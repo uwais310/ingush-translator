@@ -91,23 +91,62 @@ async function callGrok(prompt) {
   return String(content || "").trim();
 }
 
-async function callGemini(prompt, json) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`;
+// Если основная модель перегружена или недоступна, пробуем запасные.
+const GEMINI_MODELS = [...new Set([MODEL, "gemini-flash-lite-latest", "gemini-2.5-flash"])];
+const DEADLINE_MS = 9000; // Netlify/Vercel обрывают функцию примерно через 10 секунд
+
+async function geminiOnce(model, prompt, json, timeoutMs) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
   if (json) body.generationConfig = { responseMimeType: "application/json" };
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-    body: JSON.stringify(body),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const e = new Error((data.error && data.error.message) || `Gemini error ${r.status}`);
-    e.status = r.status;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const e = new Error((data.error && data.error.message) || `Gemini error ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+    const text = parts.filter((p) => !p.thought).map((p) => p.text || "").join("").trim();
+    if (!text) { const e = new Error("Empty answer"); e.status = 503; throw e; }
+    return text;
+  } catch (e) {
+    if (e.name === "AbortError") { const t = new Error("Timed out"); t.status = 504; throw t; }
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-  return parts.map((p) => p.text || "").join("").trim();
+}
+
+async function callGemini(prompt, json) {
+  const started = Date.now();
+  let last = null;
+  for (const model of GEMINI_MODELS) {
+    const left = DEADLINE_MS - (Date.now() - started);
+    if (left < 1500) break;
+    try {
+      // первой модели даём не больше 6,5 с, чтобы на запасную осталось время
+      const budget = model === GEMINI_MODELS[0] ? Math.min(left - 200, 6500) : left - 200;
+      return await geminiOnce(model, prompt, json, budget);
+    } catch (e) {
+      last = e;
+      console.error(`Gemini ${model}:`, e.status, e.message);
+      // Ключ неверный или запрос плохой — другая модель не поможет.
+      if (e.status === 400 || e.status === 401 || e.status === 403) throw e;
+      // 404 (нет модели), 429 (лимит), 5xx (перегрузка), 504 (долго) — пробуем следующую.
+    }
+  }
+  const e = new Error("Google Gemini is overloaded right now. Try again in a minute.");
+  e.status = last && last.status === 429 ? 429 : 503;
+  throw e;
 }
 
 const ask = (prompt, json = false) => (PROVIDER === "gemini" ? callGemini(prompt, json) : callGrok(prompt));
@@ -139,11 +178,10 @@ module.exports = async (req, res) => {
     return res.status(200).json({ translation: out, model: MODEL });
   } catch (e) {
     console.error("AI error:", e.status, e.message);
-    const status = e.status === 429 ? 429 : 502;
+    const status = e.status === 429 ? 429 : e.status === 503 || e.status === 504 ? 503 : 502;
     const keyName = PROVIDER === "gemini" ? "GEMINI_API_KEY" : "XAI_API_KEY";
-    const modelName = PROVIDER === "gemini" ? "GEMINI_MODEL" : "XAI_MODEL";
     const hint = e.status === 401 || e.status === 403 || /api key/i.test(e.message) ? `Check ${keyName}. ` :
-                 e.status === 404 || /model/i.test(e.message) ? `Check ${modelName} (now "${MODEL}"). ` : "";
+                 e.status === 404 ? `Check the model name (now "${MODEL}"). ` : "";
     return res.status(status).json({ error: hint + e.message });
   }
 };

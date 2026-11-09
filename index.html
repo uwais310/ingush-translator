@@ -348,6 +348,9 @@ async function translate() {
     if (e.status === 429) {
       resetOutput("Too many translations in a short time.");
       setStatus("Wait a minute, then tap Translate again.", true);
+    } else if (e.status === 503 || e.status === 502 || e.status === 504) {
+      resetOutput("The translator is busy right now.");
+      setStatus(e.message && e.message !== "Server error" ? e.message : "Wait a few seconds and tap Translate again.", true);
     } else if (e.name === "TypeError") {
       resetOutput("No connection.");
       setStatus("Check your internet and tap Translate again.", true);
