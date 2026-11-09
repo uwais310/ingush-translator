@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c6a44">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ГӀалгӀай">
+<title>Ingush Translator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Caption:wght@700&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one card, source on top / translation below on phones, side by side on wide screens.
+     Palette: Ingush flag — white field, green bands, red sun — on cool neutrals. */
+  :root {
+    --bg: #eef2f0;
+    --surface: #ffffff;
+    --surface-2: #f6f9f7;
+    --ink: #13201a;
+    --muted: #5b6a63;
+    --line: #d9e1dc;
+    --accent: #0c6a44;
+    --accent-ink: #ffffff;
+    --accent-soft: #e2f0e8;
+    --sun: #c7262f;
+    --warn-ink: #8a4e00;
+    --warn-bg: #fdf1dc;
+    --font-display: "PT Sans Caption", "PT Sans", "Noto Sans", Arial, sans-serif;
+    --font-body: "PT Sans", "Noto Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --radius: 16px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a;
+      --line: #25332c; --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326;
+      --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a;
+    --line: #25332c; --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326;
+    --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
+
+  header { display: flex; align-items: center; gap: 12px; }
+  h1 { font-family: var(--font-display); font-size: 22px; line-height: 1.1; margin: 0; text-wrap: balance; }
+  .tagline { color: var(--muted); font-size: 14px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .langbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+  select {
+    width: 100%; appearance: none; -webkit-appearance: none; border: 0; border-radius: 10px; background: transparent;
+    color: var(--accent); font: 700 16px var(--font-body); padding: 10px 12px; cursor: pointer;
+  }
+  select:hover, select:focus-visible { background: var(--accent-soft); outline: none; }
+  #tgt { text-align: right; text-align-last: right; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+    color: var(--accent); font-size: 18px; cursor: pointer; display: grid; place-items: center;
+  }
+  .icon-btn:hover { background: var(--accent-soft); }
+
+  .panes { display: grid; grid-template-columns: 1fr; }
+  .pane { display: flex; flex-direction: column; min-width: 0; }
+  .pane.out { background: var(--surface-2); border-top: 1px solid var(--line); }
+  textarea, .output {
+    width: 100%; border: 0; background: transparent; color: var(--ink); resize: none; outline: none;
+    font-family: var(--font-body); font-size: 21px; line-height: 1.45; padding: 16px 16px 8px; min-height: 130px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .output.placeholder { color: var(--muted); font-size: 17px; }
+  .output.busy { opacity: .6; }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .btn {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px;
+    font: 15px var(--font-body); padding: 8px 14px; cursor: pointer; min-height: 40px;
+  }
+  .btn:hover { background: var(--accent-soft); }
+  .btn.key { font: 700 20px var(--font-body); color: var(--sun); padding: 4px 16px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; padding: 8px 20px; }
+  .btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .details { border-top: 1px dashed var(--line); padding: 12px 16px 4px; display: grid; gap: 10px; }
+  .details[hidden] { display: none; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+  .pill.low { background: var(--warn-bg); color: var(--warn-ink); }
+  .pill.pos { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
+  .alts { display: grid; gap: 6px; }
+  .alt { display: flex; gap: 10px; align-items: baseline; }
+  .alt b { font-size: 17px; }
+  .alt span { color: var(--muted); font-size: 14px; }
+  .example { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; font-size: 15px; }
+  .example .t { color: var(--muted); }
+  .note { color: var(--muted); font-size: 14px; margin: 0; }
+
+  .status { font-size: 14px; color: var(--muted); padding: 0 16px 12px; }
+  .status.error { color: var(--warn-ink); }
+  .status:empty { display: none; }
+
+  .section-title { font: 700 13px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 4px 2px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px;
+    padding: 7px 14px; font: 15px var(--font-body); cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .history { display: grid; gap: 8px; }
+  .h-item {
+    text-align: left; width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    border-radius: 12px; padding: 10px 14px; cursor: pointer; font: 15px var(--font-body); display: grid; gap: 2px;
+  }
+  .h-item small { color: var(--muted); font-size: 12px; }
+  .h-item .h-out { color: var(--accent); overflow-wrap: anywhere; }
+  .fineprint { color: var(--muted); font-size: 13px; max-width: 65ch; margin: 0 2px; }
+
+  @media (min-width: 800px) {
+    .wrap { padding-top: 32px; }
+    h1 { font-size: 26px; }
+    .panes { grid-template-columns: 1fr 1fr; }
+    .pane.out { border-top: 0; border-left: 1px solid var(--line); }
+    textarea, .output { min-height: 220px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true">
+      <path d="M17 1 L27 10 H7 Z" fill="var(--accent)"/>
+      <path d="M9 10 H25 L27 43 H7 Z" fill="var(--accent)" opacity=".85"/>
+      <circle cx="17" cy="20" r="3.2" fill="var(--sun)"/>
+      <rect x="15" y="29" width="4" height="7" rx="2" fill="var(--surface)"/>
+    </svg>
+    <div>
+      <h1>Ingush Translator</h1>
+      <div class="tagline">ГӀалгӀай мотт · words, sentences and whole texts</div>
+    </div>
+  </header>
+
+  <main class="card">
+    <div class="langbar">
+      <select id="src" aria-label="Translate from"></select>
+      <button class="icon-btn" id="swap" type="button" aria-label="Swap languages" title="Swap languages">⇄</button>
+      <select id="tgt" aria-label="Translate to"></select>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <textarea id="input" dir="auto" maxlength="3000" placeholder="Type or paste text">Доброе утро! Как у тебя дела?</textarea>
+        <div class="toolbar">
+          <button class="btn key" id="key" type="button" title="Insert the letter Ӏ">Ӏ</button>
+          <button class="btn" id="clear" type="button">Clear</button>
+          <span class="grow"></span>
+          <span class="count" id="count">0 / 3000</span>
+          <button class="btn primary" id="go" type="button">Translate</button>
+        </div>
+      </div>
+      <div class="pane out">
+        <div class="output placeholder" id="output" dir="auto" aria-live="polite">Tap Translate</div>
+        <div class="details" id="details" hidden>
+          <div class="row" id="d-tags"></div>
+          <div class="alts" id="d-alts"></div>
+          <div class="example" id="d-example" hidden><div id="d-ex-s"></div><div class="t" id="d-ex-t"></div></div>
+          <p class="note" id="d-note" hidden></p>
+        </div>
+        <div class="toolbar">
+          <span class="grow"></span>
+          <button class="btn" id="copy" type="button" disabled>Copy</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="section-title" id="ex-title">Try</div>
+  <div class="chips" id="examples"></div>
+
+  <div class="section-title" id="h-title" hidden>Recent</div>
+  <div class="history" id="history"></div>
+
+  <p class="fineprint">
+    Translations are made by AI. Ingush has very little text online, so check anything important with a native speaker.
+    You can type 1 or I instead of Ӏ: it is fixed automatically.
+  </p>
+</div>
+
+<script>
+const LANGS = {
+  inh: { label: "ГӀалгӀай", name: "Ingush (ГӀалгӀай мотт)" },
+  ru:  { label: "Русский", name: "Russian" },
+  en:  { label: "English", name: "English" },
+  ce:  { label: "Нохчийн", name: "Chechen (Нохчийн мотт)" },
+  kk:  { label: "Қазақша", name: "Kazakh" },
+  tr:  { label: "Türkçe", name: "Turkish" },
+  ar:  { label: "العربية", name: "Arabic" },
+  de:  { label: "Deutsch", name: "German" },
+  fr:  { label: "Français", name: "French" }
+};
+const EXAMPLES = {
+  ru: ["Доброе утро! Как у тебя дела?", "Спасибо большое", "Я живу в Алматы, но родом из Ингушетии.", "мама", "Где находится мечеть?"],
+  en: ["Good morning! How are you?", "Thank you very much", "My family is from Ingushetia.", "mother", "Where is the mosque?"]
+};
+const MAX = 3000;
+const $ = (id) => document.getElementById(id);
+const els = {
+  src: $("src"), tgt: $("tgt"), input: $("input"), output: $("output"), go: $("go"), copy: $("copy"),
+  status: $("status"), details: $("details"), key: $("key"), count: $("count")
+};
+
+/* ---------- Ingush letter Ӏ (palochka) ---------- */
+const LOOK = "1Il|ІіΙⅠǀ";
+const PAL_RE = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
+function fixPalochka(s) {
+  if (!s) return s;
+  return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a, b, c) => (a ? a + "Ӏ" : "Ӏ"));
+}
+
+/* ---------- languages ---------- */
+for (const sel of [els.src, els.tgt])
+  for (const [code, l] of Object.entries(LANGS)) sel.add(new Option(l.label, code));
+
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem("inh-tr-langs") || "{}"); } catch (e) {}
+els.src.value = LANGS[saved.src] ? saved.src : "ru";
+els.tgt.value = LANGS[saved.tgt] && saved.tgt !== els.src.value ? saved.tgt : (els.src.value === "inh" ? "ru" : "inh");
+let prev = { src: els.src.value, tgt: els.tgt.value };
+function rememberLangs() {
+  try { localStorage.setItem("inh-tr-langs", JSON.stringify({ src: els.src.value, tgt: els.tgt.value })); } catch (e) {}
+}
+
+function onLang(which) {
+  if (els.src.value === els.tgt.value) {
+    if (which === "src") els.tgt.value = prev.src; else els.src.value = prev.tgt;
+  }
+  prev = { src: els.src.value, tgt: els.tgt.value };
+  rememberLangs(); refresh();
+}
+els.src.addEventListener("change", () => onLang("src"));
+els.tgt.addEventListener("change", () => onLang("tgt"));
+
+$("swap").addEventListener("click", () => {
+  const s = els.src.value;
+  els.src.value = els.tgt.value; els.tgt.value = s;
+  if (lastResult) els.input.value = lastResult;
+  prev = { src: els.src.value, tgt: els.tgt.value };
+  rememberLangs(); resetOutput(); refresh();
+});
+
+/* ---------- UI helpers ---------- */
+function refresh() {
+  els.count.textContent = `${els.input.value.length} / ${MAX}`;
+  els.key.style.display = els.src.value === "inh" ? "" : "none";
+  const ex = $("examples"); ex.innerHTML = "";
+  const list = EXAMPLES[els.src.value] || [];
+  $("ex-title").hidden = !list.length;
+  for (const t of list) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = t;
+    b.addEventListener("click", () => { els.input.value = t; refresh(); translate(); });
+    ex.appendChild(b);
+  }
+}
+let lastResult = "";
+function resetOutput(msg = "Tap Translate") {
+  lastResult = "";
+  els.output.textContent = msg; els.output.classList.add("placeholder");
+  els.details.hidden = true; els.copy.disabled = true; setStatus("");
+}
+function setStatus(msg, isError = false) {
+  els.status.textContent = msg; els.status.classList.toggle("error", isError);
+}
+function showText(text) {
+  els.output.textContent = text; els.output.classList.remove("placeholder");
+}
+
+$("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
+els.key.addEventListener("click", () => {
+  els.input.setRangeText("Ӏ", els.input.selectionStart, els.input.selectionEnd, "end");
+  els.input.focus(); refresh();
+});
+els.input.addEventListener("input", refresh);
+els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
+els.copy.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(lastResult); els.copy.textContent = "Copied"; }
+  catch (e) { els.copy.textContent = "Copy failed"; }
+  setTimeout(() => { els.copy.textContent = "Copy"; }, 1500);
+});
+
+/* ---------- server (Grok) ---------- */
+let busy = false, controller = null;
+
+function isWord(text) {
+  return !/\n/.test(text) && text.length <= 40 && text.split(/\s+/).length <= 3 && !/[.!?…]\s+\S/.test(text);
+}
+
+async function callApi(text, src, tgt, mode) {
+  const r = await fetch("/api/translate", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source: src, target: tgt, mode }), signal: controller.signal
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || "Server error"); e.status = r.status; throw e; }
+  return data;
+}
+
+async function translate() {
+  if (busy) return;
+  const src = els.src.value, tgt = els.tgt.value;
+  let text = els.input.value.trim();
+  if (!text) { resetOutput("Type something to translate"); return; }
+  if (src === "inh") {
+    const fixed = fixPalochka(els.input.value);
+    if (fixed !== els.input.value) els.input.value = fixed;
+    text = fixed.trim();
+  }
+
+  busy = true; els.go.disabled = true; els.go.textContent = "Translating…";
+  els.details.hidden = true; els.copy.disabled = true; setStatus("");
+  els.output.classList.add("busy"); showText("…");
+  controller = new AbortController();
+  const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
+  const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
+
+  try {
+    const data = await callApi(text, src, tgt, isWord(text) ? "word" : "text");
+    lastResult = fixT(String(data.translation || "").trim());
+    showText(lastResult || "No translation came back. Try again.");
+    if (data.details) renderDetails(data.details, fixS, fixT);
+    if (lastResult) { els.copy.disabled = false; addHistory(src, tgt, text, lastResult); }
+  } catch (e) {
+    lastResult = "";
+    if (e.status === 429) {
+      resetOutput("Too many translations in a short time.");
+      setStatus("Wait a minute, then tap Translate again.", true);
+    } else if (e.name === "TypeError") {
+      resetOutput("No connection.");
+      setStatus("Check your internet and tap Translate again.", true);
+    } else {
+      resetOutput("Something went wrong.");
+      setStatus(e.message || "The translation failed. Tap Translate again.", true);
+    }
+  } finally {
+    busy = false; els.go.disabled = false; els.go.textContent = "Translate";
+    els.output.classList.remove("busy");
+  }
+}
+els.go.addEventListener("click", translate);
+
+function renderDetails(v, fixS, fixT) {
+  const tags = $("d-tags"); tags.innerHTML = "";
+  if (v.part_of_speech) {
+    const p = document.createElement("span"); p.className = "pill pos"; p.textContent = String(v.part_of_speech); tags.appendChild(p);
+  }
+  const conf = String(v.confidence || "").toLowerCase();
+  if (conf) {
+    const c = document.createElement("span");
+    c.className = "pill" + (conf === "low" ? " low" : "");
+    c.textContent = conf === "low" ? "Not sure: check with a native speaker" : conf === "high" ? "Confident" : "Fairly confident";
+    tags.appendChild(c);
+  }
+  const alts = $("d-alts"); alts.innerHTML = "";
+  for (const a of (Array.isArray(v.alternatives) ? v.alternatives : []).slice(0, 3)) {
+    if (!a || !a.text) continue;
+    const row = document.createElement("div"); row.className = "alt";
+    const b = document.createElement("b"); b.textContent = fixT(String(a.text));
+    const s = document.createElement("span"); s.textContent = a.meaning ? String(a.meaning) : "";
+    row.append(b, s); alts.appendChild(row);
+  }
+  const ex = v.example || {};
+  $("d-example").hidden = !(ex.source && ex.target);
+  $("d-ex-s").textContent = fixS(String(ex.source || ""));
+  $("d-ex-t").textContent = fixT(String(ex.target || ""));
+  const note = $("d-note");
+  note.hidden = !v.note; note.textContent = v.note ? String(v.note) : "";
+  els.details.hidden = !(tags.children.length || alts.children.length || !$("d-example").hidden || !note.hidden);
+}
+
+/* ---------- recent translations (this browser only) ---------- */
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem("inh-tr-history") || "[]"); } catch (e) { return []; }
+}
+function addHistory(src, tgt, input, output) {
+  let h = loadHistory().filter((x) => !(x.src === src && x.tgt === tgt && x.input === input));
+  h.unshift({ src, tgt, input, output });
+  h = h.slice(0, 8);
+  try { localStorage.setItem("inh-tr-history", JSON.stringify(h)); } catch (e) {}
+  renderHistory(h);
+}
+function renderHistory(h = loadHistory()) {
+  const box = $("history"); box.innerHTML = "";
+  $("h-title").hidden = !h.length;
+  for (const x of h.slice(0, 5)) {
+    if (!LANGS[x.src] || !LANGS[x.tgt]) continue;
+    const b = document.createElement("button"); b.type = "button"; b.className = "h-item";
+    const meta = document.createElement("small"); meta.textContent = `${LANGS[x.src].label} → ${LANGS[x.tgt].label}`;
+    const i = document.createElement("div"); i.textContent = x.input;
+    const o = document.createElement("div"); o.className = "h-out"; o.textContent = x.output;
+    b.append(meta, i, o);
+    b.addEventListener("click", () => {
+      els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
+      els.input.value = x.input; lastResult = x.output; showText(x.output);
+      els.details.hidden = true; els.copy.disabled = false; setStatus(""); refresh();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    box.appendChild(b);
+  }
+}
+
+refresh();
+renderHistory();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+</script>
+</body>
+</html>

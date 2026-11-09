@@ -1,0 +1,15 @@
+{
+  "name": "Ingush Translator — ГӀалгӀай мотт",
+  "short_name": "ГӀалгӀай",
+  "description": "Translate Ingush words, sentences and texts",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef2f0",
+  "theme_color": "#0c6a44",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
