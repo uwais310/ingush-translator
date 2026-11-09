@@ -16,6 +16,7 @@
 const WORDS_RAW = require("../lib/ingush-words.js");
 const KB = require("../lib/ingush-guide.js");
 const CORPUS = require("../lib/corpus.js");
+const LEX = require("../lib/corpus-lexicon.js");
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -56,6 +57,14 @@ function examplesBlock(examples) {
   return `<native_speaker_corrections>\nTranslations checked by native speakers. They are correct: reuse their words, spelling and style, and prefer them over everything else.\n\n${lines.join("\n\n")}\n</native_speaker_corrections>\n\n`;
 }
 
+// Как слова текста переводятся в настоящих текстах (статистика по корпусу, без предложений).
+function lexiconBlock(text, src, tgt, tier) {
+  if (!hasIngush(src, tgt) || !(src === "ru" || src === "inh")) return "";
+  const lines = LEX.lookup(text, src, tier === "full" ? 30 : 12);
+  if (!lines.length) return "";
+  return `<corpus_word_stats>\nHow the words of this text are translated in 35,000 real Ingush–Russian sentence pairs (books, «Сердало», Wikipedia); the number is how many times. Use these words, with the case and class your sentence needs.\n${lines.join("\n")}\n</corpus_word_stats>\n\n`;
+}
+
 // Настоящие пары предложений из корпуса (книги, «Сердало», Википедия) с теми же словами, что в тексте.
 function corpusBlock(pairs, src, tier) {
   if (!pairs || !pairs.length) return "";
@@ -66,7 +75,7 @@ function corpusBlock(pairs, src, tier) {
 
 function ingushChecks(src, tgt) {
   if (tgt === "inh") {
-    return `- Write real Ingush: take words from the glossary, the verified phrases, the corpus examples and the corrections; never use the Chechen forms listed in the reference.
+    return `- Write real Ingush: take words from the glossary, the corpus word statistics, the verified phrases, the corpus examples and the corrections; never use the Chechen forms listed in the reference.
 - Make every class mark agree (в for a man, й for a woman, б for many people, д for тхо, вай, шо); use the ergative for the doer of a transitive verb and the dative with хов, хац, лов, деза, хет, гу.
 - Do not invent words and do not leave Russian words inside Ingush sentences.
 - Before answering, check your draft word by word against the reference, the glossary and the examples: replace Chechen forms, fix class marks and case endings. Output only the corrected final version.\n`;
@@ -81,7 +90,7 @@ function textPrompt(text, src, tgt, examples = [], tier = "full", corpus = []) {
   const S = LANGS[src], T = LANGS[tgt];
   return `You are a professional translator${hasIngush(src, tgt) ? " and a native speaker of Ingush" : ""}. Translate the text inside <text> from ${S} into ${T}.
 
-${rulesFor(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}Output rules:
+${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}Output rules:
 - Output only the translation, with no quotes, notes, labels, transliteration or explanations.
 - Keep the line breaks, punctuation, numbers and proper names.
 - Keep the meaning and tone, and use natural everyday ${T}.
@@ -96,7 +105,7 @@ function wordPrompt(text, src, tgt, examples = [], tier = "full", corpus = []) {
   const S = LANGS[src], T = LANGS[tgt];
   return `You are a bilingual dictionary${hasIngush(src, tgt) ? " made by native speakers of Ingush" : ""}. Translate the word or short phrase inside <text> from ${S} into ${T}.
 
-${rulesFor(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}${ingushChecks(src, tgt)}Reply with JSON only, in exactly this shape:
+${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}${ingushChecks(src, tgt)}Reply with JSON only, in exactly this shape:
 {"translation": "best ${T} translation",
  "alternatives": [{"text": "another ${T} translation", "meaning": "short gloss in Russian of how it differs"}],
  "part_of_speech": "noun | verb | adjective | adverb | phrase | other",
