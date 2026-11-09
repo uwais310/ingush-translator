@@ -109,6 +109,8 @@
   .example .t { color: var(--muted); }
   .note { color: var(--muted); font-size: 14px; margin: 0; }
 
+  .unk { text-decoration: underline dotted var(--warn-ink); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   .status { font-size: 14px; color: var(--muted); padding: 0 16px 12px; }
   .status.error { color: var(--warn-ink); }
   .status:empty { display: none; }
@@ -180,7 +182,7 @@
           <p class="note" id="d-note" hidden></p>
         </div>
         <div class="toolbar">
-          <span class="grow"></span>
+          <span class="grow meta" id="meta"></span>
           <button class="btn" id="copy" type="button" disabled>Copy</button>
         </div>
         <div class="status" id="status"></div>
@@ -281,6 +283,7 @@ function resetOutput(msg = "Tap Translate") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
   els.details.hidden = true; els.copy.disabled = true; setStatus("");
+  const m = document.getElementById("meta"); if (m) m.textContent = "";
 }
 function setStatus(msg, isError = false) {
   els.status.textContent = msg; els.status.classList.toggle("error", isError);
@@ -319,6 +322,22 @@ async function callApi(text, src, tgt, mode) {
   return data;
 }
 
+function renderMarked(text, unknown) {
+  els.output.classList.remove("placeholder");
+  els.output.textContent = "";
+  if (!unknown.length) { els.output.textContent = text; return; }
+  const set = new Set(unknown);
+  for (const part of text.split(/([\u0400-\u04FF]+(?:-[\u0400-\u04FF]+)*)/)) {
+    if (set.has(part)) {
+      const u = document.createElement("span");
+      u.className = "unk"; u.textContent = part; u.title = "Not found in Ingush texts";
+      els.output.appendChild(u);
+    } else if (part) {
+      els.output.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 async function translate() {
   if (busy) return;
   const src = els.src.value, tgt = els.tgt.value;
@@ -340,8 +359,15 @@ async function translate() {
   try {
     const data = await callApi(text, src, tgt, isWord(text) ? "word" : "text");
     lastResult = fixT(String(data.translation || "").trim());
-    showText(lastResult || "No translation came back. Try again.");
+    if (lastResult) renderMarked(lastResult, data.unknown || []);
+    else showText("No translation came back. Try again.");
     if (data.details) renderDetails(data.details, fixS, fixT);
+    $("meta").textContent = data.model ? `${data.model}${data.cached ? " · saved" : ""}` : "";
+    if (tgt === "inh" && typeof data.coverage === "number" && data.coverage < 0.5) {
+      setStatus("Most of these words were not found in Ingush texts, so this translation is probably wrong.", true);
+    } else if (data.unknown && data.unknown.length) {
+      setStatus("Underlined words were not found in Ingush books and newspapers. Check them with a native speaker.");
+    }
     if (lastResult) { els.copy.disabled = false; addHistory(src, tgt, text, lastResult); }
   } catch (e) {
     lastResult = "";
