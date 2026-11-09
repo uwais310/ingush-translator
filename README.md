@@ -14,7 +14,15 @@ manifest, sw.js, png  чтобы сайт ставился на телефон �
 2. Нажмите **Get API key → Create API key**.
 3. Скопируйте ключ (начинается на `AIza...`). Карта не нужна.
 
-## 2. Выложить на Vercel (бесплатно)
+## 2а. Выложить на Netlify (бесплатно)
+1. app.netlify.com → **Sign up** → **GitHub**.
+2. **Add new project** → **Import an existing project** → **GitHub** → выберите `ingush-translator`.
+3. Ничего не меняйте в настройках сборки. Откройте **Environment variables** → **Add** → Key `GEMINI_API_KEY`, Value — ваш ключ.
+4. **Deploy**. Будет ссылка вида `https://ingush-translator.netlify.app`.
+
+Если переменную добавили уже после первого деплоя: **Deploys → Trigger deploy → Deploy site**.
+
+## 2б. Или на Vercel (бесплатно)
 **С телефона, через GitHub:**
 1. github.com → **+ → New repository** → название `ingush-translator` → **Create**.
 2. **uploading an existing file** → все файлы, кроме папки `api` → **Commit changes**.

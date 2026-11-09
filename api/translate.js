@@ -115,7 +115,7 @@ const ask = (prompt, json = false) => (PROVIDER === "gemini" ? callGemini(prompt
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
   if (!PROVIDER) {
-    return res.status(500).json({ error: "No API key: add GEMINI_API_KEY in Vercel → Settings → Environment Variables" });
+    return res.status(500).json({ error: "No API key: add GEMINI_API_KEY in the hosting settings (Environment variables), then redeploy" });
   }
 
   let body = req.body;
