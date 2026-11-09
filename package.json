@@ -1,0 +1,8 @@
+{
+  "name": "ingush-translator",
+  "private": true,
+  "description": "Ingush translator: website + serverless translation function",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

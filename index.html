@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,13 +10,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ГӀалгӀай">
-<title>Ingush Translator</title>
+<title>Ингушский переводчик</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Caption:wght@700&display=swap" rel="stylesheet">
 <style>
-  /* Layout: one card, source on top / translation below on phones, side by side on wide screens.
-     Palette: Ingush flag — white field, green bands, red sun — on cool neutrals. */
+  /* Одна карточка: текст сверху, перевод снизу (на широком экране — рядом).
+     Палитра флага Ингушетии: белое поле, зелёные полосы, красное солнце. */
   :root {
     --bg: #eef2f0;
     --surface: #ffffff;
@@ -30,6 +30,8 @@
     --sun: #c7262f;
     --warn-ink: #8a4e00;
     --warn-bg: #fdf1dc;
+    --ok-ink: #0c6a44;
+    --ok-bg: #dff1e7;
     --font-display: "PT Sans Caption", "PT Sans", "Noto Sans", Arial, sans-serif;
     --font-body: "PT Sans", "Noto Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     --radius: 16px;
@@ -39,13 +41,13 @@
     :root:not([data-theme="light"]) {
       --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a;
       --line: #25332c; --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326;
-      --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; color-scheme: dark;
+      --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; --ok-bg: #143324; color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a;
     --line: #25332c; --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326;
-    --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; color-scheme: dark;
+    --sun: #ff6a6a; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; --ok-bg: #143324; color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
@@ -92,27 +94,42 @@
   .btn.key { font: 700 20px var(--font-body); color: var(--sun); padding: 4px 16px; }
   .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; padding: 8px 20px; }
   .btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn.small { min-height: 34px; padding: 5px 12px; font-size: 14px; }
   .btn:disabled { opacity: .55; cursor: default; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .details { border-top: 1px dashed var(--line); padding: 12px 16px 4px; display: grid; gap: 10px; }
-  .details[hidden] { display: none; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .unk { text-decoration: underline dotted var(--warn-ink); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  #meta { flex: 1 1 100%; }
   .pill { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
   .pill.low { background: var(--warn-bg); color: var(--warn-ink); }
+  .pill.ok { background: var(--ok-bg); color: var(--ok-ink); }
   .pill.pos { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
+
+  .details { border-top: 1px dashed var(--line); padding: 12px 16px 4px; display: grid; gap: 10px; }
+  .details[hidden], .panel[hidden] { display: none; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .alts { display: grid; gap: 6px; }
-  .alt { display: flex; gap: 10px; align-items: baseline; }
+  .alt { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
   .alt b { font-size: 17px; }
   .alt span { color: var(--muted); font-size: 14px; }
   .example { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; font-size: 15px; }
   .example .t { color: var(--muted); }
   .note { color: var(--muted); font-size: 14px; margin: 0; }
 
-  .unk { text-decoration: underline dotted var(--warn-ink); text-decoration-thickness: 2px; text-underline-offset: 4px; }
-  .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .panel { border-top: 1px solid var(--line); padding: 14px 16px 16px; display: grid; gap: 10px; background: var(--surface); }
+  .panel h2 { font: 700 15px var(--font-body); margin: 0; }
+  .panel p { margin: 0; color: var(--muted); font-size: 14px; }
+  .panel textarea { border: 1px solid var(--line); border-radius: 10px; min-height: 90px; font-size: 19px; padding: 10px 12px; background: var(--surface-2); }
+  .panel input { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font: 16px var(--font-body); background: var(--surface-2); color: var(--ink); }
+  .cmp { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface-2); }
+  .cmp .by { font-size: 12px; color: var(--muted); }
+  .cmp .txt { font-size: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cmp .err { color: var(--warn-ink); font-size: 14px; }
+
   .status { font-size: 14px; color: var(--muted); padding: 0 16px 12px; }
   .status.error { color: var(--warn-ink); }
+  .status.good { color: var(--ok-ink); }
   .status:empty { display: none; }
 
   .section-title { font: 700 13px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 4px 2px 0; }
@@ -151,30 +168,30 @@
       <rect x="15" y="29" width="4" height="7" rx="2" fill="var(--surface)"/>
     </svg>
     <div>
-      <h1>Ingush Translator</h1>
-      <div class="tagline">ГӀалгӀай мотт · words, sentences and whole texts</div>
+      <h1>Ингушский переводчик</h1>
+      <div class="tagline">ГӀалгӀай мотт · слова, фразы и целые тексты</div>
     </div>
   </header>
 
   <main class="card">
     <div class="langbar">
-      <select id="src" aria-label="Translate from"></select>
-      <button class="icon-btn" id="swap" type="button" aria-label="Swap languages" title="Swap languages">⇄</button>
-      <select id="tgt" aria-label="Translate to"></select>
+      <select id="src" aria-label="С какого языка"></select>
+      <button class="icon-btn" id="swap" type="button" aria-label="Поменять языки" title="Поменять языки">⇄</button>
+      <select id="tgt" aria-label="На какой язык"></select>
     </div>
     <div class="panes">
       <div class="pane">
-        <textarea id="input" dir="auto" maxlength="3000" placeholder="Type or paste text">Доброе утро! Как у тебя дела?</textarea>
+        <textarea id="input" dir="auto" maxlength="3000" placeholder="Введите текст">Доброе утро! Как у тебя дела?</textarea>
         <div class="toolbar">
-          <button class="btn key" id="key" type="button" title="Insert the letter Ӏ">Ӏ</button>
-          <button class="btn" id="clear" type="button">Clear</button>
+          <button class="btn key" id="key" type="button" title="Вставить букву Ӏ">Ӏ</button>
+          <button class="btn" id="clear" type="button">Очистить</button>
           <span class="grow"></span>
           <span class="count" id="count">0 / 3000</span>
-          <button class="btn primary" id="go" type="button">Translate</button>
+          <button class="btn primary" id="go" type="button">Перевести</button>
         </div>
       </div>
       <div class="pane out">
-        <div class="output placeholder" id="output" dir="auto" aria-live="polite">Tap Translate</div>
+        <div class="output placeholder" id="output" dir="auto" aria-live="polite">Нажмите «Перевести»</div>
         <div class="details" id="details" hidden>
           <div class="row" id="d-tags"></div>
           <div class="alts" id="d-alts"></div>
@@ -183,36 +200,53 @@
         </div>
         <div class="toolbar">
           <span class="grow meta" id="meta"></span>
-          <button class="btn" id="copy" type="button" disabled>Copy</button>
+          <button class="btn small" id="compare" type="button" disabled>Сравнить ИИ</button>
+          <button class="btn small" id="fix" type="button" disabled>Исправить</button>
+          <button class="btn small" id="copy" type="button" disabled>Копировать</button>
         </div>
         <div class="status" id="status"></div>
+
+        <section class="panel" id="fix-panel" hidden aria-labelledby="fix-title">
+          <h2 id="fix-title">Правильный перевод</h2>
+          <p>Исправьте текст так, как сказал бы носитель языка. Эта фраза потом всегда будет переводиться так, а ИИ будет учиться на ней.</p>
+          <textarea id="fix-text" dir="auto"></textarea>
+          <div class="row" id="code-row" hidden>
+            <label for="fix-code" class="meta">Код редактора</label>
+            <input id="fix-code" type="password" autocomplete="off">
+          </div>
+          <div class="row">
+            <button class="btn primary small" id="fix-save" type="button">Сохранить</button>
+            <button class="btn small" id="fix-cancel" type="button">Отмена</button>
+          </div>
+        </section>
+
+        <section class="panel" id="cmp-panel" hidden aria-labelledby="cmp-title">
+          <h2 id="cmp-title">Как переводят разные ИИ</h2>
+          <p>Выберите лучший вариант: его можно сразу сохранить как правильный или сначала поправить.</p>
+          <div class="alts" id="cmp-list"></div>
+          <div class="row"><button class="btn small" id="cmp-close" type="button">Закрыть</button></div>
+        </section>
       </div>
     </div>
   </main>
 
-  <div class="section-title" id="ex-title">Try</div>
+  <div class="section-title" id="ex-title">Попробуйте</div>
   <div class="chips" id="examples"></div>
 
-  <div class="section-title" id="h-title" hidden>Recent</div>
+  <div class="section-title" id="h-title" hidden>Недавние</div>
   <div class="history" id="history"></div>
 
   <p class="fineprint">
-    Translations are made by AI. Ingush has very little text online, so check anything important with a native speaker.
-    You can type 1 or I instead of Ӏ: it is fixed automatically.
+    Переводит ИИ, а ингушских текстов в интернете очень мало, поэтому важное лучше проверить у носителя языка.
+    Подчёркнутых слов нет в ингушских книгах и газетах. Зелёная метка «Проверено носителем языка» значит, что этот перевод сохранил человек.
+    Вместо Ӏ можно писать 1 или I: буква исправится сама.
   </p>
 </div>
 
 <script>
 const LANGS = {
-  inh: { label: "ГӀалгӀай", name: "Ingush (ГӀалгӀай мотт)" },
-  ru:  { label: "Русский", name: "Russian" },
-  en:  { label: "English", name: "English" },
-  ce:  { label: "Нохчийн", name: "Chechen (Нохчийн мотт)" },
-  kk:  { label: "Қазақша", name: "Kazakh" },
-  tr:  { label: "Türkçe", name: "Turkish" },
-  ar:  { label: "العربية", name: "Arabic" },
-  de:  { label: "Deutsch", name: "German" },
-  fr:  { label: "Français", name: "French" }
+  inh: { label: "ГӀалгӀай" }, ru: { label: "Русский" }, en: { label: "English" }, ce: { label: "Нохчийн" },
+  kk: { label: "Қазақша" }, tr: { label: "Türkçe" }, ar: { label: "العربية" }, de: { label: "Deutsch" }, fr: { label: "Français" }
 };
 const EXAMPLES = {
   ru: ["Доброе утро! Как у тебя дела?", "Спасибо большое", "Я живу в Алматы, но родом из Ингушетии.", "мама", "Где находится мечеть?"],
@@ -222,18 +256,18 @@ const MAX = 3000;
 const $ = (id) => document.getElementById(id);
 const els = {
   src: $("src"), tgt: $("tgt"), input: $("input"), output: $("output"), go: $("go"), copy: $("copy"),
-  status: $("status"), details: $("details"), key: $("key"), count: $("count")
+  fix: $("fix"), compare: $("compare"), status: $("status"), details: $("details"), key: $("key"), count: $("count"), meta: $("meta")
 };
 
-/* ---------- Ingush letter Ӏ (palochka) ---------- */
+/* ---------- буква Ӏ ---------- */
 const LOOK = "1Il|ІіΙⅠǀ";
 const PAL_RE = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
 function fixPalochka(s) {
   if (!s) return s;
-  return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a, b, c) => (a ? a + "Ӏ" : "Ӏ"));
+  return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 }
 
-/* ---------- languages ---------- */
+/* ---------- языки ---------- */
 for (const sel of [els.src, els.tgt])
   for (const [code, l] of Object.entries(LANGS)) sel.add(new Option(l.label, code));
 
@@ -245,17 +279,15 @@ let prev = { src: els.src.value, tgt: els.tgt.value };
 function rememberLangs() {
   try { localStorage.setItem("inh-tr-langs", JSON.stringify({ src: els.src.value, tgt: els.tgt.value })); } catch (e) {}
 }
-
 function onLang(which) {
   if (els.src.value === els.tgt.value) {
     if (which === "src") els.tgt.value = prev.src; else els.src.value = prev.tgt;
   }
   prev = { src: els.src.value, tgt: els.tgt.value };
-  rememberLangs(); refresh();
+  rememberLangs(); resetOutput(); refresh();
 }
 els.src.addEventListener("change", () => onLang("src"));
 els.tgt.addEventListener("change", () => onLang("tgt"));
-
 $("swap").addEventListener("click", () => {
   const s = els.src.value;
   els.src.value = els.tgt.value; els.tgt.value = s;
@@ -264,7 +296,8 @@ $("swap").addEventListener("click", () => {
   rememberLangs(); resetOutput(); refresh();
 });
 
-/* ---------- UI helpers ---------- */
+/* ---------- интерфейс ---------- */
+let lastResult = "", lastInput = "", lastPair = null;
 function refresh() {
   els.count.textContent = `${els.input.value.length} / ${MAX}`;
   els.key.style.display = els.src.value === "inh" ? "" : "none";
@@ -278,18 +311,38 @@ function refresh() {
     ex.appendChild(b);
   }
 }
-let lastResult = "";
-function resetOutput(msg = "Tap Translate") {
+function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = !on; }
+function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = true; }
+function resetOutput(msg = "Нажмите «Перевести»") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
-  els.details.hidden = true; els.copy.disabled = true; setStatus("");
-  const m = document.getElementById("meta"); if (m) m.textContent = "";
+  els.details.hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
 }
-function setStatus(msg, isError = false) {
-  els.status.textContent = msg; els.status.classList.toggle("error", isError);
+function setStatus(msg, kind = "") {
+  els.status.textContent = msg;
+  els.status.className = "status" + (kind ? " " + kind : "");
 }
 function showText(text) {
   els.output.textContent = text; els.output.classList.remove("placeholder");
+}
+function markInto(node, text, unknown) {
+  node.textContent = "";
+  if (!unknown || !unknown.length) { node.textContent = text; return; }
+  const set = new Set(unknown);
+  for (const part of text.split(/([Ѐ-ӿ]+(?:-[Ѐ-ӿ]+)*)/)) {
+    if (set.has(part)) {
+      const u = document.createElement("span");
+      u.className = "unk"; u.textContent = part; u.title = "Нет в ингушских текстах";
+      node.appendChild(u);
+    } else if (part) node.appendChild(document.createTextNode(part));
+  }
+}
+function setMeta(text, verified) {
+  els.meta.textContent = "";
+  if (verified) {
+    const p = document.createElement("span"); p.className = "pill ok"; p.textContent = "✓ " + text;
+    els.meta.appendChild(p);
+  } else els.meta.textContent = text || "";
 }
 
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
@@ -300,92 +353,75 @@ els.key.addEventListener("click", () => {
 els.input.addEventListener("input", refresh);
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
 els.copy.addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(lastResult); els.copy.textContent = "Copied"; }
-  catch (e) { els.copy.textContent = "Copy failed"; }
-  setTimeout(() => { els.copy.textContent = "Copy"; }, 1500);
+  try { await navigator.clipboard.writeText(lastResult); els.copy.textContent = "Скопировано"; }
+  catch (e) { els.copy.textContent = "Не вышло"; }
+  setTimeout(() => { els.copy.textContent = "Копировать"; }, 1500);
 });
 
-/* ---------- server (Grok) ---------- */
+/* ---------- сервер ---------- */
 let busy = false, controller = null;
-
 function isWord(text) {
   return !/\n/.test(text) && text.length <= 40 && text.split(/\s+/).length <= 3 && !/[.!?…]\s+\S/.test(text);
 }
-
-async function callApi(text, src, tgt, mode) {
+async function api(payload, signal) {
   const r = await fetch("/api/translate", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, source: src, target: tgt, mode }), signal: controller.signal
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.error || "Server error"); e.status = r.status; throw e; }
+  if (!r.ok) { const e = new Error(data.error || "Ошибка сервера"); e.status = r.status; throw e; }
   return data;
 }
+function showError(e) {
+  if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и попробуйте снова.", "error"); }
+  else if (e.name === "TypeError") { resetOutput("Нет связи."); setStatus("Проверьте интернет и попробуйте снова.", "error"); }
+  else if ([502, 503, 504].includes(e.status)) { resetOutput("Переводчик сейчас занят."); setStatus(e.message && e.message !== "Ошибка сервера" ? e.message : "Попробуйте через несколько секунд.", "error"); }
+  else { resetOutput("Что-то пошло не так."); setStatus(e.message || "Попробуйте ещё раз.", "error"); }
+}
 
-function renderMarked(text, unknown) {
-  els.output.classList.remove("placeholder");
-  els.output.textContent = "";
-  if (!unknown.length) { els.output.textContent = text; return; }
-  const set = new Set(unknown);
-  for (const part of text.split(/([\u0400-\u04FF]+(?:-[\u0400-\u04FF]+)*)/)) {
-    if (set.has(part)) {
-      const u = document.createElement("span");
-      u.className = "unk"; u.textContent = part; u.title = "Not found in Ingush texts";
-      els.output.appendChild(u);
-    } else if (part) {
-      els.output.appendChild(document.createTextNode(part));
-    }
+function readInput() {
+  let text = els.input.value.trim();
+  if (els.src.value === "inh") {
+    const fixed = fixPalochka(els.input.value);
+    if (fixed !== els.input.value) els.input.value = fixed;
+    text = fixed.trim();
   }
+  return text;
 }
 
 async function translate() {
   if (busy) return;
   const src = els.src.value, tgt = els.tgt.value;
-  let text = els.input.value.trim();
-  if (!text) { resetOutput("Type something to translate"); return; }
-  if (src === "inh") {
-    const fixed = fixPalochka(els.input.value);
-    if (fixed !== els.input.value) els.input.value = fixed;
-    text = fixed.trim();
-  }
+  const text = readInput();
+  if (!text) { resetOutput("Введите текст для перевода"); return; }
 
-  busy = true; els.go.disabled = true; els.go.textContent = "Translating…";
-  els.details.hidden = true; els.copy.disabled = true; setStatus("");
+  busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
+  els.details.hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
   els.output.classList.add("busy"); showText("…");
   controller = new AbortController();
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
   try {
-    const data = await callApi(text, src, tgt, isWord(text) ? "word" : "text");
+    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text" }, controller.signal);
     lastResult = fixT(String(data.translation || "").trim());
-    if (lastResult) renderMarked(lastResult, data.unknown || []);
-    else showText("No translation came back. Try again.");
+    lastInput = text; lastPair = { src, tgt };
+    if (!lastResult) { showText("Перевод не пришёл. Попробуйте ещё раз."); return; }
+    els.output.classList.remove("placeholder");
+    markInto(els.output, lastResult, data.unknown);
     if (data.details) renderDetails(data.details, fixS, fixT);
-    $("meta").textContent = data.model ? `${data.model}${data.cached ? " · saved" : ""}` : "";
-    if (tgt === "inh" && typeof data.coverage === "number" && data.coverage < 0.5) {
-      setStatus("Most of these words were not found in Ingush texts, so this translation is probably wrong.", true);
-    } else if (data.unknown && data.unknown.length) {
-      setStatus("Underlined words were not found in Ingush books and newspapers. Check them with a native speaker.");
+    setMeta(data.model, data.verified);
+    setButtons(true);
+    if (tgt === "inh" && !data.verified && typeof data.coverage === "number" && data.coverage < 0.5) {
+      setStatus("Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный.", "error");
+    } else if (data.unknown && data.unknown.length && !data.verified) {
+      setStatus("Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка.");
     }
-    if (lastResult) { els.copy.disabled = false; addHistory(src, tgt, text, lastResult); }
+    addHistory(src, tgt, text, lastResult);
   } catch (e) {
     lastResult = "";
-    if (e.status === 429) {
-      resetOutput("Too many translations in a short time.");
-      setStatus("Wait a minute, then tap Translate again.", true);
-    } else if (e.status === 503 || e.status === 502 || e.status === 504) {
-      resetOutput("The translator is busy right now.");
-      setStatus(e.message && e.message !== "Server error" ? e.message : "Wait a few seconds and tap Translate again.", true);
-    } else if (e.name === "TypeError") {
-      resetOutput("No connection.");
-      setStatus("Check your internet and tap Translate again.", true);
-    } else {
-      resetOutput("Something went wrong.");
-      setStatus(e.message || "The translation failed. Tap Translate again.", true);
-    }
+    if (e.name !== "AbortError") showError(e);
   } finally {
-    busy = false; els.go.disabled = false; els.go.textContent = "Translate";
+    busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
   }
 }
@@ -393,14 +429,16 @@ els.go.addEventListener("click", translate);
 
 function renderDetails(v, fixS, fixT) {
   const tags = $("d-tags"); tags.innerHTML = "";
+  const POS = { noun: "существительное", verb: "глагол", adjective: "прилагательное", adverb: "наречие", phrase: "фраза", other: "другое" };
   if (v.part_of_speech) {
-    const p = document.createElement("span"); p.className = "pill pos"; p.textContent = String(v.part_of_speech); tags.appendChild(p);
+    const p = document.createElement("span"); p.className = "pill pos";
+    p.textContent = POS[String(v.part_of_speech).toLowerCase()] || String(v.part_of_speech); tags.appendChild(p);
   }
   const conf = String(v.confidence || "").toLowerCase();
   if (conf) {
     const c = document.createElement("span");
     c.className = "pill" + (conf === "low" ? " low" : "");
-    c.textContent = conf === "low" ? "Not sure: check with a native speaker" : conf === "high" ? "Confident" : "Fairly confident";
+    c.textContent = conf === "low" ? "Не уверен: проверьте у носителя языка" : conf === "high" ? "Уверен" : "Скорее уверен";
     tags.appendChild(c);
   }
   const alts = $("d-alts"); alts.innerHTML = "";
@@ -420,7 +458,77 @@ function renderDetails(v, fixS, fixT) {
   els.details.hidden = !(tags.children.length || alts.children.length || !$("d-example").hidden || !note.hidden);
 }
 
-/* ---------- recent translations (this browser only) ---------- */
+/* ---------- исправить ---------- */
+function openFix(text) {
+  closePanels();
+  $("fix-text").value = text || lastResult;
+  $("fix-panel").hidden = false;
+  $("fix-text").focus();
+}
+els.fix.addEventListener("click", () => openFix());
+$("fix-cancel").addEventListener("click", () => { $("fix-panel").hidden = true; });
+$("fix-save").addEventListener("click", async () => {
+  if (!lastPair || !lastInput) return;
+  let translation = $("fix-text").value.trim();
+  if (lastPair.tgt === "inh") translation = fixPalochka(translation);
+  if (!translation) return;
+  const btn = $("fix-save"); btn.disabled = true; btn.textContent = "Сохраняю…";
+  try {
+    await api({ action: "correct", text: lastInput, translation, source: lastPair.src, target: lastPair.tgt, code: $("fix-code").value });
+    lastResult = translation;
+    els.output.classList.remove("placeholder"); els.output.textContent = translation;
+    setMeta("Проверено носителем языка", true);
+    $("fix-panel").hidden = true;
+    setStatus("Сохранено. Теперь эта фраза всегда будет переводиться так, а ИИ будет учиться на ней.", "good");
+    addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
+  } catch (e) {
+    if (e.status === 403) { $("code-row").hidden = false; setStatus("Нужен код редактора.", "error"); }
+    else setStatus(e.message || "Не удалось сохранить.", "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Сохранить";
+  }
+});
+
+/* ---------- сравнить ИИ ---------- */
+els.compare.addEventListener("click", async () => {
+  if (!lastPair || !lastInput || busy) return;
+  closePanels();
+  const list = $("cmp-list"); list.innerHTML = "<p>Спрашиваю все ИИ сразу… это до 10 секунд.</p>";
+  $("cmp-panel").hidden = false;
+  els.compare.disabled = true;
+  try {
+    const data = await api({ action: "compare", text: lastInput, source: lastPair.src, target: lastPair.tgt });
+    list.innerHTML = "";
+    const fixT = (s) => (lastPair.tgt === "inh" ? fixPalochka(s) : s);
+    if (data.saved) data.results.unshift({ by: "Проверено носителем языка", text: data.saved, verified: true });
+    for (const r of data.results) {
+      const card = document.createElement("div"); card.className = "cmp";
+      const by = document.createElement("div"); by.className = "by"; by.textContent = r.by;
+      card.appendChild(by);
+      if (r.text) {
+        const t = document.createElement("div"); t.className = "txt"; markInto(t, fixT(r.text), r.unknown);
+        const row = document.createElement("div"); row.className = "row";
+        const use = document.createElement("button"); use.className = "btn small"; use.type = "button"; use.textContent = "Взять за основу";
+        use.addEventListener("click", () => openFix(fixT(r.text)));
+        row.appendChild(use);
+        card.append(t, row);
+      } else {
+        const e = document.createElement("div"); e.className = "err"; e.textContent = r.error || "Нет ответа";
+        card.appendChild(e);
+      }
+      list.appendChild(card);
+    }
+  } catch (e) {
+    list.innerHTML = "";
+    const p = document.createElement("p"); p.className = "err"; p.textContent = e.message || "Не получилось сравнить.";
+    list.appendChild(p);
+  } finally {
+    els.compare.disabled = false;
+  }
+});
+$("cmp-close").addEventListener("click", () => { $("cmp-panel").hidden = true; });
+
+/* ---------- недавние (только в этом браузере) ---------- */
 function loadHistory() {
   try { return JSON.parse(localStorage.getItem("inh-tr-history") || "[]"); } catch (e) { return []; }
 }
@@ -443,8 +551,8 @@ function renderHistory(h = loadHistory()) {
     b.append(meta, i, o);
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
-      els.input.value = x.input; lastResult = x.output; showText(x.output);
-      els.details.hidden = true; els.copy.disabled = false; setStatus(""); refresh();
+      els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
+      showText(x.output); els.details.hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);

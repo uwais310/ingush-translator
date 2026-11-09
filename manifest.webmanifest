@@ -1,7 +1,7 @@
 {
-  "name": "Ingush Translator — ГӀалгӀай мотт",
+  "name": "Ингушский переводчик — ГӀалгӀай мотт",
   "short_name": "ГӀалгӀай",
-  "description": "Translate Ingush words, sentences and texts",
+  "description": "Перевод ингушских слов, фраз и текстов",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

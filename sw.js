@@ -1,5 +1,5 @@
 // Keeps the app shell available offline. Translations (/api) always go to the network.
-const CACHE = "ingush-v1";
+const CACHE = "ingush-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", (e) => e.waitUntil(

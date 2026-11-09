@@ -2,6 +2,8 @@
 const handler = require("../../api/translate.js");
 
 exports.handler = async (event) => {
+  // Подключаем хранилище Netlify Blobs (разговорник с исправлениями).
+  try { require("@netlify/blobs").connectLambda(event); } catch (e) { /* хранилище недоступно — перевод всё равно работает */ }
   let raw = event.body || "";
   if (event.isBase64Encoded) raw = Buffer.from(raw, "base64").toString("utf8");
   let body = {};
