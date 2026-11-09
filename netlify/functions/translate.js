@@ -1,7 +1,12 @@
 // Netlify: та же логика перевода, что в api/translate.js (для Vercel).
 const handler = require("../../api/translate.js");
 
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
+  // Сколько времени хостинг даёт функции (чтобы успеть ответить до обрыва).
+  let deadlineMs = null;
+  try {
+    if (context && typeof context.getRemainingTimeInMillis === "function") deadlineMs = context.getRemainingTimeInMillis();
+  } catch (e) { /* не знаем — будет 9 секунд */ }
   // Подключаем хранилище Netlify Blobs (разговорник с исправлениями).
   try { require("@netlify/blobs").connectLambda(event); } catch (e) { /* хранилище недоступно — перевод всё равно работает */ }
   let raw = event.body || "";
@@ -21,7 +26,7 @@ exports.handler = async (event) => {
         });
       },
     };
-    Promise.resolve(handler({ method: event.httpMethod, body }, res)).catch((e) =>
+    Promise.resolve(handler({ method: event.httpMethod, body, deadlineMs }, res)).catch((e) =>
       resolve({ statusCode: 500, body: JSON.stringify({ error: String(e && e.message || e) }) })
     );
   });

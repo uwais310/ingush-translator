@@ -3,13 +3,18 @@
 // 1. Фразы, исправленные носителями языка (кнопка «Исправить» на сайте), хранятся в Netlify Blobs.
 //    Если фраза уже есть в этом разговорнике — отдаём сохранённый перевод.
 //    Похожие исправленные фразы добавляются в промпт как примеры, поэтому ИИ учится на них.
-// 2. Иначе один и тот же промпт уходит по цепочке ИИ: сначала сильные модели, потом запасные.
+// 2. Иначе промпт уходит по цепочке ИИ: сначала сильные модели, потом запасные.
+//    В промпте — справочник по ингушскому (lib/ingush-guide.js): правила, отличия от чеченского,
+//    словарик частых слов и проверенные фразы. Gemini и Grok получают его целиком,
+//    Groq и OpenRouter — коротко и только нужные слова (у них маленький лимит токенов).
 //
 // Ключи (переменные окружения хостинга), хватит одного:
 //   GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, XAI_API_KEY (платный)
 // Необязательно: EDITOR_CODE — если задан, сохранять исправления можно только с этим кодом.
+//   TIME_LIMIT_SECONDS — сколько секунд хостинг даёт функции (обычно определяется само).
 
 const WORDS_RAW = require("../lib/ingush-words.js");
+const KB = require("../lib/ingush-guide.js");
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -23,7 +28,8 @@ const LANGS = {
   fr: "French",
 };
 const MAX_CHARS = 3000;
-const DEADLINE_MS = 9000; // хостинги обрывают функцию примерно через 10 секунд
+const DEADLINE_MS = 9000; // если хостинг не сказал, сколько у нас времени: обычно обрывают через 10 секунд
+const LONG_BUDGET_MS = 20000; // если времени столько или больше — модели могут думать дольше
 
 // ---------------- промпты (одни и те же для всех ИИ) ----------------
 
@@ -33,34 +39,54 @@ const INGUSH_RULES = `Ingush rules:
 - Write Ingush in Cyrillic. Always write the palochka as the letter Ӏ (U+04C0), as in гӀ, кӀ, пӀ, тӀ, хӀ, цӀ, чӀ and standalone Ӏ. Never write it as 1, I, l or |.
 - In Ingush input, 1, I, l or | next to letters stand for Ӏ.`;
 
-const rulesFor = (src, tgt) => (src === "inh" || tgt === "inh" ? INGUSH_RULES + "\n\n" : "");
+const hasIngush = (src, tgt) => src === "inh" || tgt === "inh";
+
+// Правила + справочник. tier: "full" (весь справочник) или "compact" (кратко, только нужные слова).
+function rulesFor(text, src, tgt, tier) {
+  if (!hasIngush(src, tgt)) return "";
+  // слова ищем по исходному тексту: он на русском или на ингушском
+  const lookup = src === "inh" ? "inh" : "ru";
+  return INGUSH_RULES + "\n\n" + KB.knowledgeBlock(text, lookup, tier);
+}
 
 function examplesBlock(examples) {
   if (!examples.length) return "";
   const lines = examples.map((e) => `${LANGS[e.source]}: ${e.text}\n${LANGS[e.target]}: ${e.translation}`);
-  return `Translations checked by native speakers. They are correct: reuse their words, spelling and style, and prefer them over your own guesses.\n\n${lines.join("\n\n")}\n\n`;
+  return `<native_speaker_corrections>\nTranslations checked by native speakers. They are correct: reuse their words, spelling and style, and prefer them over everything else.\n\n${lines.join("\n\n")}\n</native_speaker_corrections>\n\n`;
 }
 
-function textPrompt(text, src, tgt, examples = []) {
-  const S = LANGS[src], T = LANGS[tgt];
-  return `You are a professional translator. Translate the text inside <text> from ${S} into ${T}.
+function ingushChecks(src, tgt) {
+  if (tgt === "inh") {
+    return `- Write real Ingush: take words from the glossary, the verified phrases and the corrections; never use the Chechen forms listed in the reference.
+- Make every class mark agree (в for a man, й for a woman, б for many people, д for тхо, вай, шо); use the ergative for the doer of a transitive verb and the dative with хов, хац, лов, деза, хет, гу.
+- Do not invent words and do not leave Russian words inside Ingush sentences.\n`;
+  }
+  if (src === "inh") {
+    return `- The Ingush text may use dialect forms, typos or Latin/Chechen spellings: use the reference and the glossary to understand it, and translate the meaning.\n`;
+  }
+  return "";
+}
 
-${rulesFor(src, tgt)}${examplesBlock(examples)}Output rules:
+function textPrompt(text, src, tgt, examples = [], tier = "full") {
+  const S = LANGS[src], T = LANGS[tgt];
+  return `You are a professional translator${hasIngush(src, tgt) ? " and a native speaker of Ingush" : ""}. Translate the text inside <text> from ${S} into ${T}.
+
+${rulesFor(text, src, tgt, tier)}${examplesBlock(examples)}Output rules:
 - Output only the translation, with no quotes, notes, labels, transliteration or explanations.
 - Keep the line breaks, punctuation, numbers and proper names.
 - Keep the meaning and tone, and use natural everyday ${T}.
-- If the text is already in ${T}, output it unchanged.
+${ingushChecks(src, tgt)}- If the text is already in ${T}, output it unchanged.
 
 <text>
 ${text}
 </text>`;
 }
 
-function wordPrompt(text, src, tgt, examples = []) {
+function wordPrompt(text, src, tgt, examples = [], tier = "full") {
   const S = LANGS[src], T = LANGS[tgt];
-  return `You are a bilingual dictionary. Translate the word or short phrase inside <text> from ${S} into ${T}.
+  return `You are a bilingual dictionary${hasIngush(src, tgt) ? " made by native speakers of Ingush" : ""}. Translate the word or short phrase inside <text> from ${S} into ${T}.
 
-${rulesFor(src, tgt)}${examplesBlock(examples)}Reply with JSON only, in exactly this shape:
+${rulesFor(text, src, tgt, tier)}${examplesBlock(examples)}${ingushChecks(src, tgt)}Reply with JSON only, in exactly this shape:
 {"translation": "best ${T} translation",
  "alternatives": [{"text": "another ${T} translation", "meaning": "short gloss in Russian of how it differs"}],
  "part_of_speech": "noun | verb | adjective | adverb | phrase | other",
@@ -230,11 +256,36 @@ async function postJson(url, headers, body, timeoutMs) {
   }
 }
 
-async function callGemini(model, prompt, json, timeoutMs) {
+// Когда времени мало, просим Gemini думать недолго (у моделей 2.5 и 3 это задаётся по-разному).
+function geminiThinking(model) {
+  if (/lite/i.test(model)) return null;
+  if (/gemini-2\.5/i.test(model)) return { thinkingBudget: 512 };
+  return { thinkingLevel: "low" };
+}
+
+async function callGemini(model, prompt, json, timeoutMs, opts = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-  if (json) body.generationConfig = { responseMimeType: "application/json" };
-  const data = await postJson(url, { "x-goog-api-key": process.env.GEMINI_API_KEY }, body, timeoutMs);
+  const started = Date.now();
+  const gen = {};
+  if (json) gen.responseMimeType = "application/json";
+  const thinking = opts.fast ? geminiThinking(model) : null;
+  if (thinking) gen.thinkingConfig = thinking;
+  const send = (g, ms) => postJson(
+    url, { "x-goog-api-key": process.env.GEMINI_API_KEY },
+    { contents: [{ role: "user", parts: [{ text: prompt }] }], ...(Object.keys(g).length ? { generationConfig: g } : {}) },
+    ms
+  );
+  let data;
+  try {
+    data = await send(gen, timeoutMs);
+  } catch (e) {
+    // модель не поддерживает такую настройку — повторяем без неё
+    if (!thinking || e.status !== 400 || !/think/i.test(e.message)) throw e;
+    const left = timeoutMs - (Date.now() - started);
+    if (left < 1500) throw e;
+    delete gen.thinkingConfig;
+    data = await send(gen, left);
+  }
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   return parts.filter((p) => !p.thought).map((p) => p.text || "").join("");
 }
@@ -250,15 +301,34 @@ const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, promp
   return (msg && msg.content) || "";
 };
 
+// tier: "full" — справочник целиком (у этих моделей большой лимит), "compact" — короткий.
 const PROVIDERS = {
-  gemini: { label: "Gemini", keyEnv: "GEMINI_API_KEY", call: callGemini },
-  groq: { label: "Groq", keyEnv: "GROQ_API_KEY", call: openAiCompatible("https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY") },
+  gemini: { label: "Gemini", keyEnv: "GEMINI_API_KEY", tier: "full", call: callGemini },
+  groq: {
+    label: "Groq", keyEnv: "GROQ_API_KEY", tier: "compact",
+    call: openAiCompatible("https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY"),
+  },
   openrouter: {
-    label: "OpenRouter", keyEnv: "OPENROUTER_API_KEY",
+    label: "OpenRouter", keyEnv: "OPENROUTER_API_KEY", tier: "compact",
     call: openAiCompatible("https://openrouter.ai/api/v1/chat/completions", "OPENROUTER_API_KEY", { "X-Title": "Ingush Translator" }),
   },
-  grok: { label: "Grok", keyEnv: "XAI_API_KEY", call: openAiCompatible("https://api.x.ai/v1/chat/completions", "XAI_API_KEY") },
+  grok: { label: "Grok", keyEnv: "XAI_API_KEY", tier: "full", call: openAiCompatible("https://api.x.ai/v1/chat/completions", "XAI_API_KEY") },
 };
+
+// Сколько миллисекунд у нас есть на ответ.
+function timeBudget(req) {
+  const env = Number(process.env.TIME_LIMIT_SECONDS) * 1000;
+  if (env > 0) return Math.max(4000, env - 1000);
+  const left = Number(req && req.deadlineMs);
+  if (left > 0) return Math.max(4000, Math.min(left - 1500, 26000));
+  return DEADLINE_MS;
+}
+
+// Промпт под нужный размер, каждый собирается один раз.
+function prompts(build) {
+  const memo = {};
+  return (tier) => memo[tier] || (memo[tier] = build(tier));
+}
 
 // Порядок по умолчанию: сначала сильные модели, слабые — в самом конце.
 const DEFAULT_SEQUENCE = [
@@ -297,21 +367,31 @@ function isBadKey(e) {
 }
 
 // Пробует модели по очереди, пока одна не ответит. Возвращает { text, by }.
-async function ask(prompt, json = false) {
+// prompt(tier) возвращает промпт нужного размера.
+async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const started = Date.now();
+  const fast = budget < LONG_BUDGET_MS;
+  const cap = fast ? 6500 : 16000; // одной модели — не всё время, чтобы успели запасные
   const deadKeys = new Set();
+  const slow = new Set(); // сервис не успел ответить — сначала пробуем другие сервисы
   let last = null, sawLimit = false;
-  for (const [p, model] of attempts()) {
+  const queue = attempts();
+  const later = [];
+  while (queue.length || later.length) {
+    const [p, model] = queue.length ? queue.shift() : later.shift();
     if (deadKeys.has(p)) continue;
-    const left = DEADLINE_MS - (Date.now() - started);
+    if (slow.has(p) && queue.some(([q]) => !slow.has(q) && !deadKeys.has(q))) { later.push([p, model]); continue; }
+    const left = budget - (Date.now() - started);
     if (left < 1200) break;
     try {
-      const text = cleanOutput(await PROVIDERS[p].call(model, prompt, json, Math.min(left - 200, 6500)));
+      const pr = PROVIDERS[p];
+      const text = cleanOutput(await pr.call(model, prompt(pr.tier), json, Math.min(left - 200, cap), { fast }));
       if (!text) throw httpError(503, "Empty answer");
-      return { text, by: `${PROVIDERS[p].label} · ${model}` };
+      return { text, by: `${pr.label} · ${model}` };
     } catch (e) {
       last = e;
       if (e.status === 429) sawLimit = true;
+      if (e.status === 504) slow.add(p);
       console.error(`${p} ${model}:`, e.status, e.message);
       if (isBadKey(e)) { deadKeys.add(p); e.badKey = PROVIDERS[p].keyEnv; }
     }
@@ -321,13 +401,15 @@ async function ask(prompt, json = false) {
 }
 
 // Одна лучшая модель от каждого сервиса, параллельно — для кнопки «Сравнить».
-async function askAll(prompt) {
+async function askAll(prompt, budget = DEADLINE_MS) {
   const seen = new Set();
   const firsts = attempts().filter(([p]) => (seen.has(p) ? false : seen.add(p)));
+  const fast = budget < LONG_BUDGET_MS;
   return Promise.all(firsts.map(async ([p, model]) => {
-    const by = `${PROVIDERS[p].label} · ${model}`;
+    const pr = PROVIDERS[p];
+    const by = `${pr.label} · ${model}`;
     try {
-      const text = cleanOutput(await PROVIDERS[p].call(model, prompt, false, DEADLINE_MS - 500));
+      const text = cleanOutput(await pr.call(model, prompt(pr.tier), false, budget - 500, { fast }));
       return text ? { by, text } : { by, error: "Пустой ответ" };
     } catch (e) {
       return { by, error: e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
@@ -388,10 +470,11 @@ module.exports = async (req, res) => {
   }
 
   const examples = pickExamples(phrases, input, source, target);
+  const budget = timeBudget(req);
 
   // --- сравнить все ИИ ---
   if (action === "compare") {
-    const results = await askAll(textPrompt(input, source, target, examples));
+    const results = await askAll(prompts((tier) => textPrompt(input, source, target, examples, tier)), budget);
     for (const r of results) {
       if (r.text) {
         r.text = fixT(r.text);
@@ -408,15 +491,17 @@ module.exports = async (req, res) => {
 
   try {
     let result = null;
+    const started = Date.now();
     if (mode === "word") {
-      const { text: raw, by } = await ask(wordPrompt(input, source, target, examples), true);
+      const { text: raw, by } = await ask(prompts((tier) => wordPrompt(input, source, target, examples, tier)), true, budget);
       const v = parseJson(raw);
       if (v && typeof v.translation === "string" && v.translation.trim()) {
         result = { translation: fixT(v.translation.trim()), details: v, model: by };
       }
     }
     if (!result) {
-      const { text: out, by } = await ask(textPrompt(input, source, target, examples));
+      const left = budget - (Date.now() - started);
+      const { text: out, by } = await ask(prompts((tier) => textPrompt(input, source, target, examples, tier)), false, left);
       result = { translation: fixT(out), model: by };
     }
     result.examples = examples.length;
