@@ -20,6 +20,7 @@ const KB = require("../lib/ingush-guide.js");
 const CORPUS = require("../lib/corpus.js");
 const LEX = require("../lib/corpus-lexicon.js");
 const BASE = require("../lib/base.js")(KB, LEX);
+const SEED = require("../data/phrases.json"); // база пар; verified ставит только человек на /review
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -71,7 +72,7 @@ function lexiconBlock(text, src, tgt, tier) {
 // Настоящие пары предложений из корпуса (книги, «Сердало», Википедия) с теми же словами, что в тексте.
 function corpusBlock(pairs, src, tier) {
   if (!pairs || !pairs.length) return "";
-  const list = tier === "full" ? pairs.slice(0, 10) : pairs.slice(0, 8).sort((a, b) => a[0].length - b[0].length).slice(0, 4);
+  const list = tier === "full" ? pairs.slice(0, 15) : pairs.slice(0, 8).sort((a, b) => a[0].length - b[0].length).slice(0, 4);
   const lines = list.map(([inh, ru]) => (src === "inh" ? `Ingush: ${inh}\nRussian: ${ru}` : `Russian: ${ru}\nIngush: ${inh}`));
   return `<corpus_examples>\nReal sentence pairs from Ingush books, the Ingush newspaper «Сердало» and Wikipedia that share words with the text. They show how these words are really used in Ingush (the translations can be loose; do not copy names or facts from them).\n\n${lines.join("\n\n")}\n</corpus_examples>\n\n`;
 }
@@ -448,12 +449,140 @@ function cacheSet(k, v) {
 
 // ---------------- обработчик ----------------
 
+// ---------------- база пар (data/phrases.json) и проверка носителем (/review) ----------------
+// Решения носителя лежат в том же хранилище под отдельным ключом "review":
+//   { "<id пары>": { s: "ok" | "fix", inh?: "исправленный перевод", at } }
+// Сам файл data/phrases.json при этом не меняется, а список исправлений с сайта ("all") не трогается.
+
+let REVIEW = null, REVIEW_AT = 0, VERIFIED = [];
+async function loadReview(force = false) {
+  if (!force && REVIEW && Date.now() - REVIEW_AT < 60_000) return REVIEW;
+  const store = phraseStore();
+  let data = REVIEW || {};
+  if (store) {
+    try {
+      const got = await store.get("review", { type: "json" });
+      data = got && typeof got === "object" && !Array.isArray(got) ? got : {};
+    } catch (e) {
+      console.error("review load:", e.message);
+    }
+  }
+  setReview(data);
+  return REVIEW;
+}
+const noParens = (t) => String(t).replace(/\([^()]*\)/g, " ").replace(/\s+/g, " ").trim();
+function setReview(data) {
+  REVIEW = data; REVIEW_AT = Date.now();
+  // проверенные пары работают как исправления с сайта: точный ответ и примеры для ИИ.
+  // Идём с конца, чтобы при одинаковом русском тексте («мужчине» / «женщине») первой была первая пара.
+  VERIFIED = [];
+  for (let i = SEED.length - 1; i >= 0; i--) {
+    const r = data[SEED[i].id];
+    if (r) VERIFIED.push({ source: "ru", target: "inh", text: noParens(SEED[i].ru), translation: r.inh || SEED[i].inh, at: r.at });
+  }
+}
+async function saveReview(id, decision, inh) {
+  const store = phraseStore();
+  if (!store) throw httpError(501, "Сохранение недоступно на этом хостинге (нужен Netlify).");
+  const data = { ...(await loadReview(true)) };
+  data[id] = decision === "fix" ? { s: "fix", inh, at: new Date().toISOString() } : { s: "ok", at: new Date().toISOString() };
+  await store.setJSON("review", data);
+  setReview(data);
+  CACHE.clear();
+  return Object.keys(data).length;
+}
+
+let SEED_IDX = null;
+function seedIndex() {
+  if (SEED_IDX) return SEED_IDX;
+  const ru = new Map(), inh = new Map(), byId = new Map();
+  const push = (m, k, v) => { if (k && !m.has(k)) m.set(k, v); };
+  for (const p of SEED) { push(ru, BASE.key(p.ru), p); push(inh, BASE.key(p.inh), p); byId.set(p.id, p); }
+  return (SEED_IDX = { ru, inh, byId });
+}
+const isRuInh = (src, tgt) => (src === "ru" && tgt === "inh") || (src === "inh" && tgt === "ru");
+
+// Готовый ответ без ИИ для текста или одного предложения: { translation, verified?, label, kind?, alternatives?, note? } или null.
+function resolveExact(text, src, tgt, pool) {
+  const saved = exactMatch(pool, text, src, tgt);
+  if (saved) return { translation: saved, verified: true, label: "Проверено носителем языка" };
+  const b = BASE.lookup(text, src, tgt);
+  if (b) return b;
+  if (!isRuInh(src, tgt)) return null;
+  const p = (src === "ru" ? seedIndex().ru : seedIndex().inh).get(BASE.key(text)); // пары из других источников
+  if (p) return { translation: src === "ru" ? p.inh : noParens(p.ru), label: `Из базы: ${p.source}`, kind: "seed", note: p.note || "" };
+  if (CORPUS.size()) {
+    const c = CORPUS.exact(text, src);
+    if (c) return { translation: src === "inh" ? c[1] : c[0], label: "Из базы: перевод из настоящих текстов", kind: "corpus" };
+  }
+  return null;
+}
+
+// Похожие фразы из базы — подсказки под переводом. [[на языке текста, перевод], ...]
+function seedHints(text, src, max = 3) {
+  const stems = (t) => new Set((BASE.key(t).match(/[а-яӏ]+/g) || []).filter((w) => w.length > 1).map((w) => w.slice(0, 5)));
+  const want = stems(text);
+  if (!want.size) return [];
+  const out = [];
+  for (const p of SEED) {
+    if (p.kind !== "phrase") continue;
+    const have = stems(src === "ru" ? p.ru : p.inh);
+    let both = 0;
+    for (const w of have) if (want.has(w)) both++;
+    const score = both / (want.size + have.size - both);
+    if (both >= Math.min(2, want.size) && score >= 0.4) {
+      const r = REVIEW && REVIEW[p.id];
+      const inh = (r && r.inh) || p.inh;
+      out.push({ score, pair: src === "ru" ? [p.ru, inh] : [inh, p.ru] });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, max).map((x) => x.pair);
+}
+
+// Страница /review: следующая непроверенная пара и сохранение решения. Доступ — по коду EDITOR_CODE.
+async function reviewAction(action, body, res) {
+  const code = process.env.EDITOR_CODE;
+  if (!code) return res.status(503).json({ error: "Проверка выключена: добавьте переменную EDITOR_CODE в настройках Netlify и пересоберите сайт." });
+  if (body.code !== code) return res.status(403).json({ error: "Неверный код редактора" });
+  try {
+    if (action === "review-save") {
+      const p = seedIndex().byId.get(String(body.id || ""));
+      if (!p) return res.status(400).json({ error: "Нет такой пары" });
+      let decision = body.decision === "fix" ? "fix" : body.decision === "ok" ? "ok" : null;
+      if (!decision) return res.status(400).json({ error: "Нужно решение: ok или fix" });
+      const inh = fixPalochka(String(body.inh || "")).trim();
+      if (decision === "fix") {
+        if (!inh || inh.length > 600) return res.status(400).json({ error: "Пустой или слишком длинный перевод" });
+        if (inh === p.inh) decision = "ok";
+      }
+      const reviewed = await saveReview(p.id, decision, inh);
+      return res.status(200).json({ ok: true, reviewed, total: SEED.length });
+    }
+    const review = await loadReview(true);
+    const after = Number.isInteger(body.after) ? body.after : -1;
+    const n = SEED.length;
+    let index = -1;
+    for (let step = 1; step <= n; step++) {
+      const i = (((after + step) % n) + n) % n;
+      if (!review[SEED[i].id]) { index = i; break; }
+    }
+    const reviewed = Object.keys(review).length;
+    if (index < 0) return res.status(200).json({ done: true, reviewed, total: n });
+    const { id, ru, inh, kind, source, note, count } = SEED[index];
+    return res.status(200).json({ item: { id, ru, inh, kind, source, note: note || "", count: count || 0 }, index, reviewed, total: n });
+  } catch (e) {
+    console.error("review:", e.status, e.message);
+    return res.status(e.status || 500).json({ error: e.status === 501 ? e.message : "Не получилось. Попробуйте ещё раз." });
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
   const { text = "", source, target, mode, action } = body || {};
+  if (action === "review-next" || action === "review-save") return reviewAction(action, body || {}, res);
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
@@ -478,52 +607,60 @@ module.exports = async (req, res) => {
   }
 
   const phrases = await loadPhrases();
-
-  // --- готовый перевод из разговорника ---
-  const saved = exactMatch(phrases, input, source, target);
-  if (saved && action !== "compare") {
-    const result = { translation: saved, model: "Проверено носителем языка", verified: true };
-    if (target === "inh") Object.assign(result, checkIngush(saved));
-    return res.status(200).json(result);
-  }
-
-  // --- готовый ответ из базы: проверенные фразы, словарь, слова из настоящих текстов (без ИИ) ---
+  await loadReview();
+  const pool = VERIFIED.length ? [...VERIFIED, ...phrases] : phrases; // исправления с сайта важнее: они в конце
+  const ruInh = isRuInh(source, target);
   const noAi = body.noAi === true;
-  const baseResult = (b) => {
-    const result = { translation: fixT(b.translation), model: b.label, base: true, kind: b.kind };
-    if (b.alternatives || b.note) result.details = { alternatives: b.alternatives || [], note: b.note || "" };
-    if (target === "inh" && b.kind !== "glossary") Object.assign(result, checkIngush(result.translation));
+  const saved = exactMatch(pool, input, source, target);
+
+  // --- готовый ответ без ИИ: проверено носителем → база (фразы, словарь, настоящие тексты) ---
+  const exactResult = (r) => {
+    const result = r.verified
+      ? { translation: fixT(r.translation), model: r.label, verified: true }
+      : { translation: fixT(r.translation), model: r.label, base: true, kind: r.kind };
+    if (r.alternatives || r.note) result.details = { alternatives: r.alternatives || [], note: r.note || "" };
+    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed") Object.assign(result, checkIngush(result.translation));
     return result;
   };
+  const tryExact = () => {
+    const r = resolveExact(input, source, target, pool);
+    if (r) return exactResult(r);
+    // каждое предложение текста есть в базе — собираем ответ из них
+    const c = BASE.compose(input, (part) => resolveExact(source === "inh" ? fixPalochka(part) : part, source, target, pool));
+    if (c) return exactResult({ translation: c.translation, verified: c.verified, label: c.verified ? "Проверено носителем языка" : "Из базы: собрано по предложениям", kind: "composed" });
+    return null;
+  };
   if (action !== "compare") {
-    const b = BASE.lookup(input, source, target);
-    if (b) return res.status(200).json(baseResult(b));
+    const r = tryExact();
+    if (r) return res.status(200).json(r);
   }
 
-  const examples = pickExamples(phrases, input, source, target);
+  const examples = pickExamples(pool, input, source, target);
   let budget = timeBudget(req);
 
   // примеры из корпуса: ждём его недолго, иначе переводим без них (загрузка продолжится)
   let corpus = [];
   if (hasIngush(source, target) && (source === "ru" || source === "inh")) {
     const t0 = Date.now();
-    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 1500)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 10);
+    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 1500)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15);
     budget -= Date.now() - t0;
   }
-  const ruInh = (source === "ru" && target === "inh") || (source === "inh" && target === "ru");
-
-  // целое предложение, которое уже есть в корпусе настоящих переводов
+  // корпус мог только что загрузиться: ещё раз ищем готовый ответ (целый текст или по предложениям)
   if (ruInh && action !== "compare" && CORPUS.size()) {
-    const p = CORPUS.exact(input, source);
-    if (p) return res.status(200).json(baseResult({ translation: source === "inh" ? p[1] : p[0], label: "Из базы: перевод из настоящих текстов", kind: "corpus" }));
+    const r = tryExact();
+    if (r) return res.status(200).json(r);
   }
 
   // что база знает про слова этого текста и похожие предложения из настоящих текстов
   const words = ruInh ? BASE.breakdown(input, source) : [];
-  const similar = ruInh && CORPUS.size()
-    ? CORPUS.search(input, source, 8, 2).filter((p) => p[0].length <= 220 && p[1].length <= 220).slice(0, 3)
-      .map((p) => (source === "inh" ? [p[0], p[1]] : [p[1], p[0]]))
-    : [];
+  // подсказки: похожие фразы из базы, потом похожие предложения из настоящих текстов
+  const similar = !ruInh ? [] : [
+    ...seedHints(input, source),
+    ...(CORPUS.size()
+      ? CORPUS.search(input, source, 8, 2).filter((p) => p[0].length <= 220 && p[1].length <= 220).slice(0, 3)
+        .map((p) => (source === "inh" ? [p[0], p[1]] : [p[1], p[0]]))
+      : []),
+  ].slice(0, 5);
 
   if (noAi && action !== "compare") {
     return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh });
@@ -585,5 +722,5 @@ module.exports = async (req, res) => {
 
 // для тестов
 module.exports._checkIngush = checkIngush;
-module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; };
+module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;

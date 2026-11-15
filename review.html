@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0c6a44">
+<link rel="icon" href="/icon-192.png">
+<title>Проверка переводов — Ингушский переводчик</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Caption:wght@700&display=swap" rel="stylesheet">
+<style>
+  /* Страница для носителя языка: одна пара на экране и три большие кнопки. Палитра — как на главной. */
+  :root {
+    --bg: #eef2f0; --surface: #ffffff; --surface-2: #f6f9f7; --ink: #13201a; --muted: #5b6a63; --line: #d9e1dc;
+    --accent: #0c6a44; --accent-ink: #ffffff; --accent-soft: #e2f0e8; --warn-ink: #8a4e00; --warn-bg: #fdf1dc; --ok-ink: #0c6a44;
+    --font-display: "PT Sans Caption", "PT Sans", "Noto Sans", Arial, sans-serif;
+    --font-body: "PT Sans", "Noto Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a; --line: #25332c;
+      --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font-family: var(--font-body); font-size: 17px; line-height: 1.5; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
+  h1 { font-family: var(--font-display); font-size: 22px; line-height: 1.15; margin: 0; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 14px; margin: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px; display: grid; gap: 14px; }
+  .card[hidden] { display: none; }
+  label { font-size: 14px; color: var(--muted); display: grid; gap: 6px; }
+  input, textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface-2);
+    color: var(--ink); font: 19px var(--font-body);
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  .btn {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 14px 16px;
+    font: 700 17px var(--font-body); cursor: pointer; min-height: 52px;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .actions .wide { grid-column: 1 / -1; }
+  .tag { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .ru { font-size: 20px; overflow-wrap: anywhere; }
+  .inh { font-size: 26px; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; line-height: 1.3; }
+  .note { font-size: 14px; color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+  .bar { height: 8px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .status { font-size: 15px; min-height: 22px; margin: 0; color: var(--muted); }
+  .status.error { color: var(--warn-ink); }
+  .status.good { color: var(--ok-ink); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Проверка переводов</h1>
+    <p class="muted">Ингушский переводчик · <a href="/">на главную</a></p>
+  </header>
+
+  <form class="card" id="login">
+    <label>Код редактора
+      <input id="code" type="password" autocomplete="off" required>
+    </label>
+    <button class="btn primary" type="submit" id="enter">Войти</button>
+    <p class="status" id="login-status" aria-live="polite"></p>
+  </form>
+
+  <section class="card" id="card" hidden aria-live="polite">
+    <div>
+      <div class="tag">По-русски</div>
+      <div class="ru" id="ru"></div>
+    </div>
+    <div>
+      <div class="tag">По-ингушски</div>
+      <div class="inh" id="inh"></div>
+    </div>
+    <p class="note" id="note" hidden></p>
+
+    <div class="actions" id="actions">
+      <button class="btn primary wide" id="ok" type="button">Верно</button>
+      <button class="btn" id="fix" type="button">Исправить</button>
+      <button class="btn" id="skip" type="button">Пропустить</button>
+    </div>
+
+    <div id="editor" hidden style="display:grid;gap:10px">
+      <label>Как правильно по-ингушски
+        <textarea id="edit" dir="auto"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" id="pal" type="button" title="Вставить букву Ӏ">Вставить Ӏ</button>
+        <button class="btn" id="cancel" type="button">Отмена</button>
+        <button class="btn primary wide" id="save" type="button">Сохранить</button>
+      </div>
+    </div>
+
+    <p class="status" id="status"></p>
+    <div>
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <p class="muted" id="progress"></p>
+      <p class="muted" id="source"></p>
+    </div>
+  </section>
+
+  <section class="card" id="done" hidden>
+    <div class="inh">Всё проверено</div>
+    <p class="muted">Непроверенных пар не осталось. Баркал!</p>
+  </section>
+
+  <p class="muted">
+    «Верно» — перевод правильный, переводчик будет отдавать его с меткой «Проверено носителем языка».
+    «Исправить» — впишите, как правильно; сохранится ваш вариант. «Пропустить» — не уверены: пара покажется позже.
+    Вместо Ӏ можно писать 1.
+  </p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LOOK = "1Il|ІіΙⅠǀ";
+const PAL_RE = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
+const fixPalochka = (s) => String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
+
+let code = "", item = null, index = -1, busy = false;
+try { code = sessionStorage.getItem("inh-review-code") || ""; } catch (e) {}
+
+async function api(payload) {
+  const r = await fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, code }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || "Ошибка сервера"); e.status = r.status; throw e; }
+  return data;
+}
+function setStatus(msg, kind = "") { $("status").textContent = msg; $("status").className = "status" + (kind ? " " + kind : ""); }
+function setBusy(on) { busy = on; for (const id of ["ok", "fix", "skip", "save", "cancel"]) $(id).disabled = on; }
+function showEditor(on) { $("editor").hidden = !on; $("actions").hidden = on; if (on) { $("edit").value = item.inh; $("edit").focus(); } }
+
+function show(data) {
+  $("login").hidden = true;
+  const pct = data.total ? Math.round((data.reviewed / data.total) * 100) : 0;
+  $("bar").style.width = pct + "%";
+  $("progress").textContent = `Проверено ${data.reviewed} из ${data.total}`;
+  if (data.done) { $("card").hidden = true; $("done").hidden = false; return; }
+  item = data.item; index = data.index;
+  $("done").hidden = true; $("card").hidden = false; showEditor(false);
+  $("ru").textContent = item.ru;
+  $("inh").textContent = item.inh;
+  $("note").hidden = !(item.note && item.note !== item.inh);
+  $("note").textContent = item.note || "";
+  $("source").textContent = "Источник: " + item.source + (item.count ? ` · в текстах ${item.count} раз` : "");
+}
+
+// after — номер пары, после которой искать следующую непроверенную («Пропустить» просто идёт дальше)
+async function next(after, okMessage = "") {
+  setBusy(true);
+  try {
+    show(await api({ action: "review-next", after }));
+    setStatus(okMessage, okMessage ? "good" : "");
+  } catch (e) {
+    if (e.status === 403 || e.status === 503) {
+      $("card").hidden = true; $("login").hidden = false;
+      $("login-status").textContent = e.message; $("login-status").className = "status error";
+      try { sessionStorage.removeItem("inh-review-code"); } catch (x) {}
+    } else setStatus(e.name === "TypeError" ? "Нет связи. Проверьте интернет." : e.message, "error");
+  } finally { setBusy(false); $("enter").disabled = false; }
+}
+async function save(decision, inh) {
+  if (busy || !item) return;
+  setBusy(true); setStatus("Сохраняю…");
+  try {
+    await api({ action: "review-save", id: item.id, decision, inh });
+    await next(index, decision === "fix" ? "Исправление сохранено." : "Сохранено.");
+  } catch (e) {
+    setStatus(e.name === "TypeError" ? "Нет связи. Не сохранилось, попробуйте ещё раз." : e.message, "error");
+    setBusy(false);
+  }
+}
+
+$("login").addEventListener("submit", (e) => {
+  e.preventDefault();
+  code = $("code").value.trim();
+  if (!code) return;
+  try { sessionStorage.setItem("inh-review-code", code); } catch (x) {}
+  $("enter").disabled = true; $("login-status").textContent = "";
+  next(-1);
+});
+$("ok").addEventListener("click", () => save("ok"));
+$("skip").addEventListener("click", () => { if (!busy) next(index); });
+$("fix").addEventListener("click", () => showEditor(true));
+$("cancel").addEventListener("click", () => showEditor(false));
+$("pal").addEventListener("click", () => {
+  const t = $("edit"); t.setRangeText("Ӏ", t.selectionStart, t.selectionEnd, "end"); t.focus();
+});
+$("save").addEventListener("click", () => {
+  const inh = fixPalochka($("edit").value).trim();
+  if (!inh) { setStatus("Впишите перевод.", "error"); return; }
+  save("fix", inh);
+});
+
+if (code) next(-1);
+</script>
+</body>
+</html>

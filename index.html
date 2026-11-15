@@ -214,7 +214,7 @@
         <div class="base-info" id="base-info" hidden>
           <h3 id="w-title">Слова по базе</h3>
           <div class="wlist" id="w-list"></div>
-          <h3 id="s-title">Похожие предложения из настоящих текстов</h3>
+          <h3 id="s-title">Похожие фразы из базы и настоящих текстов</h3>
           <div id="s-list" style="display:grid;gap:8px"></div>
         </div>
         <div class="toolbar">
@@ -257,9 +257,10 @@
 
   <p class="fineprint">
     Сначала переводчик ищет ответ в базе: проверенные фразы, словарь и слова из настоящих ингушских текстов. Такой ответ помечен зелёной меткой «Из базы».
-    Если в базе ответа нет, переводит ИИ (жёлтая метка): он может ошибаться, поэтому важное лучше проверить у носителя языка. Галочка «Без ИИ» оставляет только базу.
+    Если в базе ответа нет, переводит ИИ (жёлтая метка «Перевод ИИ, может быть с ошибками»): он может ошибаться, поэтому важное лучше проверить у носителя языка. Галочка «Без ИИ» оставляет только базу.
     Подчёркнутых слов нет в ингушских книгах и газетах. Метка «Проверено носителем языка» значит, что этот перевод сохранил человек.
     Вместо Ӏ можно писать 1 или I: буква исправится сама.
+    <a href="/review" style="color:inherit">Проверка переводов (для редакторов)</a>
   </p>
 </div>
 
@@ -364,7 +365,7 @@ function setMeta(text, kind) {
     const p = document.createElement("span"); p.className = "pill ok"; p.textContent = "✓ " + text;
     els.meta.appendChild(p);
   } else if (kind === "ai") {
-    const p = document.createElement("span"); p.className = "pill low"; p.textContent = "ИИ — может ошибаться";
+    const p = document.createElement("span"); p.className = "pill low"; p.textContent = "Перевод ИИ, может быть с ошибками";
     els.meta.append(p, document.createTextNode(" " + (text || "")));
   } else els.meta.textContent = text || "";
 }
