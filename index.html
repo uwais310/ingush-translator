@@ -106,6 +106,18 @@
   .pill.ok { background: var(--ok-bg); color: var(--ok-ink); }
   .pill.pos { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
 
+  .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .base-info { border-top: 1px dashed var(--line); padding: 12px 16px 6px; display: grid; gap: 8px; }
+  .base-info[hidden] { display: none; }
+  .base-info h3 { font: 700 12px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 0; }
+  .wlist { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 15px; }
+  .wlist .w { color: var(--muted); }
+  .wlist .none { color: var(--muted); font-style: italic; }
+  .wlist small { color: var(--muted); font-size: 12px; }
+  .sim { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; font-size: 14px; display: grid; gap: 2px; }
+  .sim .t { color: var(--accent); }
+
   .details { border-top: 1px dashed var(--line); padding: 12px 16px 4px; display: grid; gap: 10px; }
   .details[hidden], .panel[hidden] { display: none; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -185,6 +197,7 @@
         <div class="toolbar">
           <button class="btn key" id="key" type="button" title="Вставить букву Ӏ">Ӏ</button>
           <button class="btn" id="clear" type="button">Очистить</button>
+          <label class="switch" title="Отвечать только из базы: проверенные фразы, словарь и настоящие тексты"><input type="checkbox" id="noai"> Без ИИ</label>
           <span class="grow"></span>
           <span class="count" id="count">0 / 3000</span>
           <button class="btn primary" id="go" type="button">Перевести</button>
@@ -197,6 +210,12 @@
           <div class="alts" id="d-alts"></div>
           <div class="example" id="d-example" hidden><div id="d-ex-s"></div><div class="t" id="d-ex-t"></div></div>
           <p class="note" id="d-note" hidden></p>
+        </div>
+        <div class="base-info" id="base-info" hidden>
+          <h3 id="w-title">Слова по базе</h3>
+          <div class="wlist" id="w-list"></div>
+          <h3 id="s-title">Похожие предложения из настоящих текстов</h3>
+          <div id="s-list" style="display:grid;gap:8px"></div>
         </div>
         <div class="toolbar">
           <span class="grow meta" id="meta"></span>
@@ -237,8 +256,9 @@
   <div class="history" id="history"></div>
 
   <p class="fineprint">
-    Переводит ИИ, а ингушских текстов в интернете очень мало, поэтому важное лучше проверить у носителя языка.
-    Подчёркнутых слов нет в ингушских книгах и газетах. Зелёная метка «Проверено носителем языка» значит, что этот перевод сохранил человек.
+    Сначала переводчик ищет ответ в базе: проверенные фразы, словарь и слова из настоящих ингушских текстов. Такой ответ помечен зелёной меткой «Из базы».
+    Если в базе ответа нет, переводит ИИ (жёлтая метка): он может ошибаться, поэтому важное лучше проверить у носителя языка. Галочка «Без ИИ» оставляет только базу.
+    Подчёркнутых слов нет в ингушских книгах и газетах. Метка «Проверено носителем языка» значит, что этот перевод сохранил человек.
     Вместо Ӏ можно писать 1 или I: буква исправится сама.
   </p>
 </div>
@@ -316,7 +336,7 @@ function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = t
 function resetOutput(msg = "Нажмите «Перевести»") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
-  els.details.hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
+  els.details.hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
 }
 function setStatus(msg, kind = "") {
   els.status.textContent = msg;
@@ -337,13 +357,42 @@ function markInto(node, text, unknown) {
     } else if (part) node.appendChild(document.createTextNode(part));
   }
 }
-function setMeta(text, verified) {
+// kind: "ok" — проверено или из базы (зелёная метка), "ai" — перевёл ИИ (жёлтая), иначе просто текст
+function setMeta(text, kind) {
   els.meta.textContent = "";
-  if (verified) {
+  if (kind === true || kind === "ok") {
     const p = document.createElement("span"); p.className = "pill ok"; p.textContent = "✓ " + text;
     els.meta.appendChild(p);
+  } else if (kind === "ai") {
+    const p = document.createElement("span"); p.className = "pill low"; p.textContent = "ИИ — может ошибаться";
+    els.meta.append(p, document.createTextNode(" " + (text || "")));
   } else els.meta.textContent = text || "";
 }
+// Что база знает про слова текста и похожие предложения из настоящих текстов.
+function renderBase(words, similar, fixT) {
+  const wl = $("w-list"), sl = $("s-list");
+  wl.innerHTML = ""; sl.innerHTML = "";
+  for (const w of words || []) {
+    const a = document.createElement("div"); a.className = "w"; a.textContent = w.word;
+    const b = document.createElement("div");
+    if (w.text) {
+      b.textContent = fixT(w.text) + " ";
+      const from = document.createElement("small"); from.textContent = w.from; b.appendChild(from);
+    } else { b.className = "none"; b.textContent = "нет в базе"; }
+    wl.append(a, b);
+  }
+  for (const [from, to] of similar || []) {
+    const d = document.createElement("div"); d.className = "sim";
+    const a = document.createElement("div"); a.textContent = from;
+    const b = document.createElement("div"); b.className = "t"; b.textContent = to;
+    d.append(a, b); sl.appendChild(d);
+  }
+  $("w-title").hidden = !wl.children.length; $("s-title").hidden = !sl.children.length;
+  $("base-info").hidden = !(wl.children.length || sl.children.length);
+}
+const noAi = $("noai");
+try { noAi.checked = localStorage.getItem("inh-tr-noai") === "1"; } catch (e) {}
+noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai", noAi.checked ? "1" : "0"); } catch (e) {} });
 
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
 els.key.addEventListener("click", () => {
@@ -395,26 +444,41 @@ async function translate() {
   if (!text) { resetOutput("Введите текст для перевода"); return; }
 
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
-  els.details.hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
+  els.details.hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
   els.output.classList.add("busy"); showText("…");
   controller = new AbortController();
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
   try {
-    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text" }, controller.signal);
+    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: noAi.checked }, controller.signal);
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
+    if (data.noAi) {
+      // режим «Без ИИ», а готового ответа в базе нет: показываем то, что база знает
+      lastResult = "";
+      resetOutput(data.supported ? "Целого перевода в базе нет." : "База есть только для пары русский ↔ ингушский.");
+      renderBase(data.words, data.similar, fixT);
+      setStatus(data.supported
+        ? (data.words && data.words.length ? "Ниже — что база знает про отдельные слова. Чтобы получить целый перевод, снимите галочку «Без ИИ»." : "Снимите галочку «Без ИИ», чтобы перевёл ИИ.")
+        : "Для других языков снимите галочку «Без ИИ».");
+      return;
+    }
     if (!lastResult) { showText("Перевод не пришёл. Попробуйте ещё раз."); return; }
     els.output.classList.remove("placeholder");
     markInto(els.output, lastResult, data.unknown);
     if (data.details) renderDetails(data.details, fixS, fixT);
-    setMeta(data.model, data.verified);
+    renderBase(data.words, data.similar, fixT);
+    const trusted = data.verified || data.base;
+    setMeta(data.model, trusted ? "ok" : data.ai ? "ai" : "");
     setButtons(true);
-    if (tgt === "inh" && !data.verified && typeof data.coverage === "number" && data.coverage < 0.5) {
+    const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
+    if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
       setStatus("Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный.", "error");
-    } else if (data.unknown && data.unknown.length && !data.verified) {
-      setStatus("Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка.");
+    } else if (data.unknown && data.unknown.length && !trusted) {
+      setStatus("Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : ""));
+    } else if (swapped) {
+      setStatus("Чеченские формы заменены на ингушские: " + swapped + ".");
     }
     addHistory(src, tgt, text, lastResult);
   } catch (e) {
@@ -442,7 +506,7 @@ function renderDetails(v, fixS, fixT) {
     tags.appendChild(c);
   }
   const alts = $("d-alts"); alts.innerHTML = "";
-  for (const a of (Array.isArray(v.alternatives) ? v.alternatives : []).slice(0, 3)) {
+  for (const a of (Array.isArray(v.alternatives) ? v.alternatives : []).slice(0, 4)) {
     if (!a || !a.text) continue;
     const row = document.createElement("div"); row.className = "alt";
     const b = document.createElement("b"); b.textContent = fixT(String(a.text));
@@ -478,7 +542,7 @@ $("fix-save").addEventListener("click", async () => {
     lastResult = translation;
     els.output.classList.remove("placeholder"); els.output.textContent = translation;
     setMeta("Проверено носителем языка", true);
-    $("fix-panel").hidden = true;
+    els.details.hidden = true; $("fix-panel").hidden = true;
     setStatus("Сохранено. Теперь эта фраза всегда будет переводиться так, а ИИ будет учиться на ней.", "good");
     addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
   } catch (e) {
@@ -552,7 +616,7 @@ function renderHistory(h = loadHistory()) {
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
       els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
-      showText(x.output); els.details.hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
+      showText(x.output); els.details.hidden = true; $("base-info").hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);

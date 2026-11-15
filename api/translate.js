@@ -3,7 +3,9 @@
 // 1. Фразы, исправленные носителями языка (кнопка «Исправить» на сайте), хранятся в Netlify Blobs.
 //    Если фраза уже есть в этом разговорнике — отдаём сохранённый перевод.
 //    Похожие исправленные фразы добавляются в промпт как примеры, поэтому ИИ учится на них.
-// 2. Иначе промпт уходит по цепочке ИИ: сначала сильные модели, потом запасные.
+// 2. Потом — база без ИИ (lib/base.js): проверенные фразы, словарь, слова и целые предложения
+//    из настоящих текстов. Такой ответ помечается «Из базы». С noAi: true ИИ не вызывается совсем.
+// 3. Иначе промпт уходит по цепочке ИИ: сначала сильные модели, потом запасные.
 //    В промпте — справочник по ингушскому (lib/ingush-guide.js): правила, отличия от чеченского,
 //    словарик частых слов и проверенные фразы. Gemini и Grok получают его целиком,
 //    Groq и OpenRouter — коротко и только нужные слова (у них маленький лимит токенов).
@@ -17,6 +19,7 @@ const WORDS_RAW = require("../lib/ingush-words.js");
 const KB = require("../lib/ingush-guide.js");
 const CORPUS = require("../lib/corpus.js");
 const LEX = require("../lib/corpus-lexicon.js");
+const BASE = require("../lib/base.js")(KB, LEX);
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -484,8 +487,17 @@ module.exports = async (req, res) => {
     return res.status(200).json(result);
   }
 
-  if (!attempts().length) {
-    return res.status(500).json({ error: "No API key: add GEMINI_API_KEY (or GROQ_API_KEY / OPENROUTER_API_KEY) in the hosting settings, then redeploy" });
+  // --- готовый ответ из базы: проверенные фразы, словарь, слова из настоящих текстов (без ИИ) ---
+  const noAi = body.noAi === true;
+  const baseResult = (b) => {
+    const result = { translation: fixT(b.translation), model: b.label, base: true, kind: b.kind };
+    if (b.alternatives || b.note) result.details = { alternatives: b.alternatives || [], note: b.note || "" };
+    if (target === "inh" && b.kind !== "glossary") Object.assign(result, checkIngush(result.translation));
+    return result;
+  };
+  if (action !== "compare") {
+    const b = BASE.lookup(input, source, target);
+    if (b) return res.status(200).json(baseResult(b));
   }
 
   const examples = pickExamples(phrases, input, source, target);
@@ -497,6 +509,28 @@ module.exports = async (req, res) => {
     const t0 = Date.now();
     if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 1500)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 10);
     budget -= Date.now() - t0;
+  }
+  const ruInh = (source === "ru" && target === "inh") || (source === "inh" && target === "ru");
+
+  // целое предложение, которое уже есть в корпусе настоящих переводов
+  if (ruInh && action !== "compare" && CORPUS.size()) {
+    const p = CORPUS.exact(input, source);
+    if (p) return res.status(200).json(baseResult({ translation: source === "inh" ? p[1] : p[0], label: "Из базы: перевод из настоящих текстов", kind: "corpus" }));
+  }
+
+  // что база знает про слова этого текста и похожие предложения из настоящих текстов
+  const words = ruInh ? BASE.breakdown(input, source) : [];
+  const similar = ruInh && CORPUS.size()
+    ? CORPUS.search(input, source, 8, 2).filter((p) => p[0].length <= 220 && p[1].length <= 220).slice(0, 3)
+      .map((p) => (source === "inh" ? [p[0], p[1]] : [p[1], p[0]]))
+    : [];
+
+  if (noAi && action !== "compare") {
+    return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh });
+  }
+
+  if (!attempts().length) {
+    return res.status(500).json({ error: "No API key: add GEMINI_API_KEY (or GROQ_API_KEY / OPENROUTER_API_KEY) in the hosting settings, then redeploy" });
   }
 
   // --- сравнить все ИИ ---
@@ -533,7 +567,14 @@ module.exports = async (req, res) => {
     }
     result.examples = examples.length;
     result.corpus = corpus.length;
-    if (target === "inh") Object.assign(result, checkIngush(result.translation));
+    result.ai = true;
+    if (target === "inh") {
+      // чеченские формы, которых в ингушском нет, заменяем по таблице
+      const f = BASE.chechenFix(result.translation);
+      if (f.fixed.length) { result.translation = f.text; result.fixed = f.fixed; }
+      Object.assign(result, checkIngush(result.translation));
+    }
+    if (mode !== "word") { result.words = words; result.similar = similar; }
     cacheSet(cacheKey, result);
     return res.status(200).json(result);
   } catch (e) {
