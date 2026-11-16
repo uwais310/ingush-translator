@@ -820,12 +820,106 @@ function resolveExact(text, src, tgt, pool) {
   if (b) return b;
   if (!isRuInh(src, tgt)) return null;
   const p = (src === "ru" ? seedIndex().ru : seedIndex().inh).get(BASE.key(text)); // пары из других источников
-  if (p) return { translation: src === "ru" ? p.inh : noParens(p.ru), label: `Из базы: ${p.source}`, kind: "seed", note: p.note || "" };
+  if (p) return { translation: src === "ru" ? p.inh : noParens(p.ru), label: `Из базы: ${p.source}`, kind: "seed", note: p.note || "", seed: p };
   if (CORPUS.size()) {
     const c = CORPUS.exact(text, src);
     if (c) return { translation: src === "inh" ? c[1] : c[0], label: "Из базы: перевод из настоящих текстов", kind: "corpus" };
   }
   return null;
+}
+
+// ---------------- варианты перевода (до 3) с источником и галочкой у самого надёжного ----------------
+// Надёжность: 1 — проверено носителем (/review, исправления с сайта); 2 — словарь и разговорник проекта;
+// 3 — открытые словари (PanLex, Викисловарь…); 4 — настоящие тексты (корпус); 5–7 — ИИ (уверен / скорее / не уверен).
+// Новых запросов к ИИ здесь нет: берём только то, что уже есть в базе или уже ответил ИИ.
+const MAX_VARIANTS = 3;
+const shortSource = (s) => String(s || "").replace(/\s*\([^()]*\)\s*$/, "").trim();
+const AI_RANK = { high: 5, medium: 6, low: 7 };
+const AI_LABEL = { high: "ИИ, уверен", medium: "ИИ, скорее уверен", low: "ИИ, не уверен" };
+function aiVariant(text, confidence, note = "") {
+  const c = String(confidence || "").toLowerCase();
+  return { text, note, source: "ai", sourceLabel: AI_LABEL[c] || "ИИ", rank: AI_RANK[c] || 6 };
+}
+// Откуда пара из data/phrases.json: { source, sourceLabel, rank }
+function seedSource(p) {
+  if (p.license) return { source: "open", sourceLabel: `Открытый словарь: ${shortSource(p.source)}`, rank: 3 };
+  if (String(p.source || "").startsWith("Корпус")) return { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 };
+  return { source: "project", sourceLabel: "Словарь проекта", rank: 2 };
+}
+// Пометка к варианту из строки словаря: «Фу деш ва хьо? (мужчине) / Фу деш я хьо? (женщине)» → «мужчине».
+function noteFromLine(text, line) {
+  const k = BASE.key(text);
+  for (const part of String(line || "").split(" / ")) {
+    const m = /^(.*?)\s*\(([^()]*)\)\s*[.!?]*\s*$/.exec(part.trim());
+    if (m && BASE.key(m[1]) === k) return m[2];
+  }
+  return "";
+}
+// Все пары базы с тем же текстом (не только первая).
+let SEED_ALL = null;
+function seedAll(src) {
+  if (!SEED_ALL) {
+    SEED_ALL = { ru: new Map(), inh: new Map() };
+    const push = (m, k, v) => { if (!k) return; const a = m.get(k); if (a) a.push(v); else m.set(k, [v]); };
+    for (const p of SEED) { push(SEED_ALL.ru, BASE.key(p.ru), p); push(SEED_ALL.inh, BASE.key(p.inh), p); }
+  }
+  return SEED_ALL[src === "inh" ? "inh" : "ru"];
+}
+// Список вариантов: лучший первым (best: true), одинаковые тексты склеиваются (остаётся более надёжный источник).
+function finishVariants(list, fixT = (x) => x) {
+  const byText = new Map();
+  list.forEach((v, order) => {
+    const text = fixT(String(v.text || "").trim());
+    if (!text) return;
+    const k = BASE.key(text) || text;
+    const old = byText.get(k);
+    if (!old) byText.set(k, { ...v, text, note: v.note || "", order });
+    else {
+      if (v.rank < old.rank) Object.assign(old, { source: v.source, sourceLabel: v.sourceLabel, rank: v.rank });
+      if (!old.note && v.note) old.note = v.note;
+    }
+  });
+  return [...byText.values()]
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .slice(0, MAX_VARIANTS)
+    .map(({ order, ...v }, i) => ({ text: v.text, note: v.note, source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, best: i === 0 }));
+}
+// Варианты для готового ответа из базы r (resolveExact / compose) + другие пары базы с тем же текстом.
+function exactVariants(r, input, src, tgt, pool, fixT) {
+  const list = [];
+  let main;
+  if (r.verified) main = { source: "native", sourceLabel: "Проверено носителем", rank: 1 };
+  else if (r.kind === "seed" && r.seed) main = seedSource(r.seed);
+  else if (r.kind === "texts" || r.kind === "corpus") main = { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 };
+  else if (r.kind === "composed") main = { source: "project", sourceLabel: "Из базы, по предложениям", rank: 2 };
+  else main = { source: "project", sourceLabel: "Словарь проекта", rank: 2 };
+  const line = r.kind === "glossary" || r.kind === "phrase" ? r.note : "";
+  const seedNote = r.kind === "seed" && r.seed && r.seed.license ? r.note : "";
+  list.push({ text: r.translation, note: noteFromLine(r.translation, line) || seedNote || "", ...main });
+  for (const a of r.alternatives || []) {
+    if (!a || !a.text) continue;
+    const fromTexts = /^в текстах/.test(a.meaning || "");
+    const src2 = fromTexts ? { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 } : main;
+    list.push({ text: a.text, note: noteFromLine(a.text, line) || (fromTexts ? a.meaning : a.meaning || ""), ...src2 });
+  }
+  if (r.kind !== "composed" && isRuInh(src, tgt)) {
+    // остальные источники базы для того же текста (только если ответ шёл не из них)
+    if (!r.verified) {
+      const saved = exactMatch(pool, input, src, tgt);
+      if (saved) list.push({ text: saved, note: "", source: "native", sourceLabel: "Проверено носителем", rank: 1 });
+    }
+    if (r.kind === "seed" || r.kind === "corpus") {
+      const b = BASE.lookup(input, src, tgt);
+      if (b) list.push(...exactVariants({ ...b, alternatives: (b.alternatives || []).slice(0, 2) }, input, src, tgt, [], fixT).map((v) => ({ ...v })));
+    }
+    for (const p of seedAll(src).get(BASE.key(input)) || []) {
+      const rev = REVIEW && REVIEW[p.id];
+      const text = src === "ru" ? (rev && rev.inh) || p.inh : noParens(p.ru);
+      const where = rev ? { source: "native", sourceLabel: "Проверено носителем", rank: 1 } : seedSource(p);
+      list.push({ text, note: p.license ? p.note || "" : noteFromLine(text, p.note), ...where });
+    }
+  }
+  return finishVariants(list, fixT);
 }
 
 // Похожие фразы из базы — подсказки под переводом. [[на языке текста, перевод], ...]
@@ -930,6 +1024,7 @@ module.exports = async (req, res) => {
       : { translation: fixT(r.translation), model: r.label, base: true, kind: r.kind };
     if (r.alternatives || r.note) result.details = { alternatives: r.alternatives || [], note: r.note || "" };
     if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed") Object.assign(result, checkIngush(result.translation));
+    result.variants = exactVariants(r, input, source, target, pool, fixT);
     return result;
   };
   const tryExact = () => {
@@ -1014,6 +1109,7 @@ module.exports = async (req, res) => {
       const improved = sane && after.length < before.length; // лучше — значит меньше слов, которых нет в ингушских текстах
       const translation = improved ? fixed : draft;
       const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation) };
+      result.variants = finishVariants([improved ? { ...aiVariant(translation, ""), sourceLabel: "ИИ, исправлено по базе" } : aiVariant(translation, "")], fixT);
       if (hurried) result.fast = true;
       remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after } : {});
       return res.status(200).json(result);
@@ -1036,6 +1132,10 @@ module.exports = async (req, res) => {
       const v = parseJson(raw);
       if (v && typeof v.translation === "string" && v.translation.trim()) {
         result = { translation: fixT(v.translation.trim()), details: v, model: by };
+        result.variants = finishVariants([
+          aiVariant(v.translation, v.confidence),
+          ...(Array.isArray(v.alternatives) ? v.alternatives : []).filter((a) => a && a.text).map((a) => aiVariant(a.text, v.confidence, a.meaning || "")),
+        ], fixT);
       }
     }
     let distill = null;
@@ -1065,6 +1165,8 @@ module.exports = async (req, res) => {
       if (mode !== "word") result.suspect = suspects(result.translation, input); // для второго прохода
     }
     if (mode !== "word") { result.words = words; result.similar = similar; }
+    if (!result.variants) result.variants = finishVariants([aiVariant(result.translation, result.confidence)], fixT);
+    else if (result.variants.length && target === "inh") result.variants[0].text = result.translation; // после замены чеченских форм
     if (distill && isRuInh(source, target)) await maybeDistill(input, source, result, distill);
     cacheSet(cacheKey, result);
     return res.status(200).json(result);
@@ -1081,3 +1183,4 @@ module.exports._attempts = attempts;
 module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; };
 module.exports._prompts = { textPrompt, wordPrompt, repairPrompt, readTranslation, systemPrompt };
 module.exports._RET = RET;
+module.exports._variants = { finishVariants, aiVariant, noteFromLine };
