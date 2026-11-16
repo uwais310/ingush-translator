@@ -154,6 +154,10 @@ Gemini (и Grok) получают справочник целиком. У Groq �
 | `PROVIDER_ORDER` | порядок, например `groq,gemini,openrouter` |
 | `GEMINI_MODELS`, `GROQ_MODELS`, `OPENROUTER_MODELS`, `XAI_MODELS` | свои списки моделей через запятую |
 | `TIME_LIMIT_SECONDS` | сколько секунд хостинг даёт функции; обычно определяется само (если нет — 9 секунд) |
+| `OPENROUTER_MODEL` | платная модель, которая переводит первой; по умолчанию `anthropic/claude-haiku-5.5`, `off` — без платной |
+| `AI_TEMPERATURE` | 0–0.2 для перевода (по умолчанию 0); Gemini 4 и 3.6+ её не принимают, им не передаётся |
+| `GEMINI_THINKING` | `low`, `medium` или `high`: сколько думает Gemini, когда времени много (на Netlify всегда `low`) |
+| `DISTILL_MODELS` | модели (через запятую), чьи уверенные переводы сохраняются как примеры для других моделей |
 
 ## Если что-то не работает
 - **«Check GEMINI_API_KEY»** — ключ скопирован не полностью или не добавлен в Vercel (после добавления нужен Redeploy).
