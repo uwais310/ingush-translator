@@ -471,7 +471,7 @@ async function translate() {
     if (data.details) renderDetails(data.details, fixS, fixT);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
-    setMeta(data.model, trusted ? "ok" : data.ai ? "ai" : "");
+    setMeta(data.model + (data.ai && data.fast ? " · быстрый режим" : ""), trusted ? "ok" : data.ai ? "ai" : "");
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {

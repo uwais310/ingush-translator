@@ -343,7 +343,7 @@ function timeBudget(req) {
   const env = Number(process.env.TIME_LIMIT_SECONDS) * 1000;
   if (env > 0) return Math.max(4000, env - 1000);
   const left = Number(req && req.deadlineMs);
-  if (left > 0) return Math.max(4000, Math.min(left - 1500, 26000));
+  if (left > 0) return Math.max(4000, Math.min(left - 2000, 55000)); // берём всё время, которое даёт хостинг
   return DEADLINE_MS;
 }
 
@@ -638,6 +638,7 @@ module.exports = async (req, res) => {
 
   const examples = pickExamples(pool, input, source, target);
   let budget = timeBudget(req);
+  const hurried = budget < LONG_BUDGET_MS; // времени мало: ИИ отвечает в быстром режиме, думает меньше
 
   // примеры из корпуса: ждём его недолго, иначе переводим без них (загрузка продолжится)
   let corpus = [];
@@ -706,6 +707,7 @@ module.exports = async (req, res) => {
     result.examples = examples.length;
     result.corpus = corpus.length;
     result.ai = true;
+    if (hurried) result.fast = true;
     if (target === "inh") {
       // чеченские формы, которых в ингушском нет, заменяем по таблице
       const f = BASE.chechenFix(result.translation);
