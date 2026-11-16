@@ -63,7 +63,7 @@
   .status { font-size: 15px; min-height: 22px; margin: 0; color: var(--muted); }
   .status.error { color: var(--warn-ink); }
   .status.good { color: var(--ok-ink); }
-  #login-status:empty { display: none; }
+  #login-status:empty, .status:empty { display: none; }
   /* ===== Зелёная тема — как на главной ===== */
   :root { --g1: #064d31; --g2: #0b6b45; --g3: #12a36a; --accent: #0b7a4d; --accent-soft: #e3f5eb; --surface-2: #f0faf4; --line: #d3ebdd;
     --on-g: #fff; --on-g-muted: rgba(255,255,255,.8); --best-bg: linear-gradient(135deg, #0b6b45, #12a36a);
@@ -82,6 +82,23 @@
   .card { border: 0; border-radius: 24px; }
   .btn.primary { background: var(--best-bg); border-color: transparent; box-shadow: 0 6px 16px rgba(11,107,69,.35); color: #fff; }
   .tag { color: var(--accent); }
+  /* ===== /review для телефона: вкладки, крупные кнопки, источник и счётчик ===== */
+  .wrap { padding-bottom: 96px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(255,255,255,.14); padding: 5px; border-radius: 16px; }
+  .tab { border: 0; border-radius: 12px; padding: 12px 8px; font: 600 16px var(--font-body); background: transparent; color: #fff; cursor: pointer; min-height: 48px; }
+  .tab[aria-selected="true"] { background: #fff; color: var(--g2, #0b6b45); }
+  .tab .n { display: block; font-size: 12px; font-weight: 500; opacity: .8; }
+  .counter { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 15px; color: var(--muted); }
+  .counter b { color: var(--ink); font-size: 17px; }
+  .src { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+  .src .chip { background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 3px 10px; font-weight: 600; }
+  .actions .btn { min-height: 60px; font-size: 19px; }
+  .actions.three { grid-template-columns: 1fr 1fr; }
+  .btn.ghost { background: transparent; border-color: var(--line); color: var(--muted); }
+  .palbtn { min-width: 64px; font-size: 22px !important; color: var(--accent); }
+  .edit-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+  .ask-ru { font-size: 24px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  textarea { font-size: 21px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -103,7 +120,15 @@
     <p class="status" id="login-status" aria-live="polite"></p>
   </form>
 
+  <div class="tabs" id="tabs" role="tablist" hidden>
+    <button class="tab" id="tab-check" role="tab" aria-selected="true" type="button">Проверить<span class="n" id="n-check"></span></button>
+    <button class="tab" id="tab-ask" role="tab" aria-selected="false" type="button">Переведите<span class="n" id="n-ask"></span></button>
+  </div>
+
+  <!-- 1. Проверить: пара из базы, носитель говорит «Верно», исправляет или пропускает -->
   <section class="card" id="card" hidden aria-live="polite">
+    <div class="counter"><span id="progress"></span><span id="pct"></span></div>
+    <div class="bar" aria-hidden="true"><i id="bar"></i></div>
     <div>
       <div class="tag">По-русски</div>
       <div class="ru" id="ru"></div>
@@ -113,30 +138,26 @@
       <div class="inh" id="inh"></div>
     </div>
     <p class="note" id="note" hidden></p>
+    <div class="src" id="source"></div>
 
     <div class="actions" id="actions">
-      <button class="btn primary wide" id="ok" type="button">Верно</button>
+      <button class="btn primary wide" id="ok" type="button">✓ Верно</button>
       <button class="btn" id="fix" type="button">Исправить</button>
-      <button class="btn" id="skip" type="button">Пропустить</button>
+      <button class="btn ghost" id="skip" type="button">Пропустить</button>
     </div>
 
     <div id="editor" hidden style="display:grid;gap:10px">
-      <label>Как правильно по-ингушски
-        <textarea id="edit" dir="auto"></textarea>
-      </label>
+      <label for="edit">Как правильно по-ингушски</label>
+      <div class="edit-row">
+        <textarea id="edit" dir="auto" autocapitalize="sentences"></textarea>
+        <button class="btn palbtn" id="pal" type="button" title="Вставить букву Ӏ" aria-label="Вставить букву Ӏ">Ӏ</button>
+      </div>
       <div class="actions">
-        <button class="btn" id="pal" type="button" title="Вставить букву Ӏ">Вставить Ӏ</button>
-        <button class="btn" id="cancel" type="button">Отмена</button>
         <button class="btn primary wide" id="save" type="button">Сохранить</button>
+        <button class="btn ghost wide" id="cancel" type="button">Отмена</button>
       </div>
     </div>
-
     <p class="status" id="status"></p>
-    <div>
-      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-      <p class="muted" id="progress"></p>
-      <p class="muted" id="source"></p>
-    </div>
   </section>
 
   <section class="card" id="done" hidden>
@@ -144,10 +165,35 @@
     <p class="muted">Непроверенных пар не осталось. Баркал!</p>
   </section>
 
-  <p class="muted">
-    «Верно» — перевод правильный, переводчик будет отдавать его с меткой «Проверено носителем языка».
+  <!-- 2. Переведите: частое русское предложение без перевода — носитель вписывает, как сказать по-ингушски -->
+  <section class="card" id="ask" hidden aria-live="polite">
+    <div class="counter"><span id="a-progress"></span><span id="a-pct"></span></div>
+    <div class="bar" aria-hidden="true"><i id="a-bar"></i></div>
+    <div>
+      <div class="tag">Как сказать по-ингушски?</div>
+      <div class="ask-ru" id="a-ru"></div>
+    </div>
+    <div class="edit-row">
+      <textarea id="a-edit" dir="auto" autocapitalize="sentences" placeholder="Впишите по-ингушски"></textarea>
+      <button class="btn palbtn" id="a-pal" type="button" title="Вставить букву Ӏ" aria-label="Вставить букву Ӏ">Ӏ</button>
+    </div>
+    <div class="actions">
+      <button class="btn primary wide" id="a-save" type="button">Сохранить</button>
+      <button class="btn ghost wide" id="a-skip" type="button">Пропустить</button>
+    </div>
+    <p class="status" id="a-status"></p>
+  </section>
+
+  <section class="card" id="a-done" hidden>
+    <div class="inh">Все предложения переведены</div>
+    <p class="muted">Баркал! Переводы уже работают на сайте с меткой «Проверено носителем».</p>
+  </section>
+
+  <p class="muted" id="help">
+    «Проверить»: «Верно» — перевод правильный, переводчик будет отдавать его с меткой «Проверено носителем языка».
     «Исправить» — впишите, как правильно; сохранится ваш вариант. «Пропустить» — не уверены: пара покажется позже.
-    Вместо Ӏ можно писать 1.
+    Сначала идут частые бытовые фразы. «Переведите»: 200 частых русских предложений — впишите, как вы скажете это по-ингушски; перевод сразу работает на сайте с меткой «Проверено носителем».
+    Вместо Ӏ можно писать 1 или нажать кнопку Ӏ.
   </p>
 </div>
 
@@ -156,8 +202,9 @@ const $ = (id) => document.getElementById(id);
 const LOOK = "1Il|ІіΙⅠǀ";
 const PAL_RE = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
 const fixPalochka = (s) => String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
+const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
 
-let code = "", item = null, index = -1, busy = false;
+let code = "", item = null, index = -1, busy = false, tab = "check", askItem = null, askIndex = -1;
 try { code = sessionStorage.getItem("inh-review-code") || ""; } catch (e) {}
 
 async function api(payload) {
@@ -166,37 +213,54 @@ async function api(payload) {
   if (!r.ok) { const e = new Error(data.error || "Ошибка сервера"); e.status = r.status; throw e; }
   return data;
 }
-function setStatus(msg, kind = "") { $("status").textContent = msg; $("status").className = "status" + (kind ? " " + kind : ""); }
-function setBusy(on) { busy = on; for (const id of ["ok", "fix", "skip", "save", "cancel"]) $(id).disabled = on; }
+function setStatus(msg, kind = "", id = "status") { $(id).textContent = msg; $(id).className = "status" + (kind ? " " + kind : ""); }
+function setBusy(on) { busy = on; for (const id of ["ok", "fix", "skip", "save", "cancel", "a-save", "a-skip"]) $(id).disabled = on; }
 function showEditor(on) { $("editor").hidden = !on; $("actions").hidden = on; if (on) { $("edit").value = item.inh; $("edit").focus(); } }
+function insertPal(t) { t.setRangeText("Ӏ", t.selectionStart, t.selectionEnd, "end"); t.focus(); }
+function showTab(which) {
+  tab = which;
+  $("tab-check").setAttribute("aria-selected", which === "check");
+  $("tab-ask").setAttribute("aria-selected", which === "ask");
+  if (which === "check") { $("ask").hidden = true; $("a-done").hidden = true; if (!item) next(-1); else $("card").hidden = false; }
+  else { $("card").hidden = true; $("done").hidden = true; if (!askItem) askNext(-1); else $("ask").hidden = false; }
+}
+function loginFail(e) {
+  $("card").hidden = true; $("ask").hidden = true; $("tabs").hidden = true; $("login").hidden = false;
+  $("login-status").textContent = e.message; $("login-status").className = "status error";
+  try { sessionStorage.removeItem("inh-review-code"); } catch (x) {}
+}
 
 function show(data) {
-  $("login").hidden = true;
-  const pct = data.total ? Math.round((data.reviewed / data.total) * 100) : 0;
-  $("bar").style.width = pct + "%";
-  $("progress").textContent = `Проверено ${data.reviewed} из ${data.total}`;
+  $("login").hidden = true; $("tabs").hidden = false;
+  const pct = data.total ? (data.reviewed / data.total) * 100 : 0;
+  $("bar").style.width = Math.max(pct, data.reviewed ? 1 : 0) + "%";
+  $("progress").innerHTML = ""; const b = document.createElement("b"); b.textContent = fmt(data.reviewed);
+  $("progress").append("Проверено ", b, " из " + fmt(data.total));
+  $("pct").textContent = pct < 1 && data.reviewed ? "<1%" : Math.round(pct) + "%";
+  $("n-check").textContent = `${fmt(data.reviewed)} из ${fmt(data.total)}`;
   if (data.done) { $("card").hidden = true; $("done").hidden = false; return; }
   item = data.item; index = data.index;
-  $("done").hidden = true; $("card").hidden = false; showEditor(false);
+  $("done").hidden = true; $("card").hidden = tab !== "check"; showEditor(false);
   $("ru").textContent = item.ru;
   $("inh").textContent = item.inh;
   $("note").hidden = !(item.note && item.note !== item.inh);
   $("note").textContent = item.note || "";
-  $("source").textContent = "Источник: " + item.source + (item.count ? ` · в текстах ${item.count} раз` : "");
+  const s = $("source"); s.innerHTML = "";
+  const chip = document.createElement("span"); chip.className = "chip"; chip.textContent = item.sourceLabel || item.source; s.appendChild(chip);
+  const more = document.createElement("span");
+  more.textContent = "Источник: " + item.source + ((item.also && item.also.length) ? " · также: " + item.also.join(", ") : "") + (item.count ? ` · в текстах ${item.count} раз` : "");
+  s.appendChild(more);
 }
 
-// after — номер пары, после которой искать следующую непроверенную («Пропустить» просто идёт дальше)
+// after — место в очереди, после которого искать следующую непроверенную пару («Пропустить» просто идёт дальше)
 async function next(after, okMessage = "") {
   setBusy(true);
   try {
     show(await api({ action: "review-next", after }));
     setStatus(okMessage, okMessage ? "good" : "");
   } catch (e) {
-    if (e.status === 403 || e.status === 503) {
-      $("card").hidden = true; $("login").hidden = false;
-      $("login-status").textContent = e.message; $("login-status").className = "status error";
-      try { sessionStorage.removeItem("inh-review-code"); } catch (x) {}
-    } else setStatus(e.name === "TypeError" ? "Нет связи. Проверьте интернет." : e.message, "error");
+    if (e.status === 403 || e.status === 503) loginFail(e);
+    else setStatus(e.name === "TypeError" ? "Нет связи. Проверьте интернет." : e.message, "error");
   } finally { setBusy(false); $("enter").disabled = false; }
 }
 async function save(decision, inh) {
@@ -211,28 +275,61 @@ async function save(decision, inh) {
   }
 }
 
+function showAsk(data) {
+  $("login").hidden = true; $("tabs").hidden = false;
+  const pct = data.total ? (data.translated / data.total) * 100 : 0;
+  $("a-bar").style.width = pct + "%";
+  $("a-progress").innerHTML = ""; const b = document.createElement("b"); b.textContent = fmt(data.translated);
+  $("a-progress").append("Переведено ", b, " из " + fmt(data.total));
+  $("a-pct").textContent = Math.round(pct) + "%";
+  $("n-ask").textContent = `${fmt(data.translated)} из ${fmt(data.total)}`;
+  if (data.done) { $("ask").hidden = true; $("a-done").hidden = tab !== "ask"; return; }
+  askItem = data.item; askIndex = data.index;
+  $("a-done").hidden = true; $("ask").hidden = tab !== "ask";
+  $("a-ru").textContent = askItem.ru; $("a-edit").value = "";
+}
+async function askNext(after, okMessage = "", save) {
+  setBusy(true);
+  try {
+    showAsk(await api(save ? { action: "ask-save", id: save.id, inh: save.inh, after } : { action: "ask-next", after }));
+    setStatus(okMessage, okMessage ? "good" : "", "a-status");
+  } catch (e) {
+    if (e.status === 403 || e.status === 503) loginFail(e);
+    else setStatus(e.name === "TypeError" ? "Нет связи. Не сохранилось, попробуйте ещё раз." : e.message, "error", "a-status");
+  } finally { setBusy(false); $("enter").disabled = false; }
+}
+
 $("login").addEventListener("submit", (e) => {
   e.preventDefault();
   code = $("code").value.trim();
   if (!code) return;
   try { sessionStorage.setItem("inh-review-code", code); } catch (x) {}
   $("enter").disabled = true; $("login-status").textContent = "";
-  next(-1);
+  next(-1).then(() => askNext(-1));
 });
+$("tab-check").addEventListener("click", () => showTab("check"));
+$("tab-ask").addEventListener("click", () => showTab("ask"));
 $("ok").addEventListener("click", () => save("ok"));
 $("skip").addEventListener("click", () => { if (!busy) next(index); });
 $("fix").addEventListener("click", () => showEditor(true));
 $("cancel").addEventListener("click", () => showEditor(false));
-$("pal").addEventListener("click", () => {
-  const t = $("edit"); t.setRangeText("Ӏ", t.selectionStart, t.selectionEnd, "end"); t.focus();
-});
+$("pal").addEventListener("click", () => insertPal($("edit")));
+$("a-pal").addEventListener("click", () => insertPal($("a-edit")));
 $("save").addEventListener("click", () => {
   const inh = fixPalochka($("edit").value).trim();
   if (!inh) { setStatus("Впишите перевод.", "error"); return; }
   save("fix", inh);
 });
+$("a-save").addEventListener("click", () => {
+  if (busy || !askItem) return;
+  const inh = fixPalochka($("a-edit").value).trim();
+  if (!inh) { setStatus("Впишите перевод.", "error", "a-status"); return; }
+  setStatus("Сохраняю…", "", "a-status");
+  askNext(askIndex, "Сохранено. Баркал!", { id: askItem.id, inh });
+});
+$("a-skip").addEventListener("click", () => { if (!busy) askNext(askIndex); });
 
-if (code) next(-1);
+if (code) next(-1).then(() => askNext(-1));
 </script>
 </body>
 </html>

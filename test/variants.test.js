@@ -44,10 +44,12 @@ const shape = (vs) => {
   assert.strictEqual(r.data.variants[0].rank, 2);
   console.log("ok 1: «Как дела?» →", r.data.variants.map((v) => `${v.best ? "✓ " : ""}${v.text} (${v.note}) [${v.sourceLabel}]`).join(" | "));
 
-  // 2. слово только из открытого словаря: оба варианта PanLex, без ИИ
+  // 2. слово из словарей PaydaDosh и PanLex (не из словаря проекта): без ИИ, PaydaDosh надёжнее — первым
   r = await run({ text: "бурый", source: "ru", target: "inh", mode: "word" });
   shape(r.data.variants);
-  assert.ok(r.data.variants.every((v) => v.source === "open" && v.sourceLabel === "Открытый словарь: PanLex" && v.rank === 3));
+  assert.ok(r.data.variants.every((v) => v.rank === 3 && ["paydadosh", "open"].includes(v.source)), JSON.stringify(r.data.variants));
+  assert.strictEqual(r.data.variants[0].sourceLabel, "Словарь PaydaDosh");
+  assert.ok(r.data.variants.some((v) => v.sourceLabel === "Открытый словарь: PanLex"), "PanLex тоже показан");
   assert.ok(r.data.variants.length >= 2, "другие пары базы тоже показаны");
   console.log("ok 2: «бурый» →", r.data.variants.map((v) => v.text).join(", "));
 
@@ -55,7 +57,7 @@ const shape = (vs) => {
   r = await run({ text: "дом", source: "ru", target: "inh", mode: "word" });
   shape(r.data.variants);
   assert.strictEqual(r.data.variants[0].source, "project");
-  assert.ok(r.data.variants.some((v) => v.source === "open"), "открытый словарь тоже в списке");
+  assert.ok(r.data.variants.some((v) => v.source === "open" || v.source === "paydadosh"), "другой словарь тоже в списке");
   console.log("ok 3: «дом» →", r.data.variants.map((v) => `${v.text} [${v.sourceLabel}]`).join(" | "));
 
   // 4. проверенное носителем — первое (исправление с сайта)
