@@ -20,6 +20,13 @@
 // чтобы носитель языка выбрал лучшую; выбранную ставят первой в DEFAULT_SEQUENCE.
 // Необязательно: EDITOR_CODE — если задан, сохранять исправления можно только с этим кодом.
 //   TIME_LIMIT_SECONDS — сколько секунд хостинг даёт функции (обычно определяется само).
+//   OPENROUTER_MODEL — платная модель OpenRouter, которая переводит первой (по умолчанию anthropic/claude-haiku-5.5;
+//                      например anthropic/claude-sonnet-5.5; off — без платной модели).
+//   PROVIDER_ORDER   — порядок сервисов, например gemini,openrouter,groq.
+//   AI_TEMPERATURE   — 0–0.2 для перевода (по умолчанию 0). Gemini 4 и 3.6+ её не принимают, им не передаётся.
+//   GEMINI_THINKING  — low | medium | high: сколько думает Gemini, когда времени много (на Netlify всегда low).
+//   DISTILL_MODELS   — модели, чьи уверенные переводы сохраняются как примеры для других (см. «дистилляция»).
+// Подсказки под текст подбирает lib/retrieval.js; ИИ отвечает JSON {translation, confidence, unknown_words}.
 
 const WORDS_RAW = require("../lib/ingush-words.js");
 const KB = require("../lib/ingush-guide.js");
@@ -27,6 +34,7 @@ const CORPUS = require("../lib/corpus.js");
 const LEX = require("../lib/corpus-lexicon.js");
 const BASE = require("../lib/base.js")(KB, LEX);
 const SEED = require("../data/phrases.json"); // база пар; verified ставит только человек на /review
+const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор слов и примеров под текст
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -44,6 +52,14 @@ const DEADLINE_MS = 9000; // если хостинг не сказал, скол
 const LONG_BUDGET_MS = 20000; // если времени столько или больше — модели могут думать дольше
 
 // ---------------- промпты (одни и те же для всех ИИ) ----------------
+// Каждый промпт состоит из двух частей:
+//   system — постоянная часть: роль, правила и справочник по ингушскому (lib/ingush-guide.js).
+//            Она одинаковая для всех текстов, поэтому Claude через OpenRouter и Gemini её кэшируют:
+//            повторные переводы дешевле и быстрее.
+//   user   — то, что подобрано под этот текст (lib/retrieval.js): нужные слова словаря, статистика
+//            корпуса, похожие проверенные фразы, слова без перевода в базе и сам текст.
+// Раньше Gemini получал весь словарик (559 слов) и все 132 фразы — длинный промпт, где нужные
+// слова терялись. Теперь в промпт идут только 40 подходящих слов и до 16 похожих фраз.
 
 const INGUSH_RULES = `Ingush rules:
 - Ingush (ГӀалгӀай мотт) is the Nakh language of the Ingush people. It is close to Chechen but different: use Ingush words, grammar and spelling, never Chechen forms.
@@ -53,18 +69,91 @@ const INGUSH_RULES = `Ingush rules:
 
 const hasIngush = (src, tgt) => src === "inh" || tgt === "inh";
 
-// Правила + справочник. tier: "full" (весь справочник) или "compact" (кратко, только нужные слова).
-function rulesFor(text, src, tgt, tier) {
-  if (!hasIngush(src, tgt)) return "";
-  // слова ищем по исходному тексту: он на русском или на ингушском
-  const lookup = src === "inh" ? "inh" : "ru";
-  return INGUSH_RULES + "\n\n" + KB.knowledgeBlock(text, lookup, tier);
+// Как не выдумывать слова (главная беда бесплатных моделей).
+const honestyInh = (S) => `How to stay correct:
+- Build the Ingush text from words you can see in the dictionary entries, the corpus word statistics and the example translations of this request. Change endings and class marks as the grammar needs.
+- If you are not sure a word exists in Ingush, do not invent one and do not use a Chechen word instead. Use a simpler Ingush word you are sure about, or say the same thing in other words. If there is no way around it, write the ${S} word in square brackets, for example [компьютер], and add it to unknown_words.
+- Never use the Chechen forms listed in the reference. Make every class mark agree (в for a man, й for a woman, б for many people, д for тхо, вай, шо); use the ergative for the doer of a transitive verb and the dative with хов, хац, лов, деза, хет, гу.
+- Do not leave Russian words inside Ingush sentences (names of people, places and organisations stay as they are).
+- Before answering, check your draft word by word against the reference, the dictionary entries and the examples: replace Chechen forms, fix class marks and case endings. Output only the corrected final version.
+`;
+const HONESTY_FROM_INH = `How to stay correct:
+- The Ingush text may use dialect forms, typos or Latin/Chechen spellings: use the reference, the dictionary entries and the examples to understand it, and translate the meaning.
+- If you cannot understand an Ingush word, keep it in square brackets, for example [кхоачам], and add it to unknown_words. Do not guess wildly.
+`;
+
+const textOutput = (T) => `Output rules:
+- Keep the line breaks, punctuation, numbers and proper names. Keep the meaning and tone; use natural everyday ${T}.
+- If the text is already in ${T}, return it unchanged.
+- Reply with JSON only, exactly in this shape (no markdown, no notes outside the JSON):
+{"translation": "the full ${T} translation", "confidence": "high | medium | low", "unknown_words": ["source words you were not sure how to translate"]}
+- confidence: high — every word is taken from the dictionary or the examples; medium — some words are your own; low — you are guessing.`;
+
+const wordOutput = (S, T) => `Reply with JSON only, in exactly this shape:
+{"translation": "best ${T} translation",
+ "alternatives": [{"text": "another ${T} translation", "meaning": "short gloss in Russian of how it differs"}],
+ "part_of_speech": "noun | verb | adjective | adverb | phrase | other",
+ "example": {"source": "a short everyday sentence in ${S} using it", "target": "that sentence in ${T}"},
+ "note": "one short usage note in Russian, or an empty string",
+ "confidence": "high | medium | low"}
+Give 0 to 3 alternatives. Set confidence to low if you are not sure the ${T} words are correct.`;
+
+const repairOutput = `Correct the draft:
+- Replace each listed word with a real Ingush word or phrase of the same meaning. Take it from the dictionary entries, the corpus word statistics or the examples. If nothing there fits, say that part in other words that you are sure exist in Ingush; if even that is impossible, leave the source word in [square brackets].
+- Keep every other word of the draft, changing it only where the grammar requires it (class marks, case endings).
+- Names of people and places stay as they are.
+- Output only the corrected translation, with no notes or explanations. Keep the line breaks.`;
+
+// Постоянная часть промпта. kind: "text" | "word" | "repair"; tier: "full" (весь справочник) или "compact".
+const SYSTEM_MEMO = {};
+function systemPrompt(kind, src, tgt, tier) {
+  const key = [kind, src, tgt, tier].join("|");
+  if (SYSTEM_MEMO[key]) return SYSTEM_MEMO[key];
+  const S = LANGS[src], T = LANGS[tgt], ing = hasIngush(src, tgt);
+  const role =
+    kind === "repair" ? `You are an editor and a native speaker of Ingush. You correct translations from ${S} into ${T}.`
+    : kind === "word" ? `You are a bilingual dictionary${ing ? " made by native speakers of Ingush" : ""}. You translate single words and short phrases from ${S} into ${T}.`
+    : `You are a professional translator${ing ? " and a native speaker of Ingush" : ""}. You translate texts from ${S} into ${T}.`;
+  const ref = !ing ? "" :
+    `\n\n${INGUSH_RULES}\n\n<ingush_reference>\n${tier === "full" ? KB.GUIDE : KB.GUIDE_SHORT}\n</ingush_reference>`;
+  const honesty = tgt === "inh" ? honestyInh(S) : src === "inh" ? HONESTY_FROM_INH : "";
+  const out = kind === "text" ? textOutput(T) : kind === "word" ? wordOutput(S, T) : repairOutput;
+  return (SYSTEM_MEMO[key] = `${role}${ref}\n\n${honesty}${honesty ? "\n" : ""}${out}`);
 }
 
-function examplesBlock(examples) {
-  if (!examples.length) return "";
-  const lines = examples.map((e) => `${LANGS[e.source]}: ${e.text}\n${LANGS[e.target]}: ${e.translation}`);
-  return `<native_speaker_corrections>\nTranslations checked by native speakers. They are correct: reuse their words, spelling and style, and prefer them over everything else.\n\n${lines.join("\n\n")}\n</native_speaker_corrections>\n\n`;
+// Подсказки под этот текст: словарь (только нужные слова) и слова, которых нет в базе.
+function dictionaryBlock(text, src, tgt, tier, shots) {
+  if (!hasIngush(src, tgt)) return "";
+  if (src !== "ru" && src !== "inh") {
+    // английский, казахский и т.п. → ингушский: по словам текста словарь не найти, даём весь словарик (как раньше)
+    return tier === "full"
+      ? `<dictionary>\nRussian — Ingush dictionary of common words (class of the singular / of the plural; мн. = plural form):\n${KB.GLOSSARY.map(([ru, inh]) => `${ru} — ${inh}`).join("\n")}\n</dictionary>\n\n`
+      : "";
+  }
+  const hits = RET.pickDictionary(text, src, tier === "full" ? 40 : 25);
+  const missing = RET.missingWords(text, src, hits, shots);
+  let out = "";
+  if (hits.length) {
+    out += `<dictionary_entries>\nRussian — Ingush dictionary entries for the words of this text (found by word stem, so some may be another form or a false match; class of the singular / of the plural; мн. = plural):\n${hits.map((h) => `${h.ru} — ${h.inh}`).join("\n")}\n</dictionary_entries>\n\n`;
+  }
+  if (missing.length) {
+    out += `<not_in_dictionary>\nThese words of the text have no entry in the project's dictionary: ${missing.join(", ")}.\nTranslate them only if you are sure of the Ingush word; otherwise follow the rule about [square brackets].\n</not_in_dictionary>\n\n`;
+  }
+  return out;
+}
+
+// Примеры перевода (few-shot): исправления носителей, фразы справочника, переводы сильной модели.
+// Самые похожие стоят последними — ближе к тексту.
+function examplesBlock(shots, src, tgt) {
+  if (!shots.length) return "";
+  const S = LANGS[src], T = LANGS[tgt];
+  const LABEL = { native: " (checked by a native speaker)", guide: "", distilled: " (by a stronger AI model, not checked)" };
+  const line = (e) => {
+    if (e.source) return `${LANGS[e.source]}: ${e.text}\n${LANGS[e.target]}: ${e.translation}`; // другие языки
+    const from = src === "inh" ? e.inh : e.ru, to = src === "inh" ? e.ru : e.inh;
+    return `${S}: ${from}\n${T}: ${to}${LABEL[e.from] || ""}`;
+  };
+  return `<example_translations>\nCorrect translations of similar phrases. Reuse their words, spelling and grammar. Translations checked by a native speaker win over everything else.\n\n${shots.slice().reverse().map(line).join("\n\n")}\n</example_translations>\n\n`;
 }
 
 // Как слова текста переводятся в настоящих текстах (статистика по корпусу, без предложений).
@@ -78,78 +167,61 @@ function lexiconBlock(text, src, tgt, tier) {
 // Настоящие пары предложений из корпуса (книги, «Сердало», Википедия) с теми же словами, что в тексте.
 function corpusBlock(pairs, src, tier) {
   if (!pairs || !pairs.length) return "";
-  const list = tier === "full" ? pairs.slice(0, 15) : pairs.slice(0, 8).sort((a, b) => a[0].length - b[0].length).slice(0, 4);
+  const list = tier === "full" ? pairs.slice(0, 10) : pairs.slice(0, 8).sort((a, b) => a[0].length - b[0].length).slice(0, 4);
   const lines = list.map(([inh, ru]) => (src === "inh" ? `Ingush: ${inh}\nRussian: ${ru}` : `Russian: ${ru}\nIngush: ${inh}`));
   return `<corpus_examples>\nReal sentence pairs from Ingush books, the Ingush newspaper «Сердало» and Wikipedia that share words with the text. They show how these words are really used in Ingush (the translations can be loose; do not copy names or facts from them).\n\n${lines.join("\n\n")}\n</corpus_examples>\n\n`;
 }
 
-function ingushChecks(src, tgt) {
-  if (tgt === "inh") {
-    return `- Write real Ingush: take words from the glossary, the corpus word statistics, the verified phrases, the corpus examples and the corrections; never use the Chechen forms listed in the reference.
-- Make every class mark agree (в for a man, й for a woman, б for many people, д for тхо, вай, шо); use the ergative for the doer of a transitive verb and the dative with хов, хац, лов, деза, хет, гу.
-- Do not invent words and do not leave Russian words inside Ingush sentences.
-- Before answering, check your draft word by word against the reference, the glossary and the examples: replace Chechen forms, fix class marks and case endings. Output only the corrected final version.\n`;
-  }
-  if (src === "inh") {
-    return `- The Ingush text may use dialect forms, typos or Latin/Chechen spellings: use the reference and the glossary to understand it, and translate the meaning.\n`;
-  }
-  return "";
+// Всё, что подобрано под текст. shots — примеры (см. pickShots в обработчике).
+function contextFor(text, src, tgt, shots, tier, corpus) {
+  const few = tier === "full" ? shots : shots.slice(0, 8);
+  return dictionaryBlock(text, src, tgt, tier, few) + lexiconBlock(text, src, tgt, tier) + corpusBlock(corpus, src, tier) + examplesBlock(few, src, tgt);
 }
 
-function textPrompt(text, src, tgt, examples = [], tier = "full", corpus = []) {
-  const S = LANGS[src], T = LANGS[tgt];
-  return `You are a professional translator${hasIngush(src, tgt) ? " and a native speaker of Ingush" : ""}. Translate the text inside <text> from ${S} into ${T}.
-
-${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}Output rules:
-- Output only the translation, with no quotes, notes, labels, transliteration or explanations.
-- Keep the line breaks, punctuation, numbers and proper names.
-- Keep the meaning and tone, and use natural everyday ${T}.
-${ingushChecks(src, tgt)}- If the text is already in ${T}, output it unchanged.
-
-<text>
-${text}
-</text>`;
+function textPrompt(text, src, tgt, shots = [], tier = "full", corpus = []) {
+  return {
+    system: systemPrompt("text", src, tgt, tier),
+    user: `${contextFor(text, src, tgt, shots, tier, corpus)}Translate the text inside <text> from ${LANGS[src]} into ${LANGS[tgt]}. Reply with the JSON only.\n\n<text>\n${text}\n</text>`,
+  };
 }
 
 // Второй проход: ИИ получает свой черновик и список слов, которых нет в ингушских текстах.
-function repairPrompt(text, src, tgt, draft, bad, examples = [], tier = "full", corpus = []) {
-  const S = LANGS[src], T = LANGS[tgt];
-  return `You are an editor and a native speaker of Ingush. A translation from ${S} into ${T} needs correcting.
-
-${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}<source>
-${text}
-</source>
-
-<draft>
-${draft}
-</draft>
-
-These words of the draft were not found in a list of 155,000 word forms from Ingush books and newspapers, so they are probably invented, misspelled, Chechen or left in Russian:
-${bad.join(", ")}
-
-Correct the draft:
-- Replace each of these words with a real Ingush word or phrase of the same meaning. Take it from the glossary, the corpus word statistics or the examples above. If nothing there fits, say that part in other words that you are sure exist in Ingush.
-- Keep every other word of the draft, changing it only where the grammar requires it (class marks, case endings).
-- Names of people and places stay as they are.
-- Output only the corrected translation, with no notes or explanations. Keep the line breaks.`;
+function repairPrompt(text, src, tgt, draft, bad, shots = [], tier = "full", corpus = []) {
+  return {
+    system: systemPrompt("repair", src, tgt, tier),
+    user: `${contextFor(text, src, tgt, shots, tier, corpus)}<source>\n${text}\n</source>\n\n<draft>\n${draft}\n</draft>\n\nThese words of the draft were not found in a list of 155,000 word forms from Ingush books and newspapers, so they are probably invented, misspelled, Chechen or left in Russian:\n${bad.join(", ")}`,
+  };
 }
 
-function wordPrompt(text, src, tgt, examples = [], tier = "full", corpus = []) {
-  const S = LANGS[src], T = LANGS[tgt];
-  return `You are a bilingual dictionary${hasIngush(src, tgt) ? " made by native speakers of Ingush" : ""}. Translate the word or short phrase inside <text> from ${S} into ${T}.
+function wordPrompt(text, src, tgt, shots = [], tier = "full", corpus = []) {
+  return {
+    system: systemPrompt("word", src, tgt, tier),
+    user: `${contextFor(text, src, tgt, shots, tier, corpus)}Translate the word or short phrase inside <text> from ${LANGS[src]} into ${LANGS[tgt]}.\n\n<text>\n${text}\n</text>`,
+  };
+}
 
-${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}${ingushChecks(src, tgt)}Reply with JSON only, in exactly this shape:
-{"translation": "best ${T} translation",
- "alternatives": [{"text": "another ${T} translation", "meaning": "short gloss in Russian of how it differs"}],
- "part_of_speech": "noun | verb | adjective | adverb | phrase | other",
- "example": {"source": "a short everyday sentence in ${S} using it", "target": "that sentence in ${T}"},
- "note": "one short usage note in Russian, or an empty string",
- "confidence": "high | medium | low"}
-Give 0 to 3 alternatives. Set confidence to low if you are not sure the ${T} words are correct.
+// Схема ответа для Gemini (structured output): модель обязана вернуть именно такой JSON.
+const TEXT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    translation: { type: "STRING" },
+    confidence: { type: "STRING", enum: ["high", "medium", "low"] },
+    unknown_words: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["translation", "confidence", "unknown_words"],
+};
 
-<text>
-${text}
-</text>`;
+// Ответ ИИ на textPrompt → { translation, confidence, unknown_words }. Если пришёл не JSON — берём текст как есть.
+function readTranslation(raw) {
+  const v = parseJson(raw);
+  if (v && typeof v.translation === "string" && v.translation.trim()) {
+    const conf = ["high", "medium", "low"].includes(String(v.confidence).toLowerCase()) ? String(v.confidence).toLowerCase() : "";
+    const unknown = Array.isArray(v.unknown_words) ? v.unknown_words.map(String).filter(Boolean).slice(0, 20) : [];
+    return { translation: v.translation.trim(), confidence: conf, unknown_words: unknown };
+  }
+  const t = cleanOutput(raw);
+  if (/^\s*[{[]/.test(t)) return { translation: "", confidence: "", unknown_words: [] }; // сломанный JSON
+  return { translation: t, confidence: "", unknown_words: [] };
 }
 
 // ---------------- текст ----------------
@@ -184,8 +256,11 @@ const words = () => (WORDS || (WORDS = new Set(WORDS_RAW.split("\n"))));
 const wordKey = (w) =>
   fixPalochka(w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC")).toLowerCase().replace(/Ӏ/g, "ӏ");
 
+// Слова в [квадратных скобках] ИИ сам пометил как неизвестные — их не проверяем.
+const noBrackets = (t) => String(t || "").replace(/\[[^\]\n]{0,80}\]/g, " ");
+
 function checkIngush(text) {
-  const found = String(text).match(/[Ѐ-ӿ]+(?:-[Ѐ-ӿ]+)*/g) || [];
+  const found = noBrackets(text).match(/[Ѐ-ӿ]+(?:-[Ѐ-ӿ]+)*/g) || [];
   const set = words();
   const unknown = new Set();
   let checked = 0, known = 0;
@@ -217,7 +292,7 @@ function namesIn(text) {
 
 // Подозрительные слова перевода: их нет в ингушских текстах, и это не имена.
 function suspects(translation, sourceText) {
-  const { unknown } = checkIngush(translation);
+  const { unknown } = checkIngush(translation); // слова в [скобках] сюда не попадают
   if (!unknown.length) return [];
   const names = namesIn(translation);
   const srcNames = new Set([...namesIn(sourceText)].map((w) => w.slice(0, 4)));
@@ -336,65 +411,83 @@ async function postJson(url, headers, body, timeoutMs) {
   }
 }
 
-// Когда времени мало, просим Gemini думать недолго (у моделей 2.5 и 3 это задаётся по-разному).
-function geminiThinking(model) {
-  if (/lite/i.test(model)) return null;
-  if (/gemini-2\.5/i.test(model)) return { thinkingBudget: 512 };
-  return { thinkingLevel: "low" };
+// Промпт может быть строкой (как раньше) или { system, user } — постоянная часть отдельно.
+const asParts = (prompt) => (typeof prompt === "string" ? { system: "", user: prompt } : prompt);
+
+// Насколько «творчески» отвечает ИИ. Для перевода нужно 0–0.2: меньше выдумок, один и тот же ответ.
+function temperature() {
+  const t = Number(process.env.AI_TEMPERATURE);
+  return Number.isFinite(t) && t >= 0 && t <= 1 ? t : 0;
 }
 
+// Сколько Gemini думает. В быстром режиме (Netlify, около 10 секунд) — мало, иначе — GEMINI_THINKING или по умолчанию.
+// У моделей 2.5 это задаётся числом токенов, у 3.x и 4 — уровнем (low, medium, high).
+function geminiThinking(model, fast) {
+  if (/lite/i.test(model)) return null;
+  const level = String(process.env.GEMINI_THINKING || "").toLowerCase();
+  if (/gemini-2\.5/i.test(model)) {
+    if (fast) return { thinkingBudget: 512 };
+    return level ? { thinkingBudget: { low: 512, medium: 2048, high: 8192 }[level] || 2048 } : null;
+  }
+  if (fast) return { thinkingLevel: "low" };
+  return level ? { thinkingLevel: level } : { thinkingLevel: "medium" };
+}
+// Gemini 4 и Gemini 3.6+ не принимают temperature (Google просит её не передавать), старым — передаём.
+const geminiTakesTemperature = (model) => !/gemini-(4|3\.[6-9])/i.test(model) && !/latest/i.test(model);
+
+// Бесплатная модель Gemini. json: true — ответ JSON, объект — ещё и схема ответа (structured output).
 async function callGemini(model, prompt, json, timeoutMs, opts = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const started = Date.now();
+  const { system, user } = asParts(prompt);
   const gen = {};
   if (json) gen.responseMimeType = "application/json";
-  const thinking = opts.fast ? geminiThinking(model) : null;
+  if (json && typeof json === "object") gen.responseSchema = json;
+  if (geminiTakesTemperature(model)) gen.temperature = temperature();
+  const thinking = geminiThinking(model, opts.fast);
   if (thinking) gen.thinkingConfig = thinking;
   const send = (g, ms) => postJson(
     url, { "x-goog-api-key": process.env.GEMINI_API_KEY },
-    { contents: [{ role: "user", parts: [{ text: prompt }] }], ...(Object.keys(g).length ? { generationConfig: g } : {}) },
+    {
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      ...(Object.keys(g).length ? { generationConfig: g } : {}),
+    },
     ms
   );
   let data;
   try {
     data = await send(gen, timeoutMs);
   } catch (e) {
-    // модель не поддерживает такую настройку — повторяем без неё
-    if (!thinking || e.status !== 400 || !/think/i.test(e.message)) throw e;
+    // модель не приняла какую-то настройку (думание, схема, temperature) — повторяем без них
+    if (e.status !== 400 || !Object.keys(gen).length) throw e;
     const left = timeoutMs - (Date.now() - started);
     if (left < 1500) throw e;
-    delete gen.thinkingConfig;
-    data = await send(gen, left);
+    data = await send(json ? { responseMimeType: "application/json" } : {}, left);
   }
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   return parts.filter((p) => !p.thought).map((p) => p.text || "").join("");
 }
 
-// Claude через OpenRouter: неизменная часть промпта (правила и словарь) помечается для кэша —
-// в серии переводов она стоит в 20 раз дешевле и обрабатывается быстрее.
-function cacheParts(prompt) {
-  const mark = "</glossary>\n\n";
-  const cut = prompt.indexOf(mark);
-  if (cut < 4000) return null;
-  const at = cut + mark.length;
-  return [
-    { type: "text", text: prompt.slice(0, at), cache_control: { type: "ephemeral" } },
-    { type: "text", text: prompt.slice(at) },
-  ];
-}
-
+// OpenRouter, Groq, Grok (формат OpenAI). Постоянная часть промпта идёт отдельным сообщением system.
+// Для Claude (через OpenRouter) она помечается для кэша — в серии переводов она стоит в 10 раз дешевле
+// и обрабатывается быстрее (если она достаточно длинная: у Anthropic есть минимальный размер кэша).
 const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, prompt, json, timeoutMs, opts = {}) => {
   const started = Date.now();
   const send = (body, ms) => postJson(url, { Authorization: `Bearer ${process.env[keyEnv]}`, ...extraHeaders }, { model, ...body }, ms);
-  const parts = opts.cache ? cacheParts(prompt) : null;
+  const { system, user } = asParts(prompt);
+  const sys = !system ? null
+    : opts.cache && system.length >= 4000 ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
+    : system;
+  const messages = (s) => (s ? [{ role: "system", content: s }, { role: "user", content: user }] : [{ role: "user", content: user }]);
   let data;
   try {
-    data = await send({ messages: [{ role: "user", content: parts || prompt }], temperature: 0 }, timeoutMs);
+    data = await send({ messages: messages(sys), temperature: temperature() }, timeoutMs);
   } catch (e) {
-    // модель не приняла настройки запроса — повторяем самым простым способом
+    // модель не приняла настройки запроса — повторяем самым простым способом (всё одним сообщением)
     const left = timeoutMs - (Date.now() - started);
     if (e.status !== 400 || left < 1500) throw e;
-    data = await send({ messages: [{ role: "user", content: prompt }] }, left);
+    data = await send({ messages: [{ role: "user", content: system ? `${system}\n\n${user}` : user }] }, left);
   }
   const msg = data.choices && data.choices[0] && data.choices[0].message;
   let content = msg && msg.content;
@@ -467,27 +560,35 @@ function prompts(build) {
 }
 
 // Порядок по умолчанию: сначала сильные модели, слабые — в самом конце.
-// Первая — платная (Claude Haiku 5.5 через OpenRouter): работает, когда на счёте OpenRouter есть деньги,
-// иначе пропускается, и перевод идёт бесплатными моделями.
-const DEFAULT_SEQUENCE = [
-  ["openrouter", "anthropic/claude-haiku-5.5"],
-  ["gemini", "gemini-flash-latest"],
-  ["gemini", "gemini-2.5-flash"],
-  ["grok", "grok-4"],
-  ["groq", "moonshotai/kimi-k2-instruct-0905"],
-  ["groq", "moonshotai/kimi-k2-instruct"],
-  ["openrouter", "moonshotai/kimi-k2:free"],
-  ["openrouter", "openrouter/free"],
-  ["gemini", "gemini-flash-lite-latest"],
-  ["groq", "qwen/qwen3-32b"],
-];
+// Первая — платная модель через OpenRouter (OPENROUTER_MODEL, по умолчанию Claude Haiku 5.5):
+// работает, когда на счёте OpenRouter есть деньги, иначе пропускается, и перевод идёт бесплатными моделями.
+// OPENROUTER_MODEL=off — платную модель не использовать совсем.
+// Бесплатные модели Gemini (ноябрь 2026, ai.google.dev/gemini-api/docs/pricing): Gemini 4 Hydrogen —
+// самая сильная из бесплатных; 3.8 Flash и 2.5 Flash — запасные; 3.5 Flash-Lite — самая быстрая.
+const PAID_DEFAULT = "anthropic/claude-haiku-5.5";
+function defaultSequence() {
+  const paid = String(process.env.OPENROUTER_MODEL || PAID_DEFAULT).trim();
+  return [
+    ...(paid && paid.toLowerCase() !== "off" ? [["openrouter", paid]] : []),
+    ["gemini", "gemini-4-hydrogen"],
+    ["gemini", "gemini-3.8-flash"],
+    ["gemini", "gemini-2.5-flash"],
+    ["grok", "grok-4"],
+    ["groq", "moonshotai/kimi-k2-instruct-0905"],
+    ["groq", "moonshotai/kimi-k2-instruct"],
+    ["openrouter", "moonshotai/kimi-k2:free"],
+    ["openrouter", "openrouter/free"],
+    ["gemini", "gemini-3.5-flash-lite"],
+    ["groq", "qwen/qwen3-32b"],
+  ];
+}
 const MODEL_ENV = { gemini: "GEMINI_MODELS", groq: "GROQ_MODELS", openrouter: "OPENROUTER_MODELS", grok: "XAI_MODELS" };
 
 const hasKey = (p) => PROVIDERS[p] && process.env[PROVIDERS[p].keyEnv];
 
 function attempts() {
   const order = envList("PROVIDER_ORDER");
-  let seq = DEFAULT_SEQUENCE.slice();
+  let seq = defaultSequence();
   // свои списки моделей через переменные GEMINI_MODELS и т.п.
   for (const [p, env] of Object.entries(MODEL_ENV)) {
     const custom = envList(env);
@@ -508,8 +609,10 @@ function isBadKey(e) {
 // На счёте сервиса нет денег: его платные модели 10 минут не трогаем, чтобы не терять время на каждом переводе.
 const BROKE_AT = {};
 const isBroke = (p) => BROKE_AT[p] && Date.now() - BROKE_AT[p] < 10 * 60_000;
-// Когда времени мало, бесплатным моделям идёт короткий справочник: длинный они не успевают прочитать.
-const tierNow = (p, model, fast) => (fast && !isPaid(p, model) ? "compact" : tierFor(p, model));
+// Когда времени мало, бесплатным моделям Groq и OpenRouter идёт короткий справочник: длинный они не успевают прочитать.
+// Gemini теперь получает полный справочник всегда: словарь и примеры подбираются под текст, и промпт
+// стал в несколько раз короче, чем раньше (около 10 тыс. знаков вместо 60 тыс.).
+const tierNow = (p, model, fast) => (fast && !isPaid(p, model) && p !== "gemini" ? "compact" : tierFor(p, model));
 
 // Пробует модели, пока одна не ответит. Возвращает { text, by }.
 // prompt(tier) возвращает промпт нужного размера.
@@ -526,7 +629,7 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const attempt = async (p, model, ms) => {
     const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), json, ms, callOpts(p, model, fast)));
     if (!text) throw httpError(503, "Empty answer");
-    return { text, by: modelLabel(p, model) };
+    return { text, by: modelLabel(p, model), p, model };
   };
   const failed = (p, model, e) => {
     last = e;
@@ -610,6 +713,48 @@ const CACHE = new Map();
 function cacheSet(k, v) {
   if (CACHE.size > 1000) CACHE.delete(CACHE.keys().next().value);
   CACHE.set(k, v);
+}
+
+// ---------------- «дистилляция»: переводы сильной модели как примеры для слабой ----------------
+// Необязательно, по умолчанию выключено. Если задать DISTILL_MODELS (например anthropic/claude-opus-5.5),
+// то уверенные переводы этой модели (confidence high, без [неизвестных] слов, не длиннее 300 знаков)
+// сохраняются в хранилище Netlify Blobs под ключом "distilled". Потом они идут в промпт как примеры
+// с пометкой «сильная модель, не проверено» — так дешёвая модель (Haiku, Gemini) учится на них.
+// Проверенные носителем фразы всегда важнее. Ошибки сильной модели тоже копируются — поэтому
+// такие переводы лучше просматривать (их видно в хранилище) и исправлять кнопкой «Исправить».
+let DISTILLED = null, DISTILLED_AT = 0;
+const distillModels = () => envList("DISTILL_MODELS") || [];
+async function loadDistilled() {
+  if (!distillModels().length) return [];
+  if (DISTILLED && Date.now() - DISTILLED_AT < 60_000) return DISTILLED;
+  const store = phraseStore();
+  let list = [];
+  if (store) {
+    try { const got = await store.get("distilled", { type: "json" }); if (Array.isArray(got)) list = got; } catch (e) { console.error("distilled load:", e.message); }
+  }
+  DISTILLED = list; DISTILLED_AT = Date.now();
+  return DISTILLED;
+}
+async function maybeDistill(input, source, result, info) {
+  if (!info.model || !distillModels().includes(info.model)) return;
+  if (info.confidence !== "high" || info.unknown.length || /\[/.test(result.translation)) return;
+  if (input.length > 300 || (result.unknown && result.unknown.length)) return;
+  const store = phraseStore();
+  if (!store) return;
+  try {
+    const list = (await loadDistilled()).slice();
+    const entry = source === "ru"
+      ? { ru: input, inh: result.translation, from: "distilled", model: info.model, at: new Date().toISOString() }
+      : { ru: result.translation, inh: input, from: "distilled", model: info.model, at: new Date().toISOString() };
+    const k = normKey(entry.ru);
+    const kept = list.filter((e) => normKey(e.ru) !== k);
+    kept.push(entry);
+    while (kept.length > 2000) kept.shift();
+    await store.setJSON("distilled", kept);
+    DISTILLED = kept; DISTILLED_AT = Date.now();
+  } catch (e) {
+    console.error("distilled save:", e.message); // не сохранилось — перевод всё равно отдаём
+  }
 }
 
 // ---------------- обработчик ----------------
@@ -800,7 +945,12 @@ module.exports = async (req, res) => {
     if (r) return res.status(200).json(r);
   }
 
-  const examples = pickExamples(pool, input, source, target);
+  // примеры для ИИ: для русского ↔ ингушского — 16 самых похожих пар (lib/retrieval.js),
+  // для других языков — исправления носителей с теми же словами (как раньше)
+  const distilled = isRuInh(source, target) ? await loadDistilled() : [];
+  const examples = isRuInh(source, target)
+    ? RET.pickFewShots(input, source, target, pool, distilled, 16)
+    : pickExamples(pool, input, source, target);
   let budget = timeBudget(req);
   const hurried = budget < LONG_BUDGET_MS; // времени мало: ИИ отвечает в быстром режиме, думает меньше
 
@@ -841,7 +991,7 @@ module.exports = async (req, res) => {
     const results = await askAll(prompts((tier) => textPrompt(input, source, target, examples, tier, corpus)), budget);
     for (const r of results) {
       if (r.text) {
-        r.text = fixT(r.text);
+        r.text = fixT(readTranslation(r.text).translation || r.text);
         if (target === "inh") Object.assign(r, checkIngush(r.text));
       }
     }
@@ -888,10 +1038,20 @@ module.exports = async (req, res) => {
         result = { translation: fixT(v.translation.trim()), details: v, model: by };
       }
     }
+    let distill = null;
     if (!result) {
       const left = budget - (Date.now() - started);
-      const { text: out, by } = await ask(prompts((tier) => textPrompt(input, source, target, examples, tier, corpus)), false, left);
-      result = { translation: fixT(out), model: by };
+      const { text: raw, by, model } = await ask(prompts((tier) => textPrompt(input, source, target, examples, tier, corpus)), TEXT_SCHEMA, left);
+      const v = readTranslation(raw);
+      if (!v.translation) throw httpError(503, "ИИ вернул пустой ответ. Попробуйте ещё раз.");
+      result = { translation: fixT(v.translation), model: by };
+      if (v.confidence) result.confidence = v.confidence;
+      if (v.unknown_words.length) result.aiUnknown = v.unknown_words;
+      // плашка «Уверен / Не уверен» под переводом (её уже умеет показывать страница)
+      if (v.confidence || v.unknown_words.length) {
+        result.details = { confidence: v.confidence, alternatives: [], note: v.unknown_words.length ? `ИИ не уверен в словах: ${v.unknown_words.join(", ")}` : "" };
+      }
+      distill = { model, confidence: v.confidence, unknown: v.unknown_words };
     }
     result.examples = examples.length;
     result.corpus = corpus.length;
@@ -905,6 +1065,7 @@ module.exports = async (req, res) => {
       if (mode !== "word") result.suspect = suspects(result.translation, input); // для второго прохода
     }
     if (mode !== "word") { result.words = words; result.similar = similar; }
+    if (distill && isRuInh(source, target)) await maybeDistill(input, source, result, distill);
     cacheSet(cacheKey, result);
     return res.status(200).json(result);
   } catch (e) {
@@ -918,3 +1079,5 @@ module.exports._checkIngush = checkIngush;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
 module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; };
+module.exports._prompts = { textPrompt, wordPrompt, repairPrompt, readTranslation, systemPrompt };
+module.exports._RET = RET;
