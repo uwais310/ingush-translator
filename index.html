@@ -241,7 +241,7 @@
 
         <section class="panel" id="cmp-panel" hidden aria-labelledby="cmp-title">
           <h2 id="cmp-title">Как переводят разные ИИ</h2>
-          <p>Выберите лучший вариант: его можно сразу сохранить как правильный или сначала поправить.</p>
+          <p>Выберите лучший вариант: его можно сразу сохранить как правильный или сначала поправить. У платных моделей рядом написана примерная цена одного перевода.</p>
           <div class="alts" id="cmp-list"></div>
           <div class="row"><button class="btn small" id="cmp-close" type="button">Закрыть</button></div>
         </section>
@@ -581,7 +581,7 @@ $("fix-save").addEventListener("click", async () => {
 els.compare.addEventListener("click", async () => {
   if (!lastPair || !lastInput || busy) return;
   closePanels();
-  const list = $("cmp-list"); list.innerHTML = "<p>Спрашиваю все ИИ сразу… это до 10 секунд.</p>";
+  const list = $("cmp-list"); list.innerHTML = "<p>Спрашиваю все ИИ сразу… это может занять до минуты.</p>";
   $("cmp-panel").hidden = false;
   els.compare.disabled = true;
   try {

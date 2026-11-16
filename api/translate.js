@@ -14,8 +14,10 @@
 //
 // Ключи (переменные окружения хостинга), хватит одного:
 //   GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, XAI_API_KEY (платный)
-// Если на счёте OpenRouter есть деньги, первым переводит Claude (anthropic/claude-sonnet-5.5):
-// это платно, примерно 3–4 цента за перевод. Без денег на счёте всё работает бесплатно, как раньше.
+// Если на счёте OpenRouter есть деньги, первым переводит Claude Haiku 5.5 (anthropic/claude-haiku-5.5):
+// это платно, примерно 0,2 цента за перевод. Без денег на счёте всё работает бесплатно, как раньше.
+// Кнопка «Сравнить ИИ» при деньгах на счёте показывает ещё и другие платные модели (COMPARE_PAID),
+// чтобы носитель языка выбрал лучшую; выбранную ставят первой в DEFAULT_SEQUENCE.
 // Необязательно: EDITOR_CODE — если задан, сохранять исправления можно только с этим кодом.
 //   TIME_LIMIT_SECONDS — сколько секунд хостинг даёт функции (обычно определяется само).
 
@@ -418,10 +420,23 @@ const PROVIDERS = {
 const isPaid = (p, model) => p === "openrouter" && model !== "openrouter/free" && !model.endsWith(":free");
 const tierFor = (p, model) => (isPaid(p, model) ? "full" : PROVIDERS[p].tier);
 const callOpts = (p, model, fast) => ({ fast, cache: p === "openrouter" && model.startsWith("anthropic/") });
-// «anthropic/claude-sonnet-5.5» → «Claude Sonnet 5.5 (OpenRouter)»
+// Платные модели для кнопки «Сравнить ИИ»: [модель, оценка цены одного перевода с полным справочником].
+// Цены за миллион входных токенов на OpenRouter (ноябрь 2026): Opus 5.5 — $4, Sonnet 5.5 — $2,
+// Haiku 5.5 и GPT-6 Luna — $0.10, DeepSeek V4.1 Flash — $0.30, GLM 5.3 Flash — около $0.10.
+const COMPARE_PAID = [
+  ["anthropic/claude-opus-5.5", "≈ 6–8 ¢ за перевод"],
+  ["anthropic/claude-sonnet-5.5", "≈ 3–4 ¢ за перевод"],
+  ["anthropic/claude-haiku-5.5", "≈ 0,2 ¢ за перевод"],
+  ["openai/gpt-6-luna", "≈ 0,2 ¢ за перевод"],
+  ["deepseek/deepseek-v4.1-flash", "≈ 0,5 ¢ за перевод"],
+  ["z-ai/glm-5.3-flash", "≈ 0,2 ¢ за перевод"],
+];
+const NAMES = { "openai/gpt-6-luna": "GPT-6 Luna", "deepseek/deepseek-v4.1-flash": "DeepSeek V4.1 Flash", "z-ai/glm-5.3-flash": "GLM 5.3 Flash" };
+// «anthropic/claude-haiku-5.5» → «Claude Haiku 5.5 (OpenRouter)»
 function modelLabel(p, model) {
   const m = /^anthropic\/claude-([a-z]+)-([\d.]+)$/.exec(model);
   if (m) return `Claude ${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]} (${PROVIDERS[p].label})`;
+  if (NAMES[model]) return `${NAMES[model]} (${PROVIDERS[p].label})`;
   return `${PROVIDERS[p].label} · ${model}`;
 }
 // Коротко, почему модель не ответила (для строки под ошибкой).
@@ -452,10 +467,9 @@ function prompts(build) {
 }
 
 // Порядок по умолчанию: сначала сильные модели, слабые — в самом конце.
-// Первые две — платные (Claude через OpenRouter): работают, когда на счёте OpenRouter есть деньги,
-// иначе пропускаются, и перевод идёт бесплатными моделями.
+// Первая — платная (Claude Haiku 5.5 через OpenRouter): работает, когда на счёте OpenRouter есть деньги,
+// иначе пропускается, и перевод идёт бесплатными моделями.
 const DEFAULT_SEQUENCE = [
-  ["openrouter", "anthropic/claude-sonnet-5.5"],
   ["openrouter", "anthropic/claude-haiku-5.5"],
   ["gemini", "gemini-flash-latest"],
   ["gemini", "gemini-2.5-flash"],
@@ -571,21 +585,24 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   throw err;
 }
 
-// Одна лучшая модель от каждого сервиса, параллельно — для кнопки «Сравнить».
+// Для кнопки «Сравнить»: по одной бесплатной модели от каждого сервиса и, если на счёте OpenRouter
+// есть деньги, платные модели из COMPARE_PAID — все параллельно.
 async function askAll(prompt, budget = DEADLINE_MS) {
   const seen = new Set();
-  const firsts = attempts().filter(([p, model]) => !(isBroke(p) && isPaid(p, model))).filter(([p]) => (seen.has(p) ? false : seen.add(p)));
+  const free = attempts().filter(([p, model]) => !isPaid(p, model)).filter(([p]) => (seen.has(p) ? false : seen.add(p)));
+  const paid = hasKey("openrouter") && !isBroke("openrouter") ? COMPARE_PAID.map(([model, price]) => ["openrouter", model, price]) : [];
   const fast = budget < LONG_BUDGET_MS;
-  return Promise.all(firsts.map(async ([p, model]) => {
-    const by = modelLabel(p, model);
+  const results = await Promise.all([...paid, ...free].map(async ([p, model, price]) => {
+    const by = modelLabel(p, model) + (price ? ` · ${price}` : "");
     try {
       const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), false, budget - 500, callOpts(p, model, fast)));
       return text ? { by, text } : { by, error: "Пустой ответ" };
     } catch (e) {
-      if (e.status === 402) BROKE_AT[p] = Date.now();
-      return { by, error: e.status === 402 ? "Нет средств на счёте OpenRouter" : e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
+      if (e.status === 402) { BROKE_AT[p] = Date.now(); return { by, noMoney: true }; }
+      return { by, error: e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : e.status === 404 ? "Нет такой модели" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
     }
   }));
+  return results.filter((r) => !r.noMoney); // денег на счёте нет — платные модели просто не показываем
 }
 
 // ---------------- кэш ----------------
