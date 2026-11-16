@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0b6b45">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -215,6 +215,62 @@
     textarea, .output { min-height: 200px; font-size: 24px; }
     .output:not(.placeholder) { min-height: 120px; }
   }
+  /* ===== Зелёная тема: зелёный фон страницы, белая карточка переводчика на нём ===== */
+  :root {
+    --g1: #064d31; --g2: #0b6b45; --g3: #12a36a;
+    --accent: #0b7a4d; --accent-hover: #086a41; --accent-soft: #e3f5eb; --surface-2: #f0faf4; --line: #d3ebdd;
+    --on-g: #ffffff; --on-g-muted: rgba(255,255,255,.78); --on-g-line: rgba(255,255,255,.22); --on-g-fill: rgba(255,255,255,.12);
+    --best-bg: linear-gradient(135deg, #0b6b45, #12a36a); --best-ink: #ffffff;
+    --shadow: 0 2px 6px rgba(2, 40, 24, .12), 0 24px 60px rgba(2, 40, 24, .28);
+  }
+  :root[data-theme="dark"] { --g1: #020d08; --g2: #062a1b; --g3: #0b4a30; --surface-2: #10261d; --line: #1f3d30; --accent-soft: #143b2b;
+    --best-bg: linear-gradient(135deg, #0f7a4f, #18a86f); --best-ink: #ffffff; --shadow: 0 2px 6px rgba(0,0,0,.4), 0 24px 60px rgba(0,0,0,.45); --surface: #0d1e17; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --g1: #020d08; --g2: #062a1b; --g3: #0b4a30; --surface-2: #10261d; --line: #1f3d30; --accent-soft: #143b2b;
+      --best-bg: linear-gradient(135deg, #0f7a4f, #18a86f); --best-ink: #ffffff; --shadow: 0 2px 6px rgba(0,0,0,.4), 0 24px 60px rgba(0,0,0,.45); --surface: #0d1e17; }
+  }
+  html { background: var(--g1); }
+  body { min-height: 100vh; background: radial-gradient(1200px 600px at 85% -10%, rgba(255,255,255,.14), transparent 60%),
+    linear-gradient(165deg, var(--g1) 0%, var(--g2) 45%, var(--g3) 100%); }
+  header { padding: 10px 2px 4px; color: var(--on-g); }
+  .logo { background: #ffffff; color: var(--g2); box-shadow: 0 6px 18px rgba(0,0,0,.18); width: 42px; height: 42px; border-radius: 13px; font-size: 23px; }
+  h1 { color: var(--on-g); font-size: 21px; }
+  .tagline { color: var(--on-g-muted); }
+
+  .card { border: 0; box-shadow: var(--shadow); border-radius: 24px; }
+  .langbar { background: var(--accent-soft); border-bottom: 0; padding: 8px; }
+  select { color: var(--accent); font-weight: 700; }
+  select:hover, select:focus-visible { background: rgba(255,255,255,.6); }
+  .icon-btn { background: var(--best-bg); color: #fff; box-shadow: 0 4px 12px rgba(11,107,69,.35); }
+  .icon-btn:hover { background: var(--accent-hover); color: #fff; }
+  .pane.out { background: var(--surface-2); border-color: var(--line); }
+  .output { color: var(--accent); font-weight: 600; }
+  .output.placeholder { color: var(--muted); font-weight: 400; }
+  .btn.primary { color: #fff; background: var(--best-bg); box-shadow: 0 6px 16px rgba(11,107,69,.35); padding: 11px 26px; }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn.primary:disabled { background: var(--best-bg); }
+  .btn.key { background: var(--accent); color: #fff; }
+  #copy:not(:disabled) { background: var(--accent); color: #fff; }
+
+  .variants h3 { color: var(--accent); }
+  .variant { background: var(--surface); border: 1px solid var(--line); }
+  .variant .mark { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .variant.best { background: var(--best-bg); border-color: transparent; box-shadow: 0 8px 20px rgba(11,107,69,.3); color: var(--best-ink); }
+  .variant.best .mark { background: #ffffff; color: var(--g2); }
+  .variant.best .vt small, .variant.best .vs { color: rgba(255,255,255,.85); }
+  .variant.best .vs b, .variant.best .copied { color: #ffffff; }
+
+  .section-title { color: var(--on-g-muted); }
+  .chip { background: var(--on-g-fill); border-color: var(--on-g-line); color: var(--on-g); backdrop-filter: blur(6px); }
+  .chip:hover { background: #ffffff; color: var(--g2); border-color: #ffffff; }
+  .h-item { background: var(--on-g-fill); border-color: var(--on-g-line); color: var(--on-g); backdrop-filter: blur(6px); }
+  .h-item:hover { border-color: #ffffff; }
+  .h-item small { color: var(--on-g-muted); }
+  .h-item .h-out { color: #c8f7de; }
+  .about { color: var(--on-g-muted); border-top-color: var(--on-g-line); }
+  .fineprint { color: var(--on-g-muted); }
+  .footer-links a { color: #ffffff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.4); }
+  .site-footer { color: var(--on-g-muted); font-size: 12px; text-align: center; padding: 8px 0 0; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -312,6 +368,7 @@
     </p>
   </details>
   <nav class="footer-links"><a href="/review">Проверка переводов (для редакторов)</a></nav>
+  <footer class="site-footer">ГӀалгӀай мотт · ингушский переводчик</footer>
 </div>
 
 <script>
@@ -741,7 +798,13 @@ function renderHistory(h = loadHistory()) {
 
 refresh();
 renderHistory();
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  // новая версия сайта: сервис-воркер обновляется сам, страница один раз перезагружается
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
+}
 </script>
 </body>
 </html>
