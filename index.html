@@ -118,6 +118,23 @@
   .sim { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; font-size: 14px; display: grid; gap: 2px; }
   .sim .t { color: var(--accent); }
 
+  .variants { border-top: 1px dashed var(--line); padding: 10px 12px 6px; display: grid; gap: 6px; }
+  .variants[hidden] { display: none; }
+  .variants h3 { font: 700 12px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 2px 4px; }
+  .variant { display: grid; grid-template-columns: 26px 1fr; gap: 2px 8px; align-items: start; width: 100%; text-align: left;
+    background: var(--surface-2); color: inherit; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    font: inherit; cursor: pointer; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+  @media (hover: hover) { .variant:hover { box-shadow: 0 0 0 2px var(--line); } }
+  .variant:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .variant.best { border-color: var(--ok-ink); background: var(--ok-bg); }
+  .variant .mark { grid-row: span 2; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: var(--muted); border: 1px solid var(--line); }
+  .variant.best .mark { background: var(--ok-ink); color: var(--ok-bg); border-color: var(--ok-ink); }
+  .variant .vt { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .variant .vt small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .variant .vs { font-size: 12px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .variant.best .vs b { color: var(--ok-ink); }
+  .variant .copied { color: var(--ok-ink); font-weight: 700; }
   .details { border-top: 1px dashed var(--line); padding: 12px 16px 4px; display: grid; gap: 10px; }
   .details[hidden], .panel[hidden] { display: none; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -205,6 +222,10 @@
       </div>
       <div class="pane out">
         <div class="output placeholder" id="output" dir="auto" aria-live="polite">Нажмите «Перевести»</div>
+        <div class="variants" id="variants" hidden aria-label="Варианты перевода">
+          <h3 id="v-title">Варианты</h3>
+          <div id="v-list" style="display:grid;gap:6px"></div>
+        </div>
         <div class="details" id="details" hidden>
           <div class="row" id="d-tags"></div>
           <div class="alts" id="d-alts"></div>
@@ -337,7 +358,7 @@ function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = t
 function resetOutput(msg = "Нажмите «Перевести»") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
-  els.details.hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
+  els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
 }
 function setStatus(msg, kind = "") {
   els.status.textContent = msg;
@@ -449,7 +470,7 @@ async function translate() {
   if (!text) { resetOutput("Введите текст для перевода"); return; }
 
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
-  els.details.hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
+  els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
   els.output.classList.add("busy"); showText("…");
   controller = new AbortController();
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
@@ -472,7 +493,8 @@ async function translate() {
     if (!lastResult) { showText("Перевод не пришёл. Попробуйте ещё раз."); return; }
     els.output.classList.remove("placeholder");
     markInto(els.output, lastResult, data.unknown);
-    if (data.details) renderDetails(data.details, fixS, fixT);
+    const hasVariants = renderVariants(data.variants, fixT);
+    if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
     setMeta(data.model + (data.ai && data.fast ? " · быстрый режим" : ""), trusted ? "ok" : data.ai ? "ai" : "");
@@ -497,6 +519,7 @@ async function translate() {
         if (r.improved && r.translation) {
           lastResult = fixT(String(r.translation).trim());
           markInto(els.output, lastResult, r.unknown);
+          if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
           setStatus("Перевод исправлен: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
         } else setStatus(note, noteKind);
       } catch (e) {
@@ -515,7 +538,47 @@ async function translate() {
 }
 els.go.addEventListener("click", translate);
 
-function renderDetails(v, fixS, fixT) {
+// Варианты перевода (до 3): у самого надёжного — зелёная галочка и причина; нажатие копирует вариант.
+function renderVariants(list, fixT) {
+  const box = $("variants"), wrap = $("v-list");
+  wrap.innerHTML = "";
+  const items = (Array.isArray(list) ? list : []).filter((v) => v && v.text).slice(0, 3);
+  if (!items.length) { box.hidden = true; return false; }
+  $("v-title").textContent = items.length > 1 ? "Варианты — нажмите, чтобы скопировать" : "Нажмите, чтобы скопировать";
+  items.forEach((v, i) => {
+    const best = v.best === true || (i === 0 && !items.some((x) => x.best === true));
+    const text = fixT(String(v.text));
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "variant" + (best ? " best" : "");
+    const mark = document.createElement("span"); mark.className = "mark"; mark.textContent = best ? "✓" : String(i + 1);
+    mark.setAttribute("aria-hidden", "true");
+    const t = document.createElement("span"); t.className = "vt"; t.dir = "auto"; t.textContent = text;
+    if (v.note) { const n = document.createElement("small"); n.textContent = "(" + String(v.note) + ")"; t.appendChild(n); }
+    const s = document.createElement("span"); s.className = "vs";
+    const lab = document.createElement(best ? "b" : "span");
+    lab.textContent = (best ? "Самый надёжный · " : "") + String(v.sourceLabel || "");
+    s.appendChild(lab);
+    b.append(mark, t, s);
+    b.setAttribute("aria-label", (best ? "Самый надёжный вариант: " : "Вариант: ") + text + (v.note ? " (" + v.note + ")" : "") + ". " + (v.sourceLabel || "") + ". Нажмите, чтобы скопировать.");
+    b.addEventListener("click", async () => {
+      let ok = true;
+      try { await navigator.clipboard.writeText(text); }
+      catch (e) {
+        // запасной способ для старых телефонов
+        try { const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove(); } catch (e2) { ok = false; }
+      }
+      const old = lab.textContent;
+      lab.textContent = ok ? "Скопировано" : "Не вышло скопировать"; lab.classList.add("copied");
+      setTimeout(() => { lab.textContent = old; lab.classList.remove("copied"); }, 1500);
+    });
+    wrap.appendChild(b);
+  });
+  box.hidden = false;
+  return true;
+}
+
+function renderDetails(v, fixS, fixT, hasVariants = false) {
   const tags = $("d-tags"); tags.innerHTML = "";
   const POS = { noun: "существительное", verb: "глагол", adjective: "прилагательное", adverb: "наречие", phrase: "фраза", other: "другое" };
   if (v.part_of_speech) {
@@ -530,7 +593,7 @@ function renderDetails(v, fixS, fixT) {
     tags.appendChild(c);
   }
   const alts = $("d-alts"); alts.innerHTML = "";
-  for (const a of (Array.isArray(v.alternatives) ? v.alternatives : []).slice(0, 4)) {
+  for (const a of (hasVariants ? [] : Array.isArray(v.alternatives) ? v.alternatives : []).slice(0, 4)) { // варианты уже показаны выше
     if (!a || !a.text) continue;
     const row = document.createElement("div"); row.className = "alt";
     const b = document.createElement("b"); b.textContent = fixT(String(a.text));
@@ -640,7 +703,7 @@ function renderHistory(h = loadHistory()) {
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
       els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
-      showText(x.output); els.details.hidden = true; $("base-info").hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
+      showText(x.output); els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);
