@@ -4,5 +4,8 @@
   "description": "Ingush translator: website + serverless translation function",
   "dependencies": {
     "@netlify/blobs": "^8.1.0"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }

@@ -394,7 +394,8 @@ function isBadKey(e) {
 async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const started = Date.now();
   const fast = budget < LONG_BUDGET_MS;
-  const cap = fast ? 6500 : 16000; // одной модели — не всё время, чтобы успели запасные
+  // одной модели — не всё время, чтобы успели запасные; на своём компьютере времени много, ждём дольше
+  const cap = fast ? 6500 : Math.max(16000, Math.min(45000, Math.round(budget * 0.5)));
   const deadKeys = new Set();
   const slow = new Set(); // сервис не успел ответить — сначала пробуем другие сервисы
   let last = null, sawLimit = false;
@@ -667,7 +668,7 @@ module.exports = async (req, res) => {
   }
 
   if (!attempts().length) {
-    return res.status(500).json({ error: "No API key: add GEMINI_API_KEY (or GROQ_API_KEY / OPENROUTER_API_KEY) in the hosting settings, then redeploy" });
+    return res.status(500).json({ error: "Этого нет в базе, а ключа ИИ нет. Добавьте GEMINI_API_KEY: на хостинге — в настройках (и пересоберите сайт), на своём компьютере — в файле .env (и перезапустите server.js)." });
   }
 
   // --- сравнить все ИИ ---
