@@ -14,6 +14,8 @@
 //
 // Ключи (переменные окружения хостинга), хватит одного:
 //   GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, XAI_API_KEY (платный)
+// Если на счёте OpenRouter есть деньги, первым переводит Claude (anthropic/claude-sonnet-5.5):
+// это платно, примерно 3–4 цента за перевод. Без денег на счёте всё работает бесплатно, как раньше.
 // Необязательно: EDITOR_CODE — если задан, сохранять исправления можно только с этим кодом.
 //   TIME_LIMIT_SECONDS — сколько секунд хостинг даёт функции (обычно определяется само).
 
@@ -366,15 +368,36 @@ async function callGemini(model, prompt, json, timeoutMs, opts = {}) {
   return parts.filter((p) => !p.thought).map((p) => p.text || "").join("");
 }
 
-const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, prompt, json, timeoutMs) => {
-  const data = await postJson(
-    url,
-    { Authorization: `Bearer ${process.env[keyEnv]}`, ...extraHeaders },
-    { model, messages: [{ role: "user", content: prompt }], temperature: 0 },
-    timeoutMs
-  );
+// Claude через OpenRouter: неизменная часть промпта (правила и словарь) помечается для кэша —
+// в серии переводов она стоит в 20 раз дешевле и обрабатывается быстрее.
+function cacheParts(prompt) {
+  const mark = "</glossary>\n\n";
+  const cut = prompt.indexOf(mark);
+  if (cut < 4000) return null;
+  const at = cut + mark.length;
+  return [
+    { type: "text", text: prompt.slice(0, at), cache_control: { type: "ephemeral" } },
+    { type: "text", text: prompt.slice(at) },
+  ];
+}
+
+const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, prompt, json, timeoutMs, opts = {}) => {
+  const started = Date.now();
+  const send = (body, ms) => postJson(url, { Authorization: `Bearer ${process.env[keyEnv]}`, ...extraHeaders }, { model, ...body }, ms);
+  const parts = opts.cache ? cacheParts(prompt) : null;
+  let data;
+  try {
+    data = await send({ messages: [{ role: "user", content: parts || prompt }], temperature: 0 }, timeoutMs);
+  } catch (e) {
+    // модель не приняла настройки запроса — повторяем самым простым способом
+    const left = timeoutMs - (Date.now() - started);
+    if (e.status !== 400 || left < 1500) throw e;
+    data = await send({ messages: [{ role: "user", content: prompt }] }, left);
+  }
   const msg = data.choices && data.choices[0] && data.choices[0].message;
-  return (msg && msg.content) || "";
+  let content = msg && msg.content;
+  if (Array.isArray(content)) content = content.filter((c) => !c.type || c.type === "text").map((c) => c.text || "").join("");
+  return content || "";
 };
 
 // tier: "full" — справочник целиком (у этих моделей большой лимит), "compact" — короткий.
@@ -390,6 +413,28 @@ const PROVIDERS = {
   },
   grok: { label: "Grok", keyEnv: "XAI_API_KEY", tier: "full", call: openAiCompatible("https://api.x.ai/v1/chat/completions", "XAI_API_KEY") },
 };
+
+// Платные модели (OpenRouter, всё, что не «:free»): им идёт полный справочник, как Gemini.
+const isPaid = (p, model) => p === "openrouter" && model !== "openrouter/free" && !model.endsWith(":free");
+const tierFor = (p, model) => (isPaid(p, model) ? "full" : PROVIDERS[p].tier);
+const callOpts = (p, model, fast) => ({ fast, cache: p === "openrouter" && model.startsWith("anthropic/") });
+// «anthropic/claude-sonnet-5.5» → «Claude Sonnet 5.5 (OpenRouter)»
+function modelLabel(p, model) {
+  const m = /^anthropic\/claude-([a-z]+)-([\d.]+)$/.exec(model);
+  if (m) return `Claude ${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]} (${PROVIDERS[p].label})`;
+  return `${PROVIDERS[p].label} · ${model}`;
+}
+// Коротко, почему модель не ответила (для строки под ошибкой).
+function whyFailed(e) {
+  if (e.status === 402) return "нет средств на счёте";
+  if (e.status === 429) return "лимит";
+  if (e.status === 504) return "не успел ответить";
+  if (e.status === 404) return "нет такой модели";
+  if (e.status === 413) return "слишком большой запрос";
+  if (e.status === 503 || e.status === 529) return "перегружен";
+  if (isBadKey(e)) return "ключ не работает";
+  return `ошибка ${e.status || "связи"}`;
+}
 
 // Сколько миллисекунд у нас есть на ответ.
 function timeBudget(req) {
@@ -407,7 +452,11 @@ function prompts(build) {
 }
 
 // Порядок по умолчанию: сначала сильные модели, слабые — в самом конце.
+// Первые две — платные (Claude через OpenRouter): работают, когда на счёте OpenRouter есть деньги,
+// иначе пропускаются, и перевод идёт бесплатными моделями.
 const DEFAULT_SEQUENCE = [
+  ["openrouter", "anthropic/claude-sonnet-5.5"],
+  ["openrouter", "anthropic/claude-haiku-5.5"],
   ["gemini", "gemini-flash-latest"],
   ["gemini", "gemini-2.5-flash"],
   ["grok", "grok-4"],
@@ -439,10 +488,16 @@ function attempts() {
 }
 
 function isBadKey(e) {
-  return e.status === 401 || e.status === 403 || /api key|unauthori[sz]ed|invalid.*key/i.test(e.message);
+  return e.status === 401 || /api key|unauthori[sz]ed|invalid.*key/i.test(e.message);
 }
 
-// Пробует модели по очереди, пока одна не ответит. Возвращает { text, by }.
+// На счёте сервиса нет денег: его платные модели 10 минут не трогаем, чтобы не терять время на каждом переводе.
+const BROKE_AT = {};
+const isBroke = (p) => BROKE_AT[p] && Date.now() - BROKE_AT[p] < 10 * 60_000;
+// Когда времени мало, бесплатным моделям идёт короткий справочник: длинный они не успевают прочитать.
+const tierNow = (p, model, fast) => (fast && !isPaid(p, model) ? "compact" : tierFor(p, model));
+
+// Пробует модели, пока одна не ответит. Возвращает { text, by }.
 // prompt(tier) возвращает промпт нужного размера.
 async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const started = Date.now();
@@ -451,45 +506,84 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const cap = fast ? 6500 : Math.max(16000, Math.min(45000, Math.round(budget * 0.5)));
   const deadKeys = new Set();
   const slow = new Set(); // сервис не успел ответить — сначала пробуем другие сервисы
+  const trail = []; // кто и почему не ответил
   let last = null, sawLimit = false;
-  const queue = attempts();
+
+  const attempt = async (p, model, ms) => {
+    const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), json, ms, callOpts(p, model, fast)));
+    if (!text) throw httpError(503, "Empty answer");
+    return { text, by: modelLabel(p, model) };
+  };
+  const failed = (p, model, e) => {
+    last = e;
+    trail.push(`${modelLabel(p, model)}: ${whyFailed(e)}`);
+    console.error(`${p} ${model}:`, e.status, e.message);
+    if (e.status === 402) { BROKE_AT[p] = Date.now(); return; }
+    if (e.status === 429) sawLimit = true;
+    if (e.status === 504) slow.add(p);
+    if (isBadKey(e)) { deadKeys.add(p); e.badKey = PROVIDERS[p].keyEnv; }
+  };
+  const usable = ([p, model]) => !deadKeys.has(p) && !(isBroke(p) && isPaid(p, model));
+
+  let queue = attempts().filter(usable);
+
+  if (fast) {
+    // Времени мало: первая модель каждого сервиса стартует сразу.
+    // Ждём по порядку силы: если сильная не ответила, ответ следующей уже готов.
+    const seen = new Set(), firsts = [], rest = [];
+    for (const a of queue) (seen.has(a[0]) ? rest : (seen.add(a[0]), firsts)).push(a);
+    const ms = Math.max(1500, budget - 900);
+    const runs = firsts.map(([p, model]) => attempt(p, model, ms).then((r) => ({ r }), (e) => ({ e })));
+    // сильную модель ждём не до конца: если она думает слишком долго, а у следующей ответ готов — берём его
+    const graceEnd = started + Math.max(3500, Math.round(budget * 0.65));
+    const wait = (i) => Promise.race([runs[i], new Promise((res) => setTimeout(() => res(null), Math.max(0, graceEnd - Date.now())))]);
+    const pending = [];
+    for (let i = 0; i < firsts.length; i++) {
+      const out = await wait(i);
+      if (!out) { pending.push(i); continue; }
+      if (out.r) return out.r;
+      failed(firsts[i][0], firsts[i][1], out.e);
+    }
+    for (const i of pending) { // готовых ответов нет — дожидаемся тех, кто ещё думает
+      const out = await runs[i];
+      if (out.r) return out.r;
+      failed(firsts[i][0], firsts[i][1], out.e);
+    }
+    queue = rest;
+  }
+
   const later = [];
   while (queue.length || later.length) {
     const [p, model] = queue.length ? queue.shift() : later.shift();
-    if (deadKeys.has(p)) continue;
+    if (!usable([p, model])) continue;
     if (slow.has(p) && queue.some(([q]) => !slow.has(q) && !deadKeys.has(q))) { later.push([p, model]); continue; }
     const left = budget - (Date.now() - started);
     if (left < 1200) break;
     try {
-      const pr = PROVIDERS[p];
-      const text = cleanOutput(await pr.call(model, prompt(pr.tier), json, Math.min(left - 200, cap), { fast }));
-      if (!text) throw httpError(503, "Empty answer");
-      return { text, by: `${pr.label} · ${model}` };
+      return await attempt(p, model, Math.min(left - 200, cap));
     } catch (e) {
-      last = e;
-      if (e.status === 429) sawLimit = true;
-      if (e.status === 504) slow.add(p);
-      console.error(`${p} ${model}:`, e.status, e.message);
-      if (isBadKey(e)) { deadKeys.add(p); e.badKey = PROVIDERS[p].keyEnv; }
+      failed(p, model, e);
     }
   }
   if (last && last.badKey && attempts().every(([p]) => deadKeys.has(p))) throw httpError(401, `Check ${last.badKey}. ${last.message}`);
-  throw httpError(sawLimit ? 429 : 503, "Все переводчики сейчас заняты. Попробуйте через минуту.");
+  const err = httpError(sawLimit ? 429 : 503, "Все переводчики сейчас заняты. Попробуйте через минуту.");
+  err.detail = trail.slice(0, 8).join("; ");
+  throw err;
 }
 
 // Одна лучшая модель от каждого сервиса, параллельно — для кнопки «Сравнить».
 async function askAll(prompt, budget = DEADLINE_MS) {
   const seen = new Set();
-  const firsts = attempts().filter(([p]) => (seen.has(p) ? false : seen.add(p)));
+  const firsts = attempts().filter(([p, model]) => !(isBroke(p) && isPaid(p, model))).filter(([p]) => (seen.has(p) ? false : seen.add(p)));
   const fast = budget < LONG_BUDGET_MS;
   return Promise.all(firsts.map(async ([p, model]) => {
-    const pr = PROVIDERS[p];
-    const by = `${pr.label} · ${model}`;
+    const by = modelLabel(p, model);
     try {
-      const text = cleanOutput(await pr.call(model, prompt(pr.tier), false, budget - 500, { fast }));
+      const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), false, budget - 500, callOpts(p, model, fast)));
       return text ? { by, text } : { by, error: "Пустой ответ" };
     } catch (e) {
-      return { by, error: e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
+      if (e.status === 402) BROKE_AT[p] = Date.now();
+      return { by, error: e.status === 402 ? "Нет средств на счёте OpenRouter" : e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
     }
   }));
 }
@@ -697,7 +791,7 @@ module.exports = async (req, res) => {
   let corpus = [];
   if (hasIngush(source, target) && (source === "ru" || source === "inh")) {
     const t0 = Date.now();
-    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 1500)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15);
+    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 300)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15);
     budget -= Date.now() - t0;
   }
   // корпус мог только что загрузиться: ещё раз ищем готовый ответ (целый текст или по предложениям)
@@ -758,7 +852,7 @@ module.exports = async (req, res) => {
       return res.status(200).json(result);
     } catch (e) {
       const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
-      return res.status(status).json({ error: e.message });
+      return res.status(status).json({ error: e.message, detail: e.detail });
     }
   }
 
@@ -798,7 +892,7 @@ module.exports = async (req, res) => {
     return res.status(200).json(result);
   } catch (e) {
     const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
-    return res.status(status).json({ error: e.message });
+    return res.status(status).json({ error: e.message, detail: e.detail });
   }
 };
 
@@ -806,3 +900,4 @@ module.exports = async (req, res) => {
 module.exports._checkIngush = checkIngush;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
+module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; };

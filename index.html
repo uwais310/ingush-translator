@@ -418,13 +418,17 @@ async function api(payload, signal) {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.error || "Ошибка сервера"); e.status = r.status; throw e; }
+  if (!r.ok) { const e = new Error(data.error || "Ошибка сервера"); e.status = r.status; e.detail = data.detail || ""; throw e; }
   return data;
 }
 function showError(e) {
-  if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и попробуйте снова.", "error"); }
+  if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и попробуйте снова." + (e.detail ? " (" + e.detail + ")" : ""), "error"); }
   else if (e.name === "TypeError") { resetOutput("Нет связи."); setStatus("Проверьте интернет и попробуйте снова.", "error"); }
-  else if ([502, 503, 504].includes(e.status)) { resetOutput("Переводчик сейчас занят."); setStatus(e.message && e.message !== "Ошибка сервера" ? e.message : "Попробуйте через несколько секунд.", "error"); }
+  else if ([502, 503, 504].includes(e.status)) {
+    resetOutput("Переводчик сейчас занят.");
+    // в скобках — какие ИИ не ответили и почему: это помогает понять, что чинить
+    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Попробуйте через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : ""), "error");
+  }
   else { resetOutput("Что-то пошло не так."); setStatus(e.message || "Попробуйте ещё раз.", "error"); }
 }
 
