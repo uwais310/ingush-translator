@@ -130,11 +130,20 @@ function dictionaryBlock(text, src, tgt, tier, shots) {
       ? `<dictionary>\nRussian — Ingush dictionary of common words (class of the singular / of the plural; мн. = plural form):\n${KB.GLOSSARY.map(([ru, inh]) => `${ru} — ${inh}`).join("\n")}\n</dictionary>\n\n`
       : "";
   }
-  const hits = RET.pickDictionary(text, src, tier === "full" ? 40 : 25);
+  const order = RET.wordsOf(text);
+  const at = (h) => { const i = order.indexOf((h.hits || [])[0]); return i < 0 ? 999 : i; };
+  // записи идут в порядке слов текста (внутри слова — от надёжных к менее надёжным)
+  const hits = RET.pickDictionary(text, src, tier === "full" ? 40 : 25).map((h, n) => ({ h, n })).sort((a, b) => at(a.h) - at(b.h) || a.n - b.n).map((x) => x.h);
   const missing = RET.missingWords(text, src, hits, shots);
   let out = "";
   if (hits.length) {
-    out += `<dictionary_entries>\nRussian — Ingush dictionary entries for the words of this text (found by word stem, so some may be another form or a false match; class of the singular / of the plural; мн. = plural):\n${hits.map((h) => `${h.ru} — ${h.inh}`).join("\n")}\n</dictionary_entries>\n\n`;
+    // «слово текста: запись словаря» — чтобы ИИ видел, к какому слову относится запись («люблю: любить — деза»)
+    const line = (h) => {
+      const head = RET.normalize(h.ru), hit = (h.hits || []).filter((w) => w !== head).map((w) => w.replace(/ӏ/g, "Ӏ"));
+      const tag = h.from === "open" ? " [open dictionary, not checked]" : h.from === "corpus" ? " [from texts, may be an inflected form]" : "";
+      return `${hit.length && src === "ru" ? hit.join(", ") + ": " : ""}${h.ru} — ${h.inh}${tag}`;
+    };
+    out += `<dictionary_entries>\nRussian — Ingush dictionary entries for the words of this text. Before the colon is the word as it stands in the text; the entry itself is the dictionary (base) form, so put the Ingush word into the case, class and tense your sentence needs. Entries without a tag come from the project's dictionary and the PaydaDosh dictionary and are the most reliable. One word can have several entries: choose the one that fits the meaning here (class of the singular / of the plural; мн. = plural):\n${hits.map(line).join("\n")}\n</dictionary_entries>\n\n`;
   }
   if (missing.length) {
     out += `<not_in_dictionary>\nThese words of the text have no entry in the project's dictionary: ${missing.join(", ")}.\nTranslate them only if you are sure of the Ingush word; otherwise follow the rule about [square brackets].\n</not_in_dictionary>\n\n`;
@@ -147,7 +156,7 @@ function dictionaryBlock(text, src, tgt, tier, shots) {
 function examplesBlock(shots, src, tgt) {
   if (!shots.length) return "";
   const S = LANGS[src], T = LANGS[tgt];
-  const LABEL = { native: " (checked by a native speaker)", guide: "", open: " (open dictionary, not checked)", distilled: " (by a stronger AI model, not checked)" };
+  const LABEL = { native: " (checked by a native speaker)", guide: "", paydadosh: "", open: " (open dictionary, not checked)", wiki: " (website interface text, not checked)", distilled: " (by a stronger AI model, not checked)" };
   const line = (e) => {
     if (e.source) return `${LANGS[e.source]}: ${e.text}\n${LANGS[e.target]}: ${e.translation}`; // другие языки
     const from = src === "inh" ? e.inh : e.ru, to = src === "inh" ? e.ru : e.inh;
@@ -564,7 +573,8 @@ function prompts(build) {
 // работает, когда на счёте OpenRouter есть деньги, иначе пропускается, и перевод идёт бесплатными моделями.
 // OPENROUTER_MODEL=off — платную модель не использовать совсем.
 // Бесплатные модели Gemini (ноябрь 2026, ai.google.dev/gemini-api/docs/pricing): Gemini 4 Hydrogen —
-// самая сильная из бесплатных; 3.8 Flash и 2.5 Flash — запасные; 3.5 Flash-Lite — самая быстрая.
+// самая сильная из бесплатных (у неё маленький дневной лимит); 3.8 Flash и 3.6 Flash — запасные;
+// 3.5 Flash-Lite — самая быстрая. Модель, которая ответила «лимит», какое-то время пропускается (COOL).
 const PAID_DEFAULT = "anthropic/claude-haiku-5.5";
 function defaultSequence() {
   const paid = String(process.env.OPENROUTER_MODEL || PAID_DEFAULT).trim();
@@ -572,7 +582,7 @@ function defaultSequence() {
     ...(paid && paid.toLowerCase() !== "off" ? [["openrouter", paid]] : []),
     ["gemini", "gemini-4-hydrogen"],
     ["gemini", "gemini-3.8-flash"],
-    ["gemini", "gemini-2.5-flash"],
+    ["gemini", "gemini-3.6-flash"],
     ["grok", "grok-4"],
     ["groq", "moonshotai/kimi-k2-instruct-0905"],
     ["groq", "moonshotai/kimi-k2-instruct"],
@@ -614,6 +624,16 @@ const isBroke = (p) => BROKE_AT[p] && Date.now() - BROKE_AT[p] < 10 * 60_000;
 // стал в несколько раз короче, чем раньше (около 10 тыс. знаков вместо 60 тыс.).
 const tierNow = (p, model, fast) => (fast && !isPaid(p, model) && p !== "gemini" ? "compact" : tierFor(p, model));
 
+// Модель ответила «лимит» (429): минуту её не спрашиваем первой, а если кончился дневной лимит — полчаса.
+// Так перевод не теряет время на модель, которая всё равно откажет; если остальные тоже не ответят, её спросят в конце.
+const COOL = new Map();
+const coolKey = (p, model) => `${p}|${model}`;
+const isCooling = (p, model) => (COOL.get(coolKey(p, model)) || 0) > Date.now();
+function coolDown(p, model, e) {
+  const daily = /per.?day|daily|perday|quota/i.test(String(e && e.message));
+  COOL.set(coolKey(p, model), Date.now() + (daily ? 30 * 60_000 : 60_000));
+}
+
 // Пробует модели, пока одна не ответит. Возвращает { text, by }.
 // prompt(tier) возвращает промпт нужного размера.
 async function ask(prompt, json = false, budget = DEADLINE_MS) {
@@ -629,6 +649,7 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const attempt = async (p, model, ms) => {
     const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), json, ms, callOpts(p, model, fast)));
     if (!text) throw httpError(503, "Empty answer");
+    COOL.delete(coolKey(p, model));
     return { text, by: modelLabel(p, model), p, model };
   };
   const failed = (p, model, e) => {
@@ -636,13 +657,15 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
     trail.push(`${modelLabel(p, model)}: ${whyFailed(e)}`);
     console.error(`${p} ${model}:`, e.status, e.message);
     if (e.status === 402) { BROKE_AT[p] = Date.now(); return; }
-    if (e.status === 429) sawLimit = true;
+    if (e.status === 429) { sawLimit = true; coolDown(p, model, e); }
     if (e.status === 504) slow.add(p);
     if (isBadKey(e)) { deadKeys.add(p); e.badKey = PROVIDERS[p].keyEnv; }
   };
   const usable = ([p, model]) => !deadKeys.has(p) && !(isBroke(p) && isPaid(p, model));
 
   let queue = attempts().filter(usable);
+  // модели на «паузе после лимита» — в конец очереди
+  queue = [...queue.filter(([p, m]) => !isCooling(p, m)), ...queue.filter(([p, m]) => isCooling(p, m))];
 
   if (fast) {
     // Времени мало: первая модель каждого сервиса стартует сразу.
@@ -812,15 +835,73 @@ function seedIndex() {
 }
 const isRuInh = (src, tgt) => (src === "ru" && tgt === "inh") || (src === "inh" && tgt === "ru");
 
+// Знаки ударения из словарей («ва́ла») в перевод не идут: их неудобно копировать. Слово с ударением остаётся в пояснении.
+const noStress = (t) => String(t == null ? "" : t).replace(/[\u0300\u0301]/g, "");
+const stressNote = (t) => (/[\u0300\u0301]/.test(String(t)) ? `Ударение: ${t}.` : "");
+const joinNotes = (...parts) => parts.filter(Boolean).join(" ");
+// Пары базы с тем же текстом, самый надёжный источник первым.
+function seedBest(text, src) {
+  const list = (seedAll(src).get(BASE.key(text)) || []).map((p, order) => ({ p, w: seedSource(p), order }));
+  list.sort((a, b) => a.w.rank - b.w.rank || (a.w.prio || 0) - (b.w.prio || 0) || a.order - b.order);
+  return list.length ? list[0].p : null;
+}
+// Как подписать источник пары для человека.
+function sourceTitle(p) {
+  const w = RET.sourceOf(p);
+  return w.from === "paydadosh" ? "словарь PaydaDosh" : w.from === "corpus" ? "слова из настоящих текстов"
+    : w.from === "open" ? `открытый словарь ${w.name}` : "словарь проекта";
+}
+// Пометы источника вроде «PaydaDosh, разговорник: уроки (УРОКИ)» человеку не нужны — это адрес записи, а не пояснение.
+// Одна буква класса («д», «й-й») подписывается словом «класс».
+function glossNote(n) {
+  const t = String(n || "").trim();
+  if (!t || /^PaydaDosh,/.test(t)) return "";
+  return /^[вйдб](\s*[-,/]\s*[вйдб])*$/.test(t) ? `класс ${t}` : t;
+}
+function seedResult(p, src, more = []) {
+  const raw = src === "ru" ? p.inh : noParens(p.ru);
+  const gloss = p.license ? glossNote(p.note) : "";
+  return { translation: noStress(raw), label: `Из базы: ${sourceTitle(p)}`, kind: "seed", seed: p, more, seedNote: gloss, note: joinNotes(p.license ? gloss : p.note || "", stressNote(raw)) };
+}
+// Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
+// или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
+function fromDictionary(text, src, tgt) {
+  const lw = RET.lookupWord(text, src);
+  if (!lw) return null;
+  const lemmaNote = lw.lemma
+    ? `В тексте слово стоит в другой форме. Перевод дан для начальной формы «${lw.lemma}»: окончание или класс в ингушском могут быть другими.`
+    : "";
+  if (lw.lemma) {
+    const b = BASE.lookup(lw.lemma, src, tgt); // словарик проекта знает слово лучше всех
+    if (b && b.kind !== "texts") return { ...b, label: `${b.label} · начальная форма «${lw.lemma}»`, note: joinNotes(lemmaNote, b.note), line: b.note, lemma: lw.lemma, prio: 0 };
+  }
+  const first = lw.items[0];
+  const p = first.seed || { source: "Справочник проекта", ru: first.ru, inh: first.inh, note: first.line };
+  const r = seedResult({ ...p, inh: first.inh }, src, lw.items.slice(1));
+  r.seed = p;
+  if (lw.lemma) { r.label += ` · начальная форма «${lw.lemma}»`; r.note = joinNotes(lemmaNote, r.note); }
+  return { ...r, lemma: lw.lemma, prio: first.prio, items: lw.items };
+}
+
 // Готовый ответ без ИИ для текста или одного предложения: { translation, verified?, label, kind?, alternatives?, note? } или null.
+// Порядок: проверено носителем → фразы и словарик проекта → словари (PaydaDosh, открытые) → начальная форма
+// слова по надёжному словарю → слова из настоящих текстов → начальная форма по остальным словарям.
 function resolveExact(text, src, tgt, pool) {
   const saved = exactMatch(pool, text, src, tgt);
   if (saved) return { translation: saved, verified: true, label: "Проверено носителем языка" };
   const b = BASE.lookup(text, src, tgt);
+  if (b && b.kind !== "texts") return b;
+  if (!isRuInh(src, tgt)) return b || null;
+  const p = seedBest(text, src); // пара базы с точно таким текстом
+  const pp = p ? RET.sourceOf(p).prio : 99;
+  const d = fromDictionary(text, src, tgt);
+  const exactItems = d && !d.lemma ? d.items : [];
+  if (p && pp !== 5 && (!d || d.lemma || pp <= d.prio)) return seedResult(p, src, exactItems);
+  if (d && !d.lemma) return d;
+  if (d && d.prio <= 1) return d;
+  if (p) return seedResult(p, src);
   if (b) return b;
-  if (!isRuInh(src, tgt)) return null;
-  const p = (src === "ru" ? seedIndex().ru : seedIndex().inh).get(BASE.key(text)); // пары из других источников
-  if (p) return { translation: src === "ru" ? p.inh : noParens(p.ru), label: `Из базы: ${p.source}`, kind: "seed", note: p.note || "", seed: p };
+  if (d) return d;
   if (CORPUS.size()) {
     const c = CORPUS.exact(text, src);
     if (c) return { translation: src === "inh" ? c[1] : c[0], label: "Из базы: перевод из настоящих текстов", kind: "corpus" };
@@ -896,9 +977,15 @@ function finishVariants(list, fixT = (x) => x) {
       if (!old.note && v.note) old.note = v.note;
     }
   });
-  return [...byText.values()]
-    .sort((a, b) => a.rank - b.rank || (a.prio || 0) - (b.prio || 0) || a.order - b.order)
-    .slice(0, MAX_VARIANTS)
+  const sorted = [...byText.values()].sort((a, b) => a.rank - b.rank || (a.prio || 0) - (b.prio || 0) || a.order - b.order);
+  // последнее место — по возможности другому источнику: «второе мнение» полезнее третьего варианта из того же словаря
+  let top = sorted.slice(0, MAX_VARIANTS);
+  if (sorted.length > MAX_VARIANTS) {
+    const head = sorted.slice(0, MAX_VARIANTS - 1);
+    const other = sorted.slice(MAX_VARIANTS - 1).find((v) => head.every((h) => h.sourceLabel !== v.sourceLabel));
+    if (other) top = [...head, other];
+  }
+  return top
     .map(({ order, ...v }, i) => ({ text: v.text, note: v.note, source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, best: i === 0 }));
 }
 // Варианты для готового ответа из базы r (resolveExact / compose) + другие пары базы с тем же текстом.
@@ -910,8 +997,8 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
   else if (r.kind === "texts" || r.kind === "corpus") main = { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 };
   else if (r.kind === "composed") main = { source: "project", sourceLabel: "Из базы, по предложениям", rank: 2 };
   else main = { source: "project", sourceLabel: "Словарь проекта", rank: 2 };
-  const line = r.kind === "glossary" || r.kind === "phrase" ? r.note : "";
-  const seedNote = r.kind === "seed" && r.seed && r.seed.license ? r.note : "";
+  const line = r.kind === "glossary" || r.kind === "phrase" ? r.line || r.note : "";
+  const seedNote = r.kind === "seed" ? r.seedNote || "" : "";
   list.push({ text: r.translation, note: noteFromLine(r.translation, line) || seedNote || "", ...main });
   for (const a of r.alternatives || []) {
     if (!a || !a.text) continue;
@@ -929,11 +1016,15 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
       const b = BASE.lookup(input, src, tgt);
       if (b) list.push(...exactVariants({ ...b, alternatives: (b.alternatives || []).slice(0, 2) }, input, src, tgt, [], fixT).map((v) => ({ ...v })));
     }
+    for (const it of r.more || []) { // другие записи словаря для того же слова
+      const where = it.seed ? seedSource(it.seed) : { source: "project", sourceLabel: "Словарь проекта", rank: 2, prio: 0 };
+      list.push({ text: src === "ru" ? it.inh : noParens(it.ru), note: it.seed && it.seed.license ? glossNote(it.seed.note) : "", ...where });
+    }
     for (const p of seedAll(src).get(BASE.key(input)) || []) {
       const rev = REVIEW && REVIEW[p.id];
-      const text = src === "ru" ? (rev && rev.inh) || p.inh : noParens(p.ru);
+      const text = src === "ru" ? (rev && rev.inh) || noStress(p.inh) : noParens(p.ru);
       const where = rev ? { source: "native", sourceLabel: "Проверено носителем", rank: 1 } : seedSource(p);
-      list.push({ text, note: p.license ? p.note || "" : noteFromLine(text, p.note), ...where });
+      list.push({ text, note: p.license ? glossNote(p.note) : noteFromLine(text, p.note), ...where });
     }
   }
   return finishVariants(list, fixT);
@@ -1147,15 +1238,15 @@ module.exports = async (req, res) => {
   }
 
   // что база знает про слова этого текста и похожие предложения из настоящих текстов
-  const words = ruInh ? BASE.breakdown(input, source) : [];
+  const words = ruInh ? RET.breakdown(input, source) : [];
   // подсказки: похожие фразы из базы, потом похожие предложения из настоящих текстов
   const similar = !ruInh ? [] : [
-    ...seedHints(input, source),
+    ...examples.filter((e) => e.ru && e.inh && e.from !== "distilled" && e.from !== "wiki").slice(0, 4).map((e) => (source === "ru" ? [e.ru, fixPalochka(e.inh)] : [fixPalochka(e.inh), e.ru])),
     ...(CORPUS.size()
       ? CORPUS.search(input, source, 8, 2).filter((p) => p[0].length <= 220 && p[1].length <= 220).slice(0, 3)
         .map((p) => (source === "inh" ? [p[0], p[1]] : [p[1], p[0]]))
       : []),
-  ].slice(0, 5);
+  ].slice(0, 6);
 
   if (noAi && action !== "compare") {
     return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh });
@@ -1264,7 +1355,7 @@ module.exports = async (req, res) => {
 module.exports._checkIngush = checkIngush;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
-module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; };
+module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; COOL.clear(); };
 module.exports._prompts = { textPrompt, wordPrompt, repairPrompt, readTranslation, systemPrompt };
 module.exports._RET = RET;
 module.exports._variants = { finishVariants, aiVariant, noteFromLine };
