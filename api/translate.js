@@ -873,13 +873,14 @@ function fromDictionary(text, src, tgt) {
     : "";
   if (lw.lemma) {
     const b = BASE.lookup(lw.lemma, src, tgt); // словарик проекта знает слово лучше всех
-    if (b && b.kind !== "texts") return { ...b, label: `${b.label} · начальная форма «${lw.lemma}»`, note: joinNotes(lemmaNote, b.note), line: b.note, lemma: lw.lemma, prio: 0 };
+    // строку словаря в пояснении повторяем, только если в ней есть объяснение (после тире): сами слова уже в вариантах
+    if (b && b.kind !== "texts") return { ...b, label: `${b.label}, начальная форма «${lw.lemma}»`, note: joinNotes(lemmaNote, / — /.test(b.note || "") ? b.note : ""), line: b.note, lemma: lw.lemma, prio: 0 };
   }
   const first = lw.items[0];
   const p = first.seed || { source: "Справочник проекта", ru: first.ru, inh: first.inh, note: first.line };
   const r = seedResult({ ...p, inh: first.inh }, src, lw.items.slice(1));
   r.seed = p;
-  if (lw.lemma) { r.label += ` · начальная форма «${lw.lemma}»`; r.note = joinNotes(lemmaNote, r.note); }
+  if (lw.lemma) { r.label += `, начальная форма «${lw.lemma}»`; r.note = joinNotes(lemmaNote, r.note); }
   return { ...r, lemma: lw.lemma, prio: first.prio, items: lw.items };
 }
 
@@ -973,8 +974,11 @@ function finishVariants(list, fixT = (x) => x) {
     const old = byText.get(k);
     if (!old) byText.set(k, { ...v, text, note: v.note || "", order });
     else {
-      if (v.rank < old.rank || (v.rank === old.rank && (v.prio || 0) < (old.prio || 0))) Object.assign(old, { source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, prio: v.prio });
-      if (!old.note && v.note) old.note = v.note;
+      if (v.rank < old.rank || (v.rank === old.rank && (v.prio || 0) < (old.prio || 0))) {
+        Object.assign(old, { source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, prio: v.prio });
+        if (/^в текстах/.test(old.note)) old.note = ""; // счётчик относился к прежнему источнику
+      }
+      if (!old.note && v.note && !/^в текстах/.test(v.note)) old.note = v.note;
     }
   });
   const sorted = [...byText.values()].sort((a, b) => a.rank - b.rank || (a.prio || 0) - (b.prio || 0) || a.order - b.order);
@@ -1028,27 +1032,6 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
     }
   }
   return finishVariants(list, fixT);
-}
-
-// Похожие фразы из базы — подсказки под переводом. [[на языке текста, перевод], ...]
-function seedHints(text, src, max = 3) {
-  const stems = (t) => new Set((BASE.key(t).match(/[а-яӏ]+/g) || []).filter((w) => w.length > 1).map((w) => w.slice(0, 5)));
-  const want = stems(text);
-  if (!want.size) return [];
-  const out = [];
-  for (const p of SEED) {
-    if (p.kind !== "phrase") continue;
-    const have = stems(src === "ru" ? p.ru : p.inh);
-    let both = 0;
-    for (const w of have) if (want.has(w)) both++;
-    const score = both / (want.size + have.size - both);
-    if (both >= Math.min(2, want.size) && score >= 0.4) {
-      const r = REVIEW && REVIEW[p.id];
-      const inh = (r && r.inh) || p.inh;
-      out.push({ score, pair: src === "ru" ? [p.ru, inh] : [inh, p.ru] });
-    }
-  }
-  return out.sort((a, b) => b.score - a.score).slice(0, max).map((x) => x.pair);
 }
 
 // Порядок пар на /review: сначала частые бытовые фразы, потом слова по частоте, редкое — в конце.
