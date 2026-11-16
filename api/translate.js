@@ -147,7 +147,7 @@ function dictionaryBlock(text, src, tgt, tier, shots) {
 function examplesBlock(shots, src, tgt) {
   if (!shots.length) return "";
   const S = LANGS[src], T = LANGS[tgt];
-  const LABEL = { native: " (checked by a native speaker)", guide: "", distilled: " (by a stronger AI model, not checked)" };
+  const LABEL = { native: " (checked by a native speaker)", guide: "", open: " (open dictionary, not checked)", distilled: " (by a stronger AI model, not checked)" };
   const line = (e) => {
     if (e.source) return `${LANGS[e.source]}: ${e.text}\n${LANGS[e.target]}: ${e.translation}`; // другие языки
     const from = src === "inh" ? e.inh : e.ru, to = src === "inh" ? e.ru : e.inh;
