@@ -840,11 +840,28 @@ function aiVariant(text, confidence, note = "") {
   const c = String(confidence || "").toLowerCase();
   return { text, note, source: "ai", sourceLabel: AI_LABEL[c] || "ИИ", rank: AI_RANK[c] || 6 };
 }
-// Откуда пара из data/phrases.json: { source, sourceLabel, rank }
+// Откуда пара из data/phrases.json: { source, sourceLabel, rank, prio }.
+// Порядок надёжности: словарь проекта > PaydaDosh > Викисловарь > Википедия/Викиданные > PanLex > корпус > translatewiki.
+// rank — для сайта (1 носитель … 7 ИИ), prio — порядок внутри одного rank. Если ту же пару дал и другой
+// источник (поле also), берём самый надёжный из них.
+function oneSource(name, p) {
+  const n = String(name || "");
+  if (/^PaydaDosh/.test(n)) return { source: "paydadosh", sourceLabel: "Словарь PaydaDosh", rank: 3, prio: 0 };
+  if (/^Корпус/.test(n)) return { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4, prio: 0 };
+  if (/^translatewiki/i.test(n)) return { source: "open", sourceLabel: `Открытый словарь: ${shortSource(n)}`, rank: 4, prio: 1 };
+  if (p.license || n !== p.source) {
+    const prio = /^Викислов/.test(n) ? 1 : /^(Ингушская Википедия|Викиданные)/.test(n) ? 2 : 3;
+    return { source: "open", sourceLabel: `Открытый словарь: ${shortSource(n)}`, rank: 3, prio };
+  }
+  return { source: "project", sourceLabel: "Словарь проекта", rank: 2, prio: 0 };
+}
 function seedSource(p) {
-  if (p.license) return { source: "open", sourceLabel: `Открытый словарь: ${shortSource(p.source)}`, rank: 3 };
-  if (String(p.source || "").startsWith("Корпус")) return { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 };
-  return { source: "project", sourceLabel: "Словарь проекта", rank: 2 };
+  let best = oneSource(p.source, p);
+  for (const a of p.also || []) {
+    const o = oneSource(a, p);
+    if (o.rank < best.rank || (o.rank === best.rank && o.prio < best.prio)) best = o;
+  }
+  return best;
 }
 // Пометка к варианту из строки словаря: «Фу деш ва хьо? (мужчине) / Фу деш я хьо? (женщине)» → «мужчине».
 function noteFromLine(text, line) {
@@ -875,12 +892,12 @@ function finishVariants(list, fixT = (x) => x) {
     const old = byText.get(k);
     if (!old) byText.set(k, { ...v, text, note: v.note || "", order });
     else {
-      if (v.rank < old.rank) Object.assign(old, { source: v.source, sourceLabel: v.sourceLabel, rank: v.rank });
+      if (v.rank < old.rank || (v.rank === old.rank && (v.prio || 0) < (old.prio || 0))) Object.assign(old, { source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, prio: v.prio });
       if (!old.note && v.note) old.note = v.note;
     }
   });
   return [...byText.values()]
-    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .sort((a, b) => a.rank - b.rank || (a.prio || 0) - (b.prio || 0) || a.order - b.order)
     .slice(0, MAX_VARIANTS)
     .map(({ order, ...v }, i) => ({ text: v.text, note: v.note, source: v.source, sourceLabel: v.sourceLabel, rank: v.rank, best: i === 0 }));
 }
@@ -943,6 +960,68 @@ function seedHints(text, src, max = 3) {
   return out.sort((a, b) => b.score - a.score).slice(0, max).map((x) => x.pair);
 }
 
+// Порядок пар на /review: сначала частые бытовые фразы, потом слова по частоте, редкое — в конце.
+//   0 — фразы словаря проекта; 1 — короткие бытовые фразы PaydaDosh (уроки, разговорник, переводы носителей);
+//   2 — остальные короткие фразы (до 6 слов); 3 — слова из настоящих текстов (чем чаще, тем раньше);
+//   4 — остальные слова; 5 — длинные фразы, пословицы и обороты; 6 — имена собственные.
+// Внутри группы — по надёжности источника, потом короче раньше. Решения хранятся по id пары, как и раньше.
+const EVERYDAY_TAG = /^PaydaDosh, разговорник: (переводы носителей|уроки|ситуации|обряды и праздники)/;
+let REVIEW_ORDER = null;
+function reviewOrder() {
+  if (REVIEW_ORDER) return REVIEW_ORDER;
+  const words = (t) => (String(t).match(/[^\s]+/g) || []).length;
+  const tier = (p, src) => {
+    if (p.kind === "name") return 6;
+    if (p.kind === "phrase") {
+      if (src.rank === 2) return 0;
+      const n = words(p.ru);
+      if (n <= 6 && src.source === "paydadosh" && EVERYDAY_TAG.test(p.note || "")) return 1;
+      return n <= 6 ? 2 : 5;
+    }
+    return p.count ? 3 : 4;
+  };
+  const keyed = SEED.map((p, i) => {
+    const src = seedSource(p);
+    return { i, t: tier(p, src), r: src.rank * 10 + (src.prio || 0), c: p.count || 0, l: String(p.ru).length };
+  });
+  keyed.sort((a, b) => a.t - b.t || (a.t === 3 ? b.c - a.c : 0) || a.r - b.r || a.l - b.l || a.i - b.i);
+  return (REVIEW_ORDER = keyed.map((x) => x.i));
+}
+
+// «Переведите»: частые русские предложения без ингушского перевода (data/translate-these.json).
+// Перевод носителя сохраняется так же, как кнопка «Исправить» на сайте (список "all", русский → ингушский),
+// поэтому сразу работает как «Проверено носителем». Формат хранилища не меняется.
+const ASK = (() => { try { return require("../data/translate-these.json").items || []; } catch { return []; } })();
+async function askAction(action, body, res) {
+  const code = process.env.EDITOR_CODE;
+  if (!code) return res.status(503).json({ error: "Проверка выключена: добавьте переменную EDITOR_CODE в настройках Netlify и пересоберите сайт." });
+  if (body.code !== code) return res.status(403).json({ error: "Неверный код редактора" });
+  try {
+    if (action === "ask-save") {
+      const item = ASK.find((x) => x.id === String(body.id || ""));
+      if (!item) return res.status(400).json({ error: "Нет такого предложения" });
+      const inh = fixPalochka(String(body.inh || "")).trim();
+      if (!inh || inh.length > 600) return res.status(400).json({ error: "Впишите перевод" });
+      await savePhrase({ source: "ru", target: "inh", text: item.ru, translation: inh, at: new Date().toISOString() });
+    }
+    const phrases = await loadPhrases(action === "ask-save");
+    const has = (x) => !!exactMatch(phrases, x.ru, "ru", "inh");
+    const done = ASK.filter(has).length;
+    const after = Number.isInteger(body.after) ? body.after : -1;
+    const n = ASK.length;
+    let index = -1;
+    for (let step = 1; step <= n; step++) {
+      const i = (((after + step) % n) + n) % n;
+      if (!has(ASK[i])) { index = i; break; }
+    }
+    if (index < 0) return res.status(200).json({ done: true, translated: done, total: n });
+    return res.status(200).json({ item: ASK[index], index, translated: done, total: n, ok: action === "ask-save" });
+  } catch (e) {
+    console.error("ask:", e.status, e.message);
+    return res.status(e.status || 500).json({ error: e.status === 501 ? e.message : "Не получилось. Попробуйте ещё раз." });
+  }
+}
+
 // Страница /review: следующая непроверенная пара и сохранение решения. Доступ — по коду EDITOR_CODE.
 async function reviewAction(action, body, res) {
   const code = process.env.EDITOR_CODE;
@@ -963,17 +1042,21 @@ async function reviewAction(action, body, res) {
       return res.status(200).json({ ok: true, reviewed, total: SEED.length });
     }
     const review = await loadReview(true);
+    // after / index — место в очереди reviewOrder() (сначала частые фразы)
+    const order = reviewOrder();
     const after = Number.isInteger(body.after) ? body.after : -1;
-    const n = SEED.length;
+    const n = order.length;
     let index = -1;
     for (let step = 1; step <= n; step++) {
-      const i = (((after + step) % n) + n) % n;
-      if (!review[SEED[i].id]) { index = i; break; }
+      const pos = (((after + step) % n) + n) % n;
+      if (!review[SEED[order[pos]].id]) { index = pos; break; }
     }
-    const reviewed = Object.keys(review).length;
+    const reviewed = Object.keys(review).filter((id) => seedIndex().byId.has(id)).length;
     if (index < 0) return res.status(200).json({ done: true, reviewed, total: n });
-    const { id, ru, inh, kind, source, note, count } = SEED[index];
-    return res.status(200).json({ item: { id, ru, inh, kind, source, note: note || "", count: count || 0 }, index, reviewed, total: n });
+    const p = SEED[order[index]];
+    const { id, ru, inh, kind, source, note, count } = p;
+    const { sourceLabel } = seedSource(p);
+    return res.status(200).json({ item: { id, ru, inh, kind, source, sourceLabel, also: p.also || [], note: note || "", count: count || 0 }, index, reviewed, total: n });
   } catch (e) {
     console.error("review:", e.status, e.message);
     return res.status(e.status || 500).json({ error: e.status === 501 ? e.message : "Не получилось. Попробуйте ещё раз." });
@@ -987,6 +1070,7 @@ module.exports = async (req, res) => {
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
   const { text = "", source, target, mode, action } = body || {};
   if (action === "review-next" || action === "review-save") return reviewAction(action, body || {}, res);
+  if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
@@ -1184,3 +1268,4 @@ module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) dele
 module.exports._prompts = { textPrompt, wordPrompt, repairPrompt, readTranslation, systemPrompt };
 module.exports._RET = RET;
 module.exports._variants = { finishVariants, aiVariant, noteFromLine };
+module.exports._review = { reviewOrder, seedSource, ASK };

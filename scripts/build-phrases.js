@@ -30,6 +30,13 @@ const inhWords = (s) => (s.replace(/\([^()]*\)/g, " ").match(/[А-Яа-яЁёӀ�
 const CHECHEN = new Set(Object.keys(BASE.CHECHEN));
 
 const out = new Map(), stats = {}, dropped = {};
+// id прежних записей не меняются: по ним хранятся решения носителя с /review. Если ту же пару теперь
+// первым даёт другой источник (например, PaydaDosh вместо PanLex), id берётся из старого data/phrases.json.
+const OLD_IDS = new Map();
+try {
+  for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8")))
+    OLD_IDS.set(`${BASE.key(clean(p.ru))}|${BASE.key(fixPal(clean(p.inh)))}`, p.id);
+} catch {}
 const bump = (o, k) => { o[k] = (o[k] || 0) + 1; };
 // strict: проверять каждое ингушское слово по частотному словарю (для строк словарика с пояснениями — нет)
 function add(kind, ru, inh, source, extra = {}, strict = true) {
@@ -47,7 +54,7 @@ function add(kind, ru, inh, source, extra = {}, strict = true) {
     }
     return bump(dropped, `${source}: дубль`);
   }
-  const id = crypto.createHash("sha1").update(`${kind}\x01${ru}\x01${inh}`).digest("hex").slice(0, 10);
+  const id = OLD_IDS.get(key) || crypto.createHash("sha1").update(`${kind}\x01${ru}\x01${inh}`).digest("hex").slice(0, 10);
   out.set(key, { id, kind, ru, inh, ...extra, source, verified: false });
   bump(stats, source);
 }
@@ -72,11 +79,13 @@ for (const w of LEX.keys("ru")) {
   const c = e && e.exact && e.list.find((x) => x.sure);
   if (c && c.n >= 5) add("word", e.key, c.text, S_TEXTS, { count: c.n });
 }
-// 4. выгрузки из открытых источников (data/sources/*.json). Порядок — от более надёжных к менее:
-//    при дубле остаётся запись первого источника, остальные пишутся в поле also.
+// 4. выгрузки из источников (data/sources/*.json). Порядок — от более надёжных к менее
+//    (проверено носителем > словарь проекта > PaydaDosh > Викисловарь > Википедия/Викиданные > PanLex >
+//    корпус > translatewiki): при дубле остаётся запись первого источника, остальные пишутся в поле also,
+//    а на сайте (api/translate.js, seedSource) подпись и надёжность берутся по самому надёжному из них.
 //    Каждое ингушское слово должно встречаться в ингушских текстах (кроме имён собственных);
 //    чеченские формы не берём ни из какого источника.
-const ORDER = ["ruwiktionary", "panlex", "translatewiki", "inhwiki", "wikidata"];
+const ORDER = ["paydadosh", "ruwiktionary", "inhwiki", "wikidata", "panlex", "translatewiki"];
 const dir = path.join(ROOT, "data", "sources");
 const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith(".json")) : [];
 const rank = (f) => { const i = ORDER.indexOf(f.replace(/\.json$/, "")); return i < 0 ? ORDER.length : i; };
@@ -88,7 +97,9 @@ for (const f of files) {
     const kind = p.kind || "phrase";
     const extra = { license: src.license || "" };
     if (p.note) extra.note = p.note;
-    add(kind, p.ru, p.inh, name, extra, src.strict !== false && kind !== "name");
+    // «Дог Ӏаткъаш / Дега Ӏаткъаш» при одном русском — отдельные пары (как во фразах справочника)
+    const variants = / \/ /.test(p.inh) && !/ \/ /.test(p.ru) ? p.inh.split(" / ") : [p.inh];
+    for (const inh of variants) add(kind, p.ru, inh, name, extra, src.strict !== false && kind !== "name");
   }
 }
 
