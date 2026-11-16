@@ -138,6 +138,24 @@ const orOk = (text) => ({ status: 200, body: { choices: [{ message: { content: t
   assert.ok(calls.find((c) => c.url.includes("openrouter")).body.messages[1].content.includes("пещера"), "для английского — весь словарик");
   console.log("ok 7: английский → ингушский получает весь словарик (как раньше)");
 
+  // ---------- 8. модель ответила «лимит»: в следующий раз её спрашивают последней ----------
+  T._resetBroke();
+  delete process.env.OPENROUTER_API_KEY; delete process.env.GEMINI_MODELS;
+  process.env.GEMINI_API_KEY = "test";
+  const okFlash = geminiOk({ translation: "Дика да", confidence: "high", unknown_words: [] });
+  reply = (url) => (url.includes("gemini-4-hydrogen") ? { status: 429, body: { error: { message: "Quota exceeded. Please retry in 35s." } } } : okFlash);
+  calls.length = 0;
+  r = await run({ text: "Сегодня очень тёплая погода на улице", source: "ru", target: "inh", mode: "text" });
+  assert.strictEqual(r.code, 200, JSON.stringify(r.data));
+  assert.ok(calls.some((c) => c.url.includes("gemini-4-hydrogen")) && /3\.8/.test(r.data.model), r.data.model);
+  assert.ok(T._cool.isCooling("gemini", "gemini-4-hydrogen"), "модель на паузе после лимита");
+  calls.length = 0;
+  r = await run({ text: "Завтра будет холодная погода в горах", source: "ru", target: "inh", mode: "text" });
+  assert.strictEqual(r.code, 200, JSON.stringify(r.data));
+  assert.ok(!calls.some((c) => c.url.includes("gemini-4-hydrogen")), "модель на паузе не спрашивают, пока отвечают другие");
+  T._resetBroke();
+  console.log("ok 8: после ответа «лимит» модель пропускается, перевод идёт следующей моделью");
+
   console.log("\nВсе проверки прошли (настоящие ИИ не вызывались).");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

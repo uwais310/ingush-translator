@@ -624,15 +624,22 @@ const isBroke = (p) => BROKE_AT[p] && Date.now() - BROKE_AT[p] < 10 * 60_000;
 // стал в несколько раз короче, чем раньше (около 10 тыс. знаков вместо 60 тыс.).
 const tierNow = (p, model, fast) => (fast && !isPaid(p, model) && p !== "gemini" ? "compact" : tierFor(p, model));
 
-// Модель ответила «лимит» (429): минуту её не спрашиваем первой, а если кончился дневной лимит — полчаса.
-// Так перевод не теряет время на модель, которая всё равно откажет; если остальные тоже не ответят, её спросят в конце.
-const COOL = new Map();
+// Модель ответила «лимит» (429): какое-то время её не спрашиваем первой, чтобы перевод не терял на неё время.
+// Первый раз — минута (или столько, сколько просит сам сервис: «retry in 35s»), второй подряд — 5 минут,
+// дальше — по полчаса: так ведёт себя дневной лимит. Если остальные модели тоже не ответят, её спросят в конце.
+const COOL = new Map(), COOL_HITS = new Map();
 const coolKey = (p, model) => `${p}|${model}`;
 const isCooling = (p, model) => (COOL.get(coolKey(p, model)) || 0) > Date.now();
 function coolDown(p, model, e) {
-  const daily = /per.?day|daily|perday|quota/i.test(String(e && e.message));
-  COOL.set(coolKey(p, model), Date.now() + (daily ? 30 * 60_000 : 60_000));
+  const k = coolKey(p, model);
+  const hits = (COOL_HITS.get(k) || 0) + 1;
+  COOL_HITS.set(k, hits);
+  const hint = /retry in ([\d.]+)\s*s/i.exec(String(e && e.message));
+  const asked = hint ? Math.ceil(Number(hint[1])) * 1000 : 0;
+  const step = hits === 1 ? 60_000 : hits === 2 ? 5 * 60_000 : 30 * 60_000;
+  COOL.set(k, Date.now() + Math.min(30 * 60_000, Math.max(step, asked)));
 }
+const coolClear = (p, model) => { COOL.delete(coolKey(p, model)); COOL_HITS.delete(coolKey(p, model)); };
 
 // Пробует модели, пока одна не ответит. Возвращает { text, by }.
 // prompt(tier) возвращает промпт нужного размера.
@@ -649,7 +656,7 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const attempt = async (p, model, ms) => {
     const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), json, ms, callOpts(p, model, fast)));
     if (!text) throw httpError(503, "Empty answer");
-    COOL.delete(coolKey(p, model));
+    coolClear(p, model);
     return { text, by: modelLabel(p, model), p, model };
   };
   const failed = (p, model, e) => {
@@ -1338,7 +1345,8 @@ module.exports = async (req, res) => {
 module.exports._checkIngush = checkIngush;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
-module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; COOL.clear(); };
+module.exports._cool = { isCooling, coolDown };
+module.exports._resetBroke = () => { for (const k of Object.keys(BROKE_AT)) delete BROKE_AT[k]; COOL.clear(); COOL_HITS.clear(); };
 module.exports._prompts = { textPrompt, wordPrompt, repairPrompt, readTranslation, systemPrompt };
 module.exports._RET = RET;
 module.exports._variants = { finishVariants, aiVariant, noteFromLine };
