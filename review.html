@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0b6b45">
 <link rel="icon" href="/icon-192.png">
 <title>Проверка переводов — Ингушский переводчик</title>
 <style>
@@ -64,6 +64,24 @@
   .status.error { color: var(--warn-ink); }
   .status.good { color: var(--ok-ink); }
   #login-status:empty { display: none; }
+  /* ===== Зелёная тема — как на главной ===== */
+  :root { --g1: #064d31; --g2: #0b6b45; --g3: #12a36a; --accent: #0b7a4d; --accent-soft: #e3f5eb; --surface-2: #f0faf4; --line: #d3ebdd;
+    --on-g: #fff; --on-g-muted: rgba(255,255,255,.8); --best-bg: linear-gradient(135deg, #0b6b45, #12a36a);
+    --shadow: 0 2px 6px rgba(2,40,24,.12), 0 24px 60px rgba(2,40,24,.28); }
+  @media (prefers-color-scheme: dark) {
+    :root { --g1: #020d08; --g2: #062a1b; --g3: #0b4a30; --surface: #0d1e17; --surface-2: #10261d; --line: #1f3d30; --accent-soft: #143b2b;
+      --best-bg: linear-gradient(135deg, #0f7a4f, #18a86f); --shadow: 0 2px 6px rgba(0,0,0,.4), 0 24px 60px rgba(0,0,0,.45); }
+  }
+  html { background: var(--g1); }
+  body { min-height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(255,255,255,.14), transparent 60%),
+    linear-gradient(165deg, var(--g1) 0%, var(--g2) 45%, var(--g3) 100%); }
+  header, header h1 { color: var(--on-g); }
+  header .muted, .wrap > p.muted { color: var(--on-g-muted); }
+  header a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255,255,255,.45); text-underline-offset: 3px; }
+  .logo { background: #fff; color: var(--g2); width: 42px; height: 42px; border-radius: 13px; font-size: 23px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+  .card { border: 0; border-radius: 24px; }
+  .btn.primary { background: var(--best-bg); border-color: transparent; box-shadow: 0 6px 16px rgba(11,107,69,.35); color: #fff; }
+  .tag { color: var(--accent); }
   [hidden] { display: none !important; }
 </style>
 </head>
