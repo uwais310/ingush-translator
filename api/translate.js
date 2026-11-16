@@ -6,6 +6,8 @@
 // 2. Потом — база без ИИ (lib/base.js): проверенные фразы, словарь, слова и целые предложения
 //    из настоящих текстов. Такой ответ помечается «Из базы». С noAi: true ИИ не вызывается совсем.
 // 3. Иначе промпт уходит по цепочке ИИ: сначала сильные модели, потом запасные.
+//    Если в ответе ИИ есть слова, которых нет в ингушских текстах, страница просит второй проход
+//    (action: "repair"): ИИ заменяет эти слова, и остаётся вариант, где таких слов меньше.
 //    В промпте — справочник по ингушскому (lib/ingush-guide.js): правила, отличия от чеченского,
 //    словарик частых слов и проверенные фразы. Gemini и Grok получают его целиком,
 //    Groq и OpenRouter — коротко и только нужные слова (у них маленький лимит токенов).
@@ -105,6 +107,29 @@ ${text}
 </text>`;
 }
 
+// Второй проход: ИИ получает свой черновик и список слов, которых нет в ингушских текстах.
+function repairPrompt(text, src, tgt, draft, bad, examples = [], tier = "full", corpus = []) {
+  const S = LANGS[src], T = LANGS[tgt];
+  return `You are an editor and a native speaker of Ingush. A translation from ${S} into ${T} needs correcting.
+
+${rulesFor(text, src, tgt, tier)}${lexiconBlock(text, src, tgt, tier)}${corpusBlock(corpus, src, tier)}${examplesBlock(examples)}<source>
+${text}
+</source>
+
+<draft>
+${draft}
+</draft>
+
+These words of the draft were not found in a list of 155,000 word forms from Ingush books and newspapers, so they are probably invented, misspelled, Chechen or left in Russian:
+${bad.join(", ")}
+
+Correct the draft:
+- Replace each of these words with a real Ingush word or phrase of the same meaning. Take it from the glossary, the corpus word statistics or the examples above. If nothing there fits, say that part in other words that you are sure exist in Ingush.
+- Keep every other word of the draft, changing it only where the grammar requires it (class marks, case endings).
+- Names of people and places stay as they are.
+- Output only the corrected translation, with no notes or explanations. Keep the line breaks.`;
+}
+
 function wordPrompt(text, src, tgt, examples = [], tier = "full", corpus = []) {
   const S = LANGS[src], T = LANGS[tgt];
   return `You are a bilingual dictionary${hasIngush(src, tgt) ? " made by native speakers of Ingush" : ""}. Translate the word or short phrase inside <text> from ${S} into ${T}.
@@ -168,6 +193,34 @@ function checkIngush(text) {
     if (ok) known++; else unknown.add(t);
   }
   return { unknown: [...unknown], coverage: checked ? Math.round((known / checked) * 100) / 100 : 1 };
+}
+
+// Слова с заглавной буквы не в начале предложения — имена и названия (в нижнем регистре).
+function namesIn(text) {
+  const out = new Set();
+  const re = /[\u0400-\u04FF]+(?:-[\u0400-\u04FF]+)*/g;
+  const s = String(text);
+  let m;
+  while ((m = re.exec(s))) {
+    const w = m[0];
+    const first = w[0] === "Ӏ" ? w[1] || "" : w[0]; // палочка всегда выглядит заглавной
+    if (!first || first === first.toLowerCase()) continue;
+    const before = s.slice(0, m.index).replace(/[\s"«»(\[—–-]+$/, "");
+    if (before && !/[.!?…:;]$/.test(before)) out.add(w.toLowerCase());
+  }
+  return out;
+}
+
+// Подозрительные слова перевода: их нет в ингушских текстах, и это не имена.
+function suspects(translation, sourceText) {
+  const { unknown } = checkIngush(translation);
+  if (!unknown.length) return [];
+  const names = namesIn(translation);
+  const srcNames = new Set([...namesIn(sourceText)].map((w) => w.slice(0, 4)));
+  return unknown.filter((w) => {
+    const k = w.toLowerCase();
+    return !names.has(k) && !(k.length >= 4 && srcNames.has(k.slice(0, 4)));
+  });
 }
 
 // ---------------- разговорник (исправления носителей) ----------------
@@ -684,6 +737,31 @@ module.exports = async (req, res) => {
     return res.status(200).json({ results, saved: saved || null, examples: examples.length });
   }
 
+  // --- второй проход: заменить слова, которых нет в ингушских текстах; остаётся лучший вариант ---
+  if (action === "repair") {
+    const draft = fixT(String(body.draft || "")).trim();
+    if (target !== "inh" || !draft || draft.length > MAX_CHARS * 2) return res.status(400).json({ error: "Нечего исправлять" });
+    const before = suspects(draft, input);
+    if (!before.length) return res.status(200).json({ translation: draft, improved: false, ...checkIngush(draft) });
+    const textKey = `${source}|${target}|t|${input}`;
+    const remember = (extra) => { const old = CACHE.get(textKey); if (old && old.translation === draft) cacheSet(textKey, { ...old, ...extra, repaired: true }); };
+    try {
+      const { text: out, by } = await ask(prompts((tier) => repairPrompt(input, source, target, draft, before, examples, tier, corpus)), false, budget);
+      const fixed = BASE.chechenFix(fixT(out)).text.trim();
+      const after = suspects(fixed, input);
+      const sane = fixed.length >= draft.length * 0.5 && fixed.length <= draft.length * 2 + 20;
+      const improved = sane && after.length < before.length; // лучше — значит меньше слов, которых нет в ингушских текстах
+      const translation = improved ? fixed : draft;
+      const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation) };
+      if (hurried) result.fast = true;
+      remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after } : {});
+      return res.status(200).json(result);
+    } catch (e) {
+      const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
+      return res.status(status).json({ error: e.message });
+    }
+  }
+
   // --- обычный перевод ---
   const cacheKey = `${source}|${target}|${mode === "word" ? "w" : "t"}|${input}`;
   const hit = CACHE.get(cacheKey);
@@ -713,6 +791,7 @@ module.exports = async (req, res) => {
       const f = BASE.chechenFix(result.translation);
       if (f.fixed.length) { result.translation = f.text; result.fixed = f.fixed; }
       Object.assign(result, checkIngush(result.translation));
+      if (mode !== "word") result.suspect = suspects(result.translation, input); // для второго прохода
     }
     if (mode !== "word") { result.words = words; result.similar = similar; }
     cacheSet(cacheKey, result);

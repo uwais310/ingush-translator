@@ -474,12 +474,31 @@ async function translate() {
     setMeta(data.model + (data.ai && data.fast ? " · быстрый режим" : ""), trusted ? "ok" : data.ai ? "ai" : "");
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
+    let note = "", noteKind = "";
     if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
-      setStatus("Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный.", "error");
+      note = "Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный."; noteKind = "error";
     } else if (data.unknown && data.unknown.length && !trusted) {
-      setStatus("Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : ""));
+      note = "Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : "");
     } else if (swapped) {
-      setStatus("Чеченские формы заменены на ингушские: " + swapped + ".");
+      note = "Чеченские формы заменены на ингушские: " + swapped + ".";
+    }
+    setStatus(note, noteKind);
+
+    // второй проход: ИИ заменяет слова, которых нет в ингушских текстах; остаётся лучший вариант
+    if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) {
+      els.go.textContent = "Проверяю…";
+      setStatus("Проверяю слова по базе и исправляю…");
+      try {
+        const r = await api({ action: "repair", text, source: src, target: tgt, draft: lastResult }, controller.signal);
+        if (r.improved && r.translation) {
+          lastResult = fixT(String(r.translation).trim());
+          markInto(els.output, lastResult, r.unknown);
+          setStatus("Перевод исправлен: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
+        } else setStatus(note, noteKind);
+      } catch (e) {
+        if (e.name === "AbortError") throw e;
+        setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
+      }
     }
     addHistory(src, tgt, text, lastResult);
   } catch (e) {
