@@ -4,68 +4,77 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0c6a44">
+<meta name="theme-color" content="#ffffff">
 <link rel="icon" href="/icon-192.png">
 <title>Проверка переводов — Ингушский переводчик</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Caption:wght@700&display=swap" rel="stylesheet">
 <style>
   /* Страница для носителя языка: одна пара на экране и три большие кнопки. Палитра — как на главной. */
   :root {
-    --bg: #eef2f0; --surface: #ffffff; --surface-2: #f6f9f7; --ink: #13201a; --muted: #5b6a63; --line: #d9e1dc;
-    --accent: #0c6a44; --accent-ink: #ffffff; --accent-soft: #e2f0e8; --warn-ink: #8a4e00; --warn-bg: #fdf1dc; --ok-ink: #0c6a44;
-    --font-display: "PT Sans Caption", "PT Sans", "Noto Sans", Arial, sans-serif;
-    --font-body: "PT Sans", "Noto Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f7f9f8; --ink: #111816; --muted: #5f6b66; --line: #e4e9e6;
+    --accent: #0a7a4b; --accent-hover: #086a41; --accent-ink: #ffffff; --accent-soft: #ebf6f0; --warn-ink: #8a5300; --warn-bg: #fff5e3; --ok-ink: #0a7a4b;
+    --shadow: 0 1px 2px rgba(16, 24, 20, .04), 0 8px 24px rgba(16, 24, 20, .06);
+    --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0d1411; --surface: #151f1a; --surface-2: #121b17; --ink: #e5eee9; --muted: #92a39a; --line: #25332c;
-      --accent: #38b77f; --accent-ink: #06130d; --accent-soft: #173326; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; color-scheme: dark;
+      --bg: #0e1412; --surface: #151d1a; --surface-2: #19221f; --ink: #e8efec; --muted: #97a59f; --line: #26322d;
+      --accent: #3ec28a; --accent-hover: #52cf98; --accent-ink: #04140c; --accent-soft: #16302a; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); }
-  body { font-family: var(--font-body); font-size: 17px; line-height: 1.5; }
+  body { font-family: var(--font-body); font-size: 17px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
-  h1 { font-family: var(--font-display); font-size: 22px; line-height: 1.15; margin: 0; }
-  a { color: var(--accent); }
+  header { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 36px; height: 36px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 20px var(--font-display); flex: none; }
+  h1 { font-family: var(--font-display); font-size: 20px; font-weight: 650; letter-spacing: -.015em; line-height: 1.15; margin: 0; }
+  a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  a:hover { text-decoration: underline; }
   .muted { color: var(--muted); font-size: 14px; margin: 0; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px; display: grid; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 18px; display: grid; gap: 16px; box-shadow: var(--shadow); }
   .card[hidden] { display: none; }
   label { font-size: 14px; color: var(--muted); display: grid; gap: 6px; }
   input, textarea {
     width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface-2);
-    color: var(--ink); font: 19px var(--font-body);
+    color: var(--ink); font: 19px var(--font-body); outline: none;
   }
+  input:focus, textarea:focus { border-color: var(--accent); }
   textarea { min-height: 96px; resize: vertical; }
   .btn {
-    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 14px 16px;
-    font: 700 17px var(--font-body); cursor: pointer; min-height: 52px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 14px; padding: 14px 16px;
+    font: 600 17px var(--font-body); cursor: pointer; min-height: 52px; transition: background .15s, border-color .15s;
   }
+  .btn:hover { border-color: var(--accent); }
   .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.primary:hover { background: var(--accent-hover); }
   .btn:disabled { opacity: .55; cursor: default; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
   .actions .wide { grid-column: 1 / -1; }
-  .tag { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .tag { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; margin-bottom: 2px; }
   .ru { font-size: 20px; overflow-wrap: anywhere; }
-  .inh { font-size: 26px; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; line-height: 1.3; }
+  .inh { font-size: 26px; font-weight: 650; letter-spacing: -.01em; color: var(--accent); overflow-wrap: anywhere; line-height: 1.3; }
   .note { font-size: 14px; color: var(--muted); margin: 0; overflow-wrap: anywhere; }
-  .bar { height: 8px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; }
+  .bar { height: 6px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; }
   .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
   .status { font-size: 15px; min-height: 22px; margin: 0; color: var(--muted); }
   .status.error { color: var(--warn-ink); }
   .status.good { color: var(--ok-ink); }
+  #login-status:empty { display: none; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Проверка переводов</h1>
-    <p class="muted">Ингушский переводчик · <a href="/">на главную</a></p>
+    <div class="logo" aria-hidden="true">Ӏ</div>
+    <div>
+      <h1>Проверка переводов</h1>
+      <p class="muted">Ингушский переводчик · <a href="/">на главную</a></p>
+    </div>
   </header>
 
   <form class="card" id="login">
