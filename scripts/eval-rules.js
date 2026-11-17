@@ -4,7 +4,8 @@
 // Если собрали — перевод сравнивается со всеми переводами этой фразы в базе (регистр, знаки препинания
 // и пометки в скобках не учитываются; вариант для мужчины или женщины тоже засчитывается).
 //
-//   node scripts/eval-rules.js            — итог по каждому правилу
+//   node scripts/eval-rules.js            — итог по каждому правилу (русский → ингушский)
+//   node scripts/eval-rules.js --inh      — то же для ингушского → русского
 //   node scripts/eval-rules.js --diff     — показать все фразы, где правила ответили не так, как в базе
 //
 // «Совпало» — ровно как у носителя. «Те же слова» — те же слова в другом порядке (в ингушском порядок
@@ -19,11 +20,13 @@ const RET = require("../lib/retrieval.js")({ KB, SEED, LEX });
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS });
 
 const SHOW = process.argv.includes("--diff");
+const INH = process.argv.includes("--inh");
 const norm = (s) => String(s).replace(/\([^()]*\)/g, " ").toLowerCase().replace(/ё/g, "е").replace(/[1lI|ӏ]/g, "Ӏ".toLowerCase())
   .replace(/Ӏ/g, "ӏ").replace(/[.,!?;:«»"—–…-]/g, " ").replace(/\s+/g, " ").trim();
 const bag = (s) => norm(s).split(" ").sort().join(" ");
 
-function run(quiet = false) {
+function run(quiet = false, inh = INH) {
+  if (inh) return runInh(quiet);
   const log = quiet ? () => {} : console.log;
   // все переводы каждой русской фразы
   const refs = new Map();
@@ -59,6 +62,48 @@ function run(quiet = false) {
   const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) + "%" : "—");
   log(`Фраз в базе: ${total}. Правила перевели: ${done} (${pct(done, total)}).`);
   log(`  совпало с переводом носителя:          ${exact} (${pct(exact, done)})`);
+  log(`  совпало или те же слова в другом порядке: ${same} (${pct(same, done)})`);
+  for (const [id, st] of [...by].sort((a, b) => b[1].n - a[1].n)) log(`  ${id.padEnd(12)} ${String(st.n).padStart(4)} фраз, совпало ${pct(st.exact, st.n)}, те же слова ${pct(st.same, st.n)}`);
+  if (SHOW) log("\nНе совпало:\n" + diffs.join("\n"));
+  return { total, done, exact, same, diffs };
+}
+
+// Ингушский → русский: русских переводов одной ингушской фразы бывает несколько — засчитывается любой.
+function runInh(quiet = false) {
+  const log = quiet ? () => {} : console.log;
+  const ruNorm = (s) => String(s).replace(/\([^()]*\)/g, " ").toLowerCase().replace(/ё/g, "е").replace(/[.,!?;:«»"—–…-]/g, " ").replace(/\s+/g, " ").trim();
+  const ruBag = (s) => ruNorm(s).split(" ").sort().join(" ");
+  const refs = new Map();
+  const put = (inh, ru) => {
+    const clean = String(inh).replace(/\([^()]*\)/g, " ").replace(/\s+/g, " ").trim();
+    const k = norm(clean);
+    if (!k) return;
+    if (!refs.has(k)) refs.set(k, { inh: clean, ru: [] });
+    refs.get(k).ru.push(ru);
+  };
+  for (const p of SEED) if (p.kind === "phrase" && /^(PaydaDosh|Справочник)/.test(p.source)) for (const alt of String(p.inh).split(/\s*\/\s*/)) put(alt, p.ru);
+  for (const [ru, inh] of KB.EXAMPLES) put(inh, ru);
+  const by = new Map();
+  let total = 0, done = 0, exact = 0, same = 0;
+  const diffs = [];
+  for (const { inh, ru } of refs.values()) {
+    total++;
+    const r = RULES.translateInh(inh);
+    if (!r) continue;
+    done++;
+    const st = by.get(r.rule) || { n: 0, exact: 0, same: 0 };
+    st.n++;
+    const ours = r.variants.map((v) => v.text);
+    const hitExact = ours.some((o) => ru.some((x) => ruNorm(x) === ruNorm(o)));
+    const hitSame = hitExact || ours.some((o) => ru.some((x) => ruBag(x) === ruBag(o)));
+    if (hitExact) { exact++; st.exact++; }
+    if (hitSame) { same++; st.same++; }
+    if (!hitSame) diffs.push(`${inh}\n    правила: ${ours.join(" | ")}   [${r.rule}]\n    в базе:  ${ru.join(" | ")}`);
+    by.set(r.rule, st);
+  }
+  const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) + "%" : "—");
+  log(`Ингушских фраз в базе: ${total}. Правила перевели: ${done} (${pct(done, total)}).`);
+  log(`  совпало с переводом в базе:               ${exact} (${pct(exact, done)})`);
   log(`  совпало или те же слова в другом порядке: ${same} (${pct(same, done)})`);
   for (const [id, st] of [...by].sort((a, b) => b[1].n - a[1].n)) log(`  ${id.padEnd(12)} ${String(st.n).padStart(4)} фраз, совпало ${pct(st.exact, st.n)}, те же слова ${pct(st.same, st.n)}`);
   if (SHOW) log("\nНе совпало:\n" + diffs.join("\n"));
