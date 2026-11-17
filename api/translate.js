@@ -244,8 +244,7 @@ const PAL_RE = new RegExp(`([\\u0400-\\u04FF])([${LOOK}])|([${LOOK}])(?=[\\u0400
 const fixPalochka = (s) =>
   String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 
-// TODO (Claude): проверка «в ингушском ответе остались русские слова» (например, «холодильник») —
-// её делает Claude отдельно; здесь только чистка разметки, проверку не добавлять, чтобы не было двух.
+// Здесь только чистка разметки. Русские слова в ингушском ответе ловит lib/postcheck.js (checkIngush).
 const cleanOutput = (t) =>
   String(t || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")

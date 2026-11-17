@@ -17,7 +17,7 @@ manifest, sw.js, png  чтобы сайт ставился на телефон �
 | 1 | Google Gemini | Gemini Flash | aistudio.google.com → Get API key | `GEMINI_API_KEY` |
 | 2 | Groq | Kimi K2, Qwen3 | console.groq.com → API Keys | `GROQ_API_KEY` |
 | 3 | OpenRouter | бесплатные `:free` (Kimi и др.) | openrouter.ai → Keys | `OPENROUTER_API_KEY` |
-| 4 | Grok (платно) | grok-4 | console.x.ai | `XAI_API_KEY` |
+| 4 | Grok (платно) | grok-4.20-non-reasoning | console.x.ai | `XAI_API_KEY` |
 
 Все три бесплатных — без карты. Ключи вставляются в настройках хостинга (Environment variables), после этого — новый деплой.
 
