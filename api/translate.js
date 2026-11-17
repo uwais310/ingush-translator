@@ -1085,7 +1085,7 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
 //   2 — остальные короткие фразы (до 6 слов); 3 — слова из настоящих текстов (чем чаще, тем раньше);
 //   4 — остальные слова; 5 — длинные фразы, пословицы и обороты; 6 — имена собственные.
 // Внутри группы — по надёжности источника, потом короче раньше. Решения хранятся по id пары, как и раньше.
-const EVERYDAY_TAG = /^PaydaDosh, разговорник: (переводы носителей|уроки|ситуации|обряды и праздники)/;
+const EVERYDAY_TAG = /^(?:PaydaDosh, )?разговорник: (переводы носителей|уроки|ситуации|обряды и праздники)/; // раздел PaydaDosh (поле section)
 let REVIEW_ORDER = null;
 function reviewOrder() {
   if (REVIEW_ORDER) return REVIEW_ORDER;
@@ -1095,7 +1095,7 @@ function reviewOrder() {
     if (p.kind === "phrase") {
       if (src.rank === 2) return 0;
       const n = words(p.ru);
-      if (n <= 6 && src.source === "paydadosh" && EVERYDAY_TAG.test(p.note || "")) return 1;
+      if (n <= 6 && src.source === "paydadosh" && EVERYDAY_TAG.test(p.section || p.note || "")) return 1;
       return n <= 6 ? 2 : 5;
     }
     return p.count ? 3 : 4;
@@ -1174,9 +1174,9 @@ async function reviewAction(action, body, res) {
     const reviewed = Object.keys(review).filter((id) => seedIndex().byId.has(id)).length;
     if (index < 0) return res.status(200).json({ done: true, reviewed, total: n });
     const p = SEED[order[index]];
-    const { id, ru, inh, kind, source, note, count } = p;
+    const { id, ru, inh, kind, source, note, section, count } = p;
     const { sourceLabel } = seedSource(p);
-    return res.status(200).json({ item: { id, ru, inh, kind, source, sourceLabel, also: p.also || [], note: note || "", count: count || 0 }, index, reviewed, total: n });
+    return res.status(200).json({ item: { id, ru, inh, kind, source, sourceLabel, also: p.also || [], note: note || "", section: section || "", count: count || 0 }, index, reviewed, total: n });
   } catch (e) {
     console.error("review:", e.status, e.message);
     return res.status(e.status || 500).json({ error: e.status === 501 ? e.message : "Не получилось. Попробуйте ещё раз." });

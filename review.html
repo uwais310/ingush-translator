@@ -248,8 +248,9 @@ function show(data) {
   $("note").textContent = item.note || "";
   const s = $("source"); s.innerHTML = "";
   const chip = document.createElement("span"); chip.className = "chip"; chip.textContent = item.sourceLabel || item.source; s.appendChild(chip);
-  // у фраз PaydaDosh в пометке написано, из какого раздела она взята («разговорник: уроки»)
-  if (/^PaydaDosh,/.test(item.note || "")) { const from = document.createElement("span"); from.textContent = item.note.replace(/^PaydaDosh,\s*/, "").replace(/\s*\([^()]*\)\s*$/, ""); s.appendChild(from); }
+  // у фраз PaydaDosh раздел сайта, откуда она взята («разговорник: уроки»), — в поле section (раньше было в note)
+  const sec = item.section || (/^PaydaDosh,/.test(item.note || "") ? item.note.replace(/^PaydaDosh,\s*/, "") : "");
+  if (sec) { const from = document.createElement("span"); from.textContent = sec.replace(/\s*\([^()]*\)\s*$/, ""); s.appendChild(from); }
   const more = document.createElement("span");
   // под меткой источника: где ещё есть эта пара и сколько раз слово встретилось в текстах
   more.textContent = [item.also && item.also.length ? "также: " + item.also.join(", ") : "", item.count ? `в текстах ${fmt(item.count)} раз` : ""].filter(Boolean).join("; ");
