@@ -57,7 +57,7 @@ You don't need to be a programmer. If you speak Ingush, the most useful thing yo
 
 ## Data sources and thanks
 
-- **[PaydaDosh](https://paydadosh.ru)**, the online Ingush dictionary created by Yunus Akhilgov: dictionary entries, phrasebook and proverbs, used **with the permission of the PaydaDosh team**. This data is not under an open license.
+- **[PaydaDosh](https://paydadosh.ru)**, the online Ingush dictionary created by Yunus Akhilgov: dictionary entries, phrasebook and proverbs, used **with the permission of the PaydaDosh team**, who also agreed to its publication in this repository. That's a permission, not an open license: to reuse PaydaDosh data in another project, please ask PaydaDosh.
 - Open dictionaries: Russian Wiktionary and Ingush Wikipedia (CC BY-SA 4.0), Wikidata and PanLex (CC0), translatewiki.net (CC BY 3.0).
 - [ing_freq_dict](https://github.com/YandievRuslan/ing_freq_dict) by YandievRuslan (WTFPL): the list of Ingush word forms used to check the output.
 - [GhalghayTools](https://github.com/Morgxth/GhalghayTools): parallel corpus. Only word statistics and fingerprints are kept here. The texts are downloaded at runtime and not redistributed.
@@ -75,4 +75,4 @@ Every entry in `data/phrases.json` records its source, and open-source entries a
 
 ## License
 
-The code is released under the [MIT License](LICENSE). The data keeps its own terms: open sources keep their original licenses (see the `license` field and SOURCES.md), and PaydaDosh entries are used with permission and are not covered by the MIT License.
+The code is released under the [MIT License](LICENSE). The data keeps its own terms: open sources keep their original licenses (see the `license` field and SOURCES.md), and PaydaDosh entries are published here with PaydaDosh's permission and are not covered by the MIT License.
