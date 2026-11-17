@@ -24,6 +24,8 @@ const LOOK = "1Il|ІіΙⅠǀ";
 const PAL = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
 const fixPal = (s) => String(s).replace(/ӏ/g, "Ӏ").replace(PAL, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 const clean = (s) => String(s || "").replace(/[­​]/g, "").replace(/\s+/g, " ").trim();
+// пометки внутри текста («(говорит мужчина)», «(й, б, д)») уходят в поле note — lib/notes.js
+const { splitNotes, cleanPair, NOTE_INH, NOTE_RU } = require("../lib/notes.js");
 // как в api/translate.js: без ударений и надстрочных знаков (в списке слов «й» записана как «и»)
 const wkey = (w) => w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC").toLowerCase().replace(/Ӏ/g, "ӏ");
 const inhWords = (s) => (s.replace(/\([^()]*\)/g, " ").match(/[А-Яа-яЁёӀӏ]+/g) || []).map(wkey);
@@ -34,14 +36,23 @@ const out = new Map(), stats = {}, dropped = {};
 // первым даёт другой источник (например, PaydaDosh вместо PanLex), id берётся из старого data/phrases.json.
 const OLD_IDS = new Map();
 try {
-  for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8")))
+  for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8"))) {
     OLD_IDS.set(`${BASE.key(clean(p.ru))}|${BASE.key(fixPal(clean(p.inh)))}`, p.id);
+    // тот же ключ без пометок — чтобы после чистки у записи остался прежний id
+    const r = splitNotes(clean(p.ru), NOTE_RU).text, i = splitNotes(fixPal(clean(p.inh)), NOTE_INH).text;
+    const k = `${BASE.key(r)}|${BASE.key(i)}`;
+    if (!OLD_IDS.has(k)) OLD_IDS.set(k, p.id);
+  }
 } catch {}
 const bump = (o, k) => { o[k] = (o[k] || 0) + 1; };
 // strict: проверять каждое ингушское слово по частотному словарю (для строк словарика с пояснениями — нет)
 function add(kind, ru, inh, source, extra = {}, strict = true) {
   ru = clean(ru); inh = fixPal(clean(inh));
   if (!ru || !inh) return;
+  if (kind === "phrase") {
+    const c = cleanPair(ru, inh, extra.note);
+    if (c.ru !== ru || c.inh !== inh) { ru = c.ru; inh = c.inh; extra = { ...extra, note: c.note }; }
+  }
   const ws = inhWords(inh);
   if (ws.some((w) => CHECHEN.has(w))) return bump(dropped, `${source}: чеченская форма`);
   if (strict && ws.some((w) => w.length > 1 && !WORDS.has(w))) return bump(dropped, `${source}: слова нет в ингушских текстах`);

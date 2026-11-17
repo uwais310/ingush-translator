@@ -156,6 +156,22 @@ const orOk = (text) => ({ status: 200, body: { choices: [{ message: { content: t
   T._resetBroke();
   console.log("ok 8: после ответа «лимит» модель пропускается, перевод идёт следующей моделью");
 
+  // ---------- 9. test: true (scripts/check-ai.js): не из базы, и ИИ не видит эту фразу в примерах ----------
+  T._resetBroke();
+  reply = () => okFlash;
+  calls.length = 0;
+  r = await run({ text: "Я забыл его имя", source: "ru", target: "inh", mode: "text", test: true });
+  assert.strictEqual(r.code, 200, JSON.stringify(r.data));
+  assert.ok(!r.data.base, "в тестовом режиме ответ не из базы");
+  const sent = calls.filter((c) => c.url.includes("generativelanguage")).map((c) => JSON.stringify(c.body));
+  assert.ok(sent.length >= 1, "ИИ вызван");
+  assert.ok(sent.every((b) => !b.includes("йицъеннай")), "готового перевода этой фразы («Цун цӀи йицъеннай сона») в подсказках нет");
+  calls.length = 0;
+  r = await run({ action: "compare", text: "Сегодня очень тёплая погода", source: "ru", target: "inh", test: true });
+  assert.ok(r.data.results.length >= 2 && r.data.results.every((x) => typeof x.ms === "number"), "в замере — все модели и время каждой");
+  T._resetBroke();
+  console.log("ok 9: тестовый режим для scripts/check-ai.js — без базы, без подсказки-ответа, все модели со временем");
+
   console.log("\nВсе проверки прошли (настоящие ИИ не вызывались).");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });
