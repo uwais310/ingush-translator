@@ -62,7 +62,31 @@ const norm = (s) => String(s).toLowerCase().replace(/ӏ/g, "Ӏ").replace(/[.,!?]
   assert.ok(rate >= 0.65, `с носителями совпало ${(rate * 100).toFixed(1)}% — правила стали хуже`);
   console.log(`ok 4: разговорник PaydaDosh — правила перевели ${m.done} фраз, ${(rate * 100).toFixed(1)}% точно как у носителей`);
 
-  // 5. через сервер: без ИИ, с меткой правил
+  // 5. ингушский → русский: каждый образец переводится обратно
+  const normRu = (x) => String(x).toLowerCase().replace(/ё/g, "е").replace(/[.,!?—-]/g, "").replace(/\s+/g, " ").trim();
+  let back = 0;
+  for (const rule of R.RULES) {
+    for (const [ru, inh] of rule.examples) {
+      const r = R.translateInh(inh);
+      assert.ok(r && r.variants.some((v) => normRu(v.text) === normRu(ru)), `«${inh}» → ждали «${ru}», получили ${r ? r.variants.map((v) => v.text).join(" | ") : "ничего"}`);
+      back++;
+    }
+  }
+  const silentInh = ["ЧӀоагӀа шийла я", "Ер Эса да", "Хьо бакъ ва", "Дала хоастам ба!", "Со меца ва", "ХӀанз тӀехьа да"];
+  for (const s of silentInh) assert.strictEqual(R.translateInh(s), null, `«${s}» должно остаться без перевода по правилам: ${JSON.stringify(R.translateInh(s))}`);
+  let ri = R.translateInh("Сона талмач веза");
+  assert.deepStrictEqual(ri.variants.map((v) => v.text), ["Мне нужен переводчик", "Я люблю переводчика"], "деза — и «нужен», и «люблю»");
+  ri = R.translateInh("Да цӀагӀа вац");
+  assert.strictEqual(ri.translation, "Отца нет дома");
+  ri = R.translateInh("Со цӀагӀа яр");
+  assert.strictEqual(ri.translation, "Я была дома", "класс й — говорит женщина");
+  ri = R.translateInh("Сога ши книжка да");
+  assert.strictEqual(ri.translation, "У меня есть две книги");
+  const mi = run(true, true);
+  assert.ok(mi.done >= 60 && mi.exact / mi.done >= 0.8, `инг → рус: ${mi.done} фраз, совпало ${(100 * mi.exact / mi.done).toFixed(1)}%`);
+  console.log(`ok 5: ингушский → русский — ${back} образцов обратно, ${silentInh.length} случаев молчания, разговорник: ${mi.done} фраз, ${(100 * mi.exact / mi.done).toFixed(1)}% как в базе`);
+
+  // 6. через сервер: без ИИ, с меткой правил
   global.fetch = async () => { throw new Error("no network"); };
   const T = require("../api/translate.js");
   T._setStore({ get: async () => null, setJSON: async () => {} });
@@ -76,9 +100,14 @@ const norm = (s) => String(s).toLowerCase().replace(/ӏ/g, "Ӏ").replace(/[.,!?]
   s = await call({ text: "Доброе утро! Мой отец врач.", source: "ru", target: "inh", mode: "text", noAi: true });
   assert.strictEqual(s.data.translation, "Ӏуйре дика хийла хьа! Са да лор ва.");
   assert.strictEqual(s.data.rules, true);
+  s = await call({ text: "Ер са нана я", source: "inh", target: "ru", mode: "text", noAi: true });
+  assert.ok(/^Это моя (мать|мама)$/.test(s.data.translation) || s.data.translation === "Это моя мать.", s.data.translation);
+  s = await call({ text: "Са да лор ва", source: "inh", target: "ru", mode: "text", noAi: true });
+  assert.strictEqual(s.data.translation, "Мой отец — врач");
+  assert.strictEqual(s.data.rules, true);
   s = await call({ action: "rules" });
   assert.ok(s.data.rules.length >= 8 && s.data.verbs.length >= 10);
-  console.log("ok 5: сервер — «Это мой дом» и текст из двух предложений переводятся без ИИ, есть список правил для /rules");
+  console.log("ok 6: сервер — «Это мой дом», «Са да лор ва» и текст из двух предложений переводятся без ИИ, есть список правил для /rules");
 
   console.log("\nВсе проверки правил прошли.");
   process.exit(0);

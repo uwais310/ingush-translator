@@ -930,9 +930,9 @@ function resolveExact(text, src, tgt, pool) {
   const exactItems = d && !d.lemma ? d.items : [];
   if (p && pp !== 5 && (!d || d.lemma || pp <= d.prio)) return seedResult(p, src, exactItems);
   if (d && !d.lemma) return d;
-  // предложение, которое можно собрать по правилам грамматики (русский → ингушский, от двух слов)
-  if (src === "ru" && RET.wordsOf(text).length >= 2) {
-    const rr = RULES.translate(text);
+  // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
+  if (RET.wordsOf(text).length >= 2) {
+    const rr = src === "ru" ? RULES.translate(text) : RULES.translateInh(text);
     if (rr) {
       return {
         translation: rr.translation, label: "Без ИИ: по правилам грамматики", kind: "rules", rules: rr,
@@ -1194,7 +1194,8 @@ module.exports = async (req, res) => {
   if (action === "rules") {
     const L = require("../lib/rules/lexicon.js");
     return res.status(200).json({
-      rules: RULES.RULES.map((r) => ({ id: r.id, name: r.name, examples: r.examples.map(([ru, inh]) => ({ ru, inh, ours: (RULES.translate(ru) || {}).translation || "" })) })),
+      // ours — как правила переводят образец с русского, back — как обратно с ингушского
+      rules: RULES.RULES.map((r) => ({ id: r.id, name: r.name, examples: r.examples.map(([ru, inh]) => ({ ru, inh, ours: (RULES.translate(ru) || {}).translation || "", back: (RULES.translateInh(inh) || {}).translation || "" })) })),
       verbs: L.VERBS.map((v) => ({ ru: v.id, inh: typeof v.pres === "string" ? v.pres : v.pres ? Object.values(v.pres).join(" / ") : v.part, example: v.example })),
     });
   }
