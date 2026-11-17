@@ -1,201 +1,78 @@
-# Ингушский переводчик — сайт и приложение
+# Ingush Translator
 
-Переводчик (ингушский, русский, английский и др.), который можно поставить на телефон как приложение.
-Переводит через **Google Gemini — бесплатный ключ, без карты**. Ключ хранится на сервере Vercel, в браузер он не попадает.
+A free, open-source translator for the Ingush language (ГӀалгӀай мотт). It looks things up in dictionaries and applies grammar rules first, and asks an AI model only when those don't have the answer.
 
+**Try it:** https://stalwart-paletas-57ff72.netlify.app
+
+<!-- Screenshot: save one as docs/screenshot.png and replace this comment with
+![Ingush Translator on a phone](docs/screenshot.png) -->
+
+> **По-русски.** Это бесплатный переводчик с ингушского на русский и обратно. Сначала он ищет ответ в словаре и разговорнике и собирает предложение по правилам грамматики, а ИИ подключается, только если база ответа не знает. Нашли ошибку или знаете слово, которого нет? Напишите в [Issues](https://github.com/uwais310/ingush-translator/issues/new/choose), можно по-русски: каждое исправление носителя языка делает перевод лучше для всех. Баркал!
+
+## Why this exists
+
+Roughly 330,000 to 350,000 people speak Ingush, and UNESCO's atlas of endangered languages lists it as vulnerable. Many Ingush families live outside Ingushetia, in Kazakhstan, other parts of Russia and Europe, and a lot of young people grow up understanding the language but hardly speaking it.
+
+Most translation tools still don't offer Ingush. General AI models will write something that looks like Ingush, but it's often wrong: made-up words, Chechen forms in place of Ingush ones, the wrong noun class.
+
+So this project goes the other way around. It trusts real sources first, says where every answer came from, and lets native speakers correct it. My family members who are native speakers check and fix the translations.
+
+## What it does
+
+- Translates between **Ingush and Russian** in both directions. English, Chechen, Kazakh, Turkish, Arabic, German and French are in the menu too, but those go through AI only.
+- Answers from a database of 42,061 Russian–Ingush entries (32,183 words, 8,188 phrases, 1,690 names). If the exact form isn't there, it looks for the base form: «маму» finds «мама», «люблю» finds «любить».
+- Builds simple sentences from grammar rules, without AI, both ways: «У меня есть…», «Где…?», «Мне нужен…», «Я тебя люблю», «Я (не) понимаю», «Это мой дом» and others. If the Russian doesn't show whether a man or a woman is speaking, it gives both versions.
+- Labels every answer with where it came from: checked by a native speaker, from the database, built by the rules, or AI (with a warning that it may be wrong).
+- Checks AI output against about 155,000 word forms from Ingush books and newspapers. Unknown words are underlined, known Chechen forms are swapped for Ingush ones, and the AI gets a second try at the doubtful words.
+- Has a review page (`/review`) where native speakers mark translations as correct, fix them, or translate a list of 200 everyday sentences. Checked answers are always used first.
+- Has a page that lists every grammar rule with its examples (`/rules`).
+- Installs on a phone like an app. It also has a key for the letter Ӏ (palochka), voice input for languages the browser can recognize (not Ingush yet), history, copy and share, a "no AI" switch and a "compare AI models" button.
+
+## How a translation is made
+
+1. **Native speakers' corrections**, saved from the site or approved on `/review`.
+2. **The database**: the project's own phrasebook and glossary, then PaydaDosh, then open dictionaries, then the base form of the word.
+3. **Grammar rules** (`lib/rules/`). Every word a rule produces must exist in a dictionary or in the word list. If a form isn't attested, the rule stays silent rather than guess.
+4. **Sentence by sentence**: a longer text where every sentence is already known is put together from those sentences.
+5. **AI as the last step**, through whichever services have an API key: Claude Haiku via OpenRouter when that account has credit, then Google Gemini and xAI Grok, with free models on Groq and OpenRouter as backups. The prompt includes a short Ingush grammar guide (`lib/ingush-guide.js`), the dictionary entries for the words in the text and up to 16 similar example pairs (`lib/retrieval.js`). The answer is then checked as described above.
+
+Steps 2–4 cover Russian ↔ Ingush only. The server side lives in `api/translate.js`. The pages are plain HTML (`index.html`, `review.html`, `rules.html`) with no build step.
+
+## Using it
+
+Open the site, pick the languages and type. To install it on a phone: Safari → Share → Add to Home Screen, or Chrome → ⋮ → Install app.
+
+To run it on your own computer you need Node.js 18 or newer, and nothing else to install:
+
+```sh
+cp .env.example .env    # optional: add a free GEMINI_API_KEY for the AI step
+node server.js          # then open http://localhost:3000
 ```
-index.html            сайт
-api/translate.js      сервер: принимает текст, спрашивает ИИ, отдаёт перевод
-manifest, sw.js, png  чтобы сайт ставился на телефон как приложение
-```
 
-## 1. Бесплатные ключи (хватит одного, чем больше — тем реже «занято»)
-Все ИИ получают **один и тот же промпт** со справочником по ингушскому языку (ниже). Если первый ИИ занят или кончился лимит, перевод делает следующий.
+The database and grammar rules work without any key. Tests: `for f in test/*.test.js; do node "$f"; done`
 
-| Порядок | Сервис | Модели | Где взять ключ | Переменная |
-|---|---|---|---|---|
-| 1 | Google Gemini | Gemini Flash | aistudio.google.com → Get API key | `GEMINI_API_KEY` |
-| 2 | Groq | Kimi K2, Qwen3 | console.groq.com → API Keys | `GROQ_API_KEY` |
-| 3 | OpenRouter | бесплатные `:free` (Kimi и др.) | openrouter.ai → Keys | `OPENROUTER_API_KEY` |
-| 4 | Grok (платно) | grok-4.20-non-reasoning | console.x.ai | `XAI_API_KEY` |
+## Contributing
 
-Все три бесплатных — без карты. Ключи вставляются в настройках хостинга (Environment variables), после этого — новый деплой.
+You don't need to be a programmer. If you speak Ingush, the most useful thing you can do is tell us when a translation is wrong, or add a word that's missing. [CONTRIBUTING.md](CONTRIBUTING.md) explains how, step by step, in English and Russian.
 
-На сайте под переводом видно, какой ИИ его сделал. Одинаковый запрос получает одинаковый ответ, пока сервер не перезапустится.
+## Data sources and thanks
 
-## Платный вариант
-Бесплатные модели знают ингушский слабо. Платные модели подключаются через OpenRouter — ключ `OPENROUTER_API_KEY` для этого уже подходит, новый не нужен.
+- **[PaydaDosh](https://paydadosh.ru)**, the online Ingush dictionary created by Yunus Akhilgov: dictionary entries, phrasebook and proverbs, used **with the permission of the PaydaDosh team**. This data is not under an open license.
+- Open dictionaries: Russian Wiktionary and Ingush Wikipedia (CC BY-SA 4.0), Wikidata and PanLex (CC0), translatewiki.net (CC BY 3.0).
+- [ing_freq_dict](https://github.com/YandievRuslan/ing_freq_dict) by YandievRuslan (WTFPL): the list of Ingush word forms used to check the output.
+- [GhalghayTools](https://github.com/Morgxth/GhalghayTools): parallel corpus. Only word statistics and fingerprints are kept here. The texts are downloaded at runtime and not redistributed.
+- The grammar guide uses short word pairs and examples from the dictionaries of N. D. Kodzoev, A. S. Kurkiev and J. Nichols, via [polonkoevv/ingush_dictionary](https://github.com/polonkoevv/ingush_dictionary).
 
-1. Зайдите на [openrouter.ai](https://openrouter.ai) под тем же аккаунтом, чей ключ стоит на сайте, и пополните счёт (Credits).
-2. Больше ничего делать не надо: пока на счёте есть деньги, первым переводит **Claude Haiku 5.5** (под переводом будет написано «Claude Haiku 5.5 (OpenRouter)»). Когда деньги кончатся, сайт сам вернётся на бесплатные модели.
+Every entry in `data/phrases.json` records its source, and open-source entries also record their license. [SOURCES.md](SOURCES.md) (in Russian) lists all sources, their licenses and which sources were left out on purpose, and why.
 
-**Какую модель выбрать.** Никто не измерял, какая модель лучше переводит на ингушский, поэтому выбирать должен носитель языка. Кнопка «Сравнить ИИ» при деньгах на счёте показывает рядом переводы шести платных моделей и бесплатных:
+## Roadmap
 
-| Модель | Цена за миллион входных токенов | Один перевод (оценка) | 10 000 переводов (оценка) |
-|---|---|---|---|
-| Claude Opus 5.5 | $4 | 6–8 ¢ | $600–800 |
-| Claude Sonnet 5.5 | $2 | 3–4 ¢ | $300–400 |
-| Claude Haiku 5.5 | $0.10 | 0,2 ¢ | $15–25 |
-| GPT-6 Luna | $0.10 | 0,2 ¢ | $15–25 |
-| DeepSeek V4.1 Flash | $0.30 | 0,5 ¢ | $45–60 |
-| GLM 5.3 Flash | около $0.10 | 0,2 ¢ | $15–30 |
+- More grammar rules, including forms we're still checking with native speakers (for example «пришёл», «мы идём») and Ingush → Russian sentences with adverbs and names.
+- Flag Russian words that the AI leaves untranslated in Ingush output (in review).
+- More checked translations through `/review`, and a separate, openly licensed set of sentence pairs checked by native speakers.
+- Database answers for English, not only Russian, and an interface in Ingush and English (it's Russian only for now).
+- Long term: help get Ingush into the major translation services, by offering checked data wherever they accept contributions for new languages.
 
-Одно нажатие «Сравнить ИИ» с деньгами на счёте стоит около 12 центов (почти всё — Opus и Sonnet). Модель, которую выберет носитель, ставится первой в `DEFAULT_SEQUENCE` в `api/translate.js` (или через переменную `OPENROUTER_MODELS`). Ответы из базы бесплатные. Чтобы выключить платный перевод, не пополняйте счёт.
+## License
 
-## Когда времени мало
-Если хостинг даёт функции около 10 секунд, длинный справочник бесплатные модели прочитать не успевают. Тогда им уходит короткая версия (правила кратко и слова из текста), все сервисы стартуют одновременно, и берётся ответ самого сильного из успевших. Если не ответил никто, под ошибкой в скобках написано, какой сервис и почему.
-
-## Запуск на своём компьютере (localhost)
-Тот же переводчик можно запустить у себя: база работает сразу, ИИ — через бесплатный ключ Gemini.
-
-1. Установите [Node.js](https://nodejs.org) (версия LTS, 18 или новее). Больше ничего ставить не нужно.
-2. Скопируйте `.env.example`, назовите копию `.env` и впишите ключ после `GEMINI_API_KEY=` (ключ бесплатно выдаёт [Google AI Studio](https://aistudio.google.com/apikey)).
-3. Windows: дважды нажмите `start.bat`. macOS и Linux: `sh start.sh` (или `node server.js`).
-4. Откройте `http://localhost:3000`. В окне запуска будет и адрес для телефона в том же Wi-Fi.
-
-Отличия от сайта на хостинге: нет ограничения в 10 секунд, поэтому Gemini думает над переводом без спешки (ответ может идти 10–30 секунд); исправления, решения со страницы `/review` и корпус хранятся в папке `local-data/`. Файл `.env` и папка `local-data/` в репозиторий не попадают.
-
-## Сначала база, потом ИИ
-Для пары русский ↔ ингушский переводчик сначала ищет готовый ответ без ИИ (`lib/base.js`):
-
-1. исправления носителей языка (кнопка «Исправить») и пары, проверенные на `/review`;
-2. проверенные фразы и словарик из справочника;
-3. словари из базы пар: PaydaDosh, потом открытые словари (Викисловарь, Википедия, PanLex). У записи вроде «носить, поносить; эксплуатировать» ищется каждое значение;
-4. начальная форма слова (`lib/morph.js`): «маму» находит запись «мама», «люблю» — «любить», «веза» — «деза». Под таким ответом написано, что перевод дан для начальной формы;
-5. слова из настоящих текстов — только те пары, которые подтверждают печатные словари;
-6. целое предложение, если оно уже есть в корпусе настоящих переводов.
-
-**Замер качества подсказок.** `node scripts/eval-retrieval.js` по очереди прячет фразы из базы и считает, какая доля слов их правильного перевода попадает в подсказки для ИИ (справочник, записи словаря, статистика слов, похожие фразы). Чем больше доля, тем меньше ИИ угадывает. Сейчас на 1500 фразах: русский → ингушский 77.8%, ингушский → русский 64.6%. `test/morph.test.js` не пройдёт, если эти числа упадут. Флаг `--misses` показывает слова, которые чаще всего не находятся: их стоит добавить в словарик или в проверку на `/review`.
-
-Начальные формы работают без большого морфологического словаря: слово превращается в возможные формы по правилам, и остаются только те, что на самом деле есть в словаре. Проверить, что найдётся для текста: `node scripts/try-retrieval.js "Я люблю свою маму"`.
-
-Такой ответ помечен зелёной меткой «Из базы», и ИИ для него не вызывается (ключи не нужны). Если в базе ответа нет, переводит ИИ: ответ помечен жёлтой меткой «ИИ — может ошибаться», под ним показано, что база знает про отдельные слова, и похожие предложения из настоящих текстов. Чеченские формы, которых в ингушских текстах нет (суна, хӀинца, стаг…), заменяются на ингушские по таблице. Галочка «Без ИИ» оставляет только базу.
-
-**Второй проход.** Если в переводе ИИ есть слова, которых нет в ингушских текстах (выдуманные, чеченские, оставленные по-русски), страница сама просит ИИ заменить именно эти слова по словарю и примерам. Остаётся тот вариант, где таких слов меньше; если второй проход не помог, остаётся первый. Имена и названия ошибкой не считаются.
-
-## Перевод по правилам, без ИИ (`lib/rules`)
-Если готового ответа в базе нет, переводчик пробует собрать предложение сам, в обе стороны (русский → ингушский — `lib/rules/index.js`, ингушский → русский — `lib/rules/reverse.js` с русскими окончаниями из `lib/rules/russian.js`):
-
-- **библиотека слов** `lib/rules/lexicon.js`: местоимения во всех падежах, связка (ва / я / да / ба, вац, вар, вий), глаголы с формами по классам, слова-состояния, места, числа. У каждой группы указан источник: справочник проекта или разговорник PaydaDosh. Существительные и прилагательные берутся из словарика проекта и PaydaDosh, вместе с классом;
-- **библиотека правил** `lib/rules/grammar.js`: «Это моя мать», «Он хороший человек», «У меня есть / нет…», «Где…?», «Мне нужен…», знать / любить / видеть / хотеть (сона, хьона), идти / жить (со вода, вахаш ва), писать / пить / читать (аз…), «Я (не) понимаю». У каждого правила есть образцы из источников;
-- **проверка**: каждое собранное слово должно быть в словаре, разговорнике, справочнике или в 155 000 словоформ из ингушских текстов. Если нужной формы в источниках нет, правило молчит и переводит ИИ;
-- **пол**: если по-русски не видно, мужчина или женщина говорит или к кому обращаются, показываются оба варианта («Со балха вода / йода»).
-
-Такой перевод помечен «Без ИИ: по правилам грамматики». Страница `/rules` показывает все правила с образцами. `node scripts/eval-rules.js` сравнивает правила с переводами носителей из разговорника: русский → ингушский — около 72% слово в слово, `--inh` (ингушский → русский) — около 88%; `--diff` показывает расхождения. Ингушские предложения с наречиями (хӀанз, тахан, чӀоагӀа, геттара…) и с именами собственными правила пока не переводят. `test/rules.test.js` проверяет образцы, случаи, где правила должны молчать, и этот замер.
-
-Как добавить: глагол — скопируйте похожий в `lexicon.js` и впишите формы из словаря; правило — добавьте в `grammar.js` с образцами из разговорника и запустите `node test/rules.test.js` и `node scripts/eval-rules.js`.
-
-## База пар и проверка носителем (`data/phrases.json`, страница `/review`)
-
-Кроме фраз и словарика проекта, в базе есть ~9 400 пар из открытых словарей: Викисловарь, PanLex,
-Ингушская Википедия, Викиданные, translatewiki.net. Откуда каждая пара и под какой лицензией —
-поля `source` и `license`, полный список источников (и каких источников нет и почему) — в `SOURCES.md`.
-Собрать заново: `python3 scripts/fetch-open-sources.py`, потом `node scripts/build-phrases.js`.
-Проверка: `node test/open-dict.test.js`.
-
-`data/phrases.json` — пары «русский — ингушский» с полями `source` (откуда пара) и `verified`. В файле `verified` всегда `false`: «проверено» ставит только человек.
-
-Файл собирает скрипт `node scripts/build-phrases.js`:
-
-| Источник | Что берётся | Лицензия |
-|---|---|---|
-| Справочник проекта (`lib/ingush-guide.js`) | фразы и словарик, сверенные с корпусом | свой материал проекта |
-| Корпус GhalghayTools (статистика слов) | слова, которые в настоящих текстах переведены так не реже 5 раз и подтверждаются словарями | репозиторий под MIT; тексты книг и газет принадлежат авторам, поэтому в базу идут только слова, не предложения |
-| `data/sources/*.json` | открытые словари: Викисловарь, PanLex, translatewiki.net, Ингушская Википедия, Викиданные (их скачивает `scripts/fetch-open-sources.py`) | CC0 / CC BY / CC BY-SA, у каждой записи поле `license`; подробно — `SOURCES.md` |
-
-Чистка при сборке: палочка приводится к `Ӏ`, дубли убираются, каждое ингушское слово должно встречаться в ингушских текстах (частотный словарь YandievRuslan/ing_freq_dict, WTFPL), пары с чеченскими формами не попадают в базу.
-
-Чтобы добавить выгрузку, положите в `data/sources/` файл вида
-`{ "source": "PaydaDosh", "license": "с разрешения владельцев", "pairs": [{ "ru": "…", "inh": "…" }] }` и запустите скрипт.
-
-**Страница `/review`** показывает непроверенные пары по одной: «Верно», «Исправить», «Пропустить». Вход по коду из переменной `EDITOR_CODE` (без неё страница выключена). Решения сохраняются в Netlify Blobs (ключ `review`), файл базы и список исправлений с сайта при этом не меняются. Проверенная пара отдаётся с меткой «Проверено носителем языка» и идёт ИИ как пример.
-Очередь идёт от частого к редкому: сначала бытовые фразы (словарь проекта, разговорник PaydaDosh), потом слова по частоте, в конце пословицы, обороты и имена. У каждой пары виден источник; есть кнопка Ӏ и счётчик «Проверено X из Y».
-
-**Вкладка «Переведите»** на `/review`: 200 частых бытовых предложений по-русски (`data/translate-these.json`, ингушского там нет). Носитель вписывает перевод — он сохраняется так же, как кнопка «Исправить» на сайте (список исправлений `all`, формат прежний), и сразу отдаётся с меткой «Проверено носителем».
-
-Если текст состоит из нескольких предложений и каждое есть в базе, ответ собирается из них без ИИ («Доброе утро! Как у тебя дела?»).
-
-## Справочник по ингушскому в промпте
-Файл `lib/ingush-guide.js` — это то, что ИИ «знает» об ингушском перед каждым переводом:
-
-- **правила**: алфавит и палочка Ӏ, классы (в/й/д/б) и согласование, связка ва/я/да/ба, эргатив и дательный («Сона хов», «Цо аьлар»), падежи, отрицание, вопросы, числительные;
-- **ингушское, а не чеченское**: около 40 пар вроде сона/суна, хӀанз/хӀинца, саг/стаг, гӀулакх/гӀуллакх, дика да / дика ду — каждая пара проверена по корпусу ингушских текстов (ингушская форма встречается сотни и тысячи раз, чеченская — почти никогда);
-- **словарик**: около 560 частых слов «русское — ингушское» с классами и формами глаголов;
-- **проверенные фразы**: около 120 приветствий, вопросов и устойчивых сочетаний.
-
-**Настоящие примеры из корпуса.** К каждому переводу ИИ получает до 10 пар предложений «ингушский — русский» с теми же словами, что в тексте, — из параллельного корпуса [GhalghayTools](https://github.com/Morgxth/GhalghayTools) (книги, газета «Сердало», Википедия, около 23 500 хорошо выровненных пар из 49 000; плохо выровненные и испорченные распознаванием отброшены автоматически). Тексты принадлежат их правообладателям и в этом репозитории не хранятся: в `lib/corpus-keep.js` только отпечатки нужных пар. При первом запросе сайт сам скачивает корпус из исходного репозитория и кладёт отобранные пары в хранилище Netlify Blobs (оно не публичное); первый перевод после обновления может идти без примеров.
-
-**Как слова переводятся на самом деле** (`lib/corpus-lexicon.js`): по тому же корпусу автоматически посчитано, как переводится каждое слово (около 11 400 русских и 8 200 ингушских словоформ, например «город → шахьар (43)», «сегодня → тахан (284)»). Там только слова и числа, без предложений, поэтому эта таблица есть и на сайте, и в версии для Claude.
-
-Gemini (и Grok) получают справочник целиком. У Groq и OpenRouter маленький лимит токенов, поэтому им уходит короткая версия правил и только слова и фразы, которые есть в переводимом тексте.
-Чтобы поправить справочник, достаточно изменить `lib/ingush-guide.js` (например, слово в словарике) и сохранить на GitHub — Netlify пересоберёт сайт сам.
-
-Источники справочника:
-- корпус ингушских текстов и частотный словарь [YandievRuslan/ing_freq_dict](https://github.com/YandievRuslan/ing_freq_dict) (WTFPL) — по нему проверены формы и фразы;
-- словари Н. Д. Кодзоева (русско-ингушский, 2021), А. С. Куркиева (ингушско-русский, 2005), J. Nichols (Ingush–English, 2004) и другие — по сводной базе [polonkoevv/ingush_dictionary](https://github.com/polonkoevv/ingush_dictionary); в справочник взяты только короткие пары слов и примеры;
-- список Сводеша для ингушского языка в Викисловаре (CC BY-SA);
-- разговорники: «Это Кавказ» и др.
-
-## Как переводчик становится лучше
-Бесплатные ИИ знают ингушский слабо. Качество растёт за счёт исправлений носителей языка:
-
-- **«Исправить»** — впишите правильный перевод и нажмите «Сохранить». Эта фраза дальше всегда переводится так (с зелёной меткой «Проверено носителем языка»), в обе стороны.
-- Сохранённые фразы, похожие на новый текст, автоматически добавляются в промпт как примеры — ИИ подстраивается под слова и стиль носителей.
-- **«Сравнить ИИ»** — показывает переводы всех подключённых ИИ рядом; лучший можно взять за основу исправления.
-
-Исправления хранятся в Netlify Blobs (бесплатно, работает только на Netlify).
-Перед тем как открыть сайт всем (**Make public**), добавьте переменную `EDITOR_CODE` с любым кодом: тогда сохранять исправления смогут только те, кто знает код.
-
-## Проверка по словарю
-Ингушский перевод проверяется по частотному словарю ингушских текстов (около 155 000 словоформ из книг, газет и журналов).
-Слова, которых в этих текстах нет, сайт подчёркивает: это может быть ошибка ИИ или чеченское слово.
-Словарь: [YandievRuslan/ing_freq_dict](https://github.com/YandievRuslan/ing_freq_dict), лицензия WTFPL. Спасибо его авторам.
-
-## 2а. Выложить на Netlify (бесплатно)
-1. app.netlify.com → **Sign up** → **GitHub**.
-2. **Add new project** → **Import an existing project** → **GitHub** → выберите `ingush-translator`.
-3. Ничего не меняйте в настройках сборки. Откройте **Environment variables** → **Add** → Key `GEMINI_API_KEY`, Value — ваш ключ.
-4. **Deploy**. Будет ссылка вида `https://ingush-translator.netlify.app`.
-
-Если переменную добавили уже после первого деплоя: **Deploys → Trigger deploy → Deploy site**.
-
-**Сайт перестал обновляться.** На бесплатном тарифе Netlify даёт 300 кредитов в месяц, а каждая публикация сайта (каждое слияние в `main`) стоит 15. Это около 20 публикаций в месяц. Когда кредиты кончились, старая версия сайта продолжает работать, но новые не выкладываются до начала следующего месяца по счёту Netlify (дата написана в **Usage & billing**). Поэтому несколько правок лучше сливать в `main` одним разом. Предпросмотр Pull Request (Deploy Preview) кредитов не тратит: у каждого Pull Request есть своя ссылка для проверки.
-
-Папки `data/`, `lib/`, `api/` и другие служебные файлы как страницы сайта не раздаются (`netlify.toml`): они нужны только серверной функции.
-
-## 2б. Или на Vercel (бесплатно)
-**С телефона, через GitHub:**
-1. github.com → **+ → New repository** → название `ingush-translator` → **Create**.
-2. **uploading an existing file** → все файлы, кроме папки `api` → **Commit changes**.
-3. **Add file → Create new file** → имя `api/.keep` → **Commit** (появится папка `api`).
-4. Откройте папку `api` → **Add file → Upload files** → `translate.js` → **Commit**.
-5. vercel.com → **Sign Up → Continue with GitHub** → **Add New → Project** → **Import** `ingush-translator`.
-6. **Environment Variables**: Key `GEMINI_API_KEY` (и другие ключи из таблицы), Value — ключ → **Add** → **Deploy**.
-
-**С компьютера:** `npx vercel` в папке проекта, потом ключ в Vercel → Settings → Environment Variables → Redeploy.
-
-Через минуту будет ссылка вида `https://ingush-translator.vercel.app`.
-
-## 3. Поставить на телефон как приложение
-- **iPhone (Safari):** открыть сайт → «Поделиться» → «На экран Домой».
-- **Android (Chrome):** ⋮ → «Установить приложение».
-
-## Настройки (необязательно)
-| Переменная | Что делает |
-|---|---|
-| `PROVIDER_ORDER` | порядок, например `groq,gemini,openrouter` |
-| `GEMINI_MODELS`, `GROQ_MODELS`, `OPENROUTER_MODELS`, `XAI_MODELS` | свои списки моделей через запятую |
-| `TIME_LIMIT_SECONDS` | сколько секунд хостинг даёт функции; обычно определяется само (если нет — 9 секунд) |
-| `OPENROUTER_MODEL` | платная модель, которая переводит первой; по умолчанию `anthropic/claude-haiku-5.5`, `off` — без платной |
-| `AI_TEMPERATURE` | 0–0.2 для перевода (по умолчанию 0); Gemini 4 и 3.6+ её не принимают, им не передаётся |
-| `GEMINI_THINKING` | `low`, `medium` или `high`: сколько думает Gemini, когда времени много (на Netlify всегда `low`) |
-| `DISTILL_MODELS` | модели (через запятую), чьи уверенные переводы сохраняются как примеры для других моделей |
-
-## Если что-то не работает
-- **Сайт не обновляется после слияния в `main`** — скорее всего, кончились кредиты Netlify на публикации (см. раздел про Netlify выше).
-- **«Check GEMINI_API_KEY»** — ключ скопирован не полностью или не добавлен в Vercel (после добавления нужен Redeploy).
-- **«All translators are busy»** — у всех подключённых ИИ кончился лимит или они перегружены. Добавьте ещё ключ из таблицы или подождите.
-
-## Важно
-- Бесплатные лимиты рассчитаны на небольшое число переводов в день. Если сайтом начнёт пользоваться много людей, их перестанет хватать.
-- На бесплатных тарифах сервисы могут использовать тексты запросов для улучшения своих продуктов.
+The code is released under the [MIT License](LICENSE). The data keeps its own terms: open sources keep their original licenses (see the `license` field and SOURCES.md), and PaydaDosh entries are used with permission and are not covered by the MIT License.

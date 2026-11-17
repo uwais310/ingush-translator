@@ -1,0 +1,51 @@
+name: Add or fix a word / Добавить или исправить слово
+description: A word or phrase that's missing or translated wrong. Слово или фраза, которой нет или которая переведена неправильно.
+title: "Word: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! You can write in Russian, Ingush or English. Можно писать по-русски.
+        Please only send words you know as a speaker or can point to in a source. Не присылайте слова, придуманные ИИ.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What do you want to do? / Что сделать?
+      options:
+        - Add a missing word / Добавить слово
+        - Fix a word / Исправить слово
+    validations:
+      required: true
+  - type: input
+    id: russian
+    attributes:
+      label: Russian / По-русски
+      placeholder: "мама"
+    validations:
+      required: true
+  - type: input
+    id: ingush
+    attributes:
+      label: Ingush / По-ингушски
+      description: Use the letter Ӏ (palochka). If you can't type it, write 1. / Палочку можно написать как 1.
+      placeholder: "нана"
+    validations:
+      required: true
+  - type: input
+    id: details
+    attributes:
+      label: Class, plural, other forms (if you know) / Класс, мн. число, формы (если знаете)
+      placeholder: "класс й, мн. ч. ноаной"
+  - type: textarea
+    id: example
+    attributes:
+      label: Example sentence (optional) / Пример в предложении
+      placeholder: "Са нана цӀагӀа я. — Моя мама дома."
+  - type: textarea
+    id: source
+    attributes:
+      label: Where does it come from? / Откуда это?
+      description: Your own knowledge, a family member, your village, a book or a website. / Сами знаете, родные, ваше село, книга, сайт.
+    validations:
+      required: true
