@@ -86,9 +86,15 @@
   #input::placeholder { color: var(--stone); opacity: .75; }
   .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; }
   .grow { flex: 1; }
-  .count { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; padding-right: 6px; }
+  .count { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; padding-right: 6px; white-space: nowrap; }
+  .count.near { color: var(--amber-ink); font-weight: 600; }
   .tool { border: 0; background: transparent; color: var(--stone); border-radius: 10px; padding: 8px 10px; min-height: 40px; font-size: 14px; font-weight: 550; cursor: pointer; }
   .tool:hover { background: var(--leaf); color: var(--green); }
+  .tool.mic { display: inline-flex; align-items: center; gap: 6px; }
+  .tool.mic svg { width: 19px; height: 19px; }
+  .tool.mic.on { background: var(--sun); color: #fff; }
+  .tool.mic.on svg { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
   .tool.key { min-width: 46px; font-size: 20px; font-weight: 700; color: var(--green); background: var(--leaf); padding: 2px 12px; }
 
   .go-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -156,6 +162,7 @@
   .acts { display: flex; gap: 8px; padding: 6px 12px 14px; flex-wrap: wrap; }
   .act { border: 1.5px solid var(--line); background: var(--snow); border-radius: 12px; padding: 9px 12px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .acts .act { flex: 1 1 0; padding: 9px 6px; }
+  .acts.four { display: grid; grid-template-columns: 1fr 1fr; }
   @media (max-width: 400px) { .acts .act { font-size: 14px; } }
   .act:hover { border-color: var(--green); color: var(--green-deep); }
   .act.main { background: #0a6b3d; border-color: #0a6b3d; color: #fff; }
@@ -256,6 +263,10 @@
         <textarea id="input" dir="auto" maxlength="3000" placeholder="Введите слово или текст" aria-label="Текст для перевода">Доброе утро! Как у тебя дела?</textarea>
         <div class="tools">
           <button class="tool key" id="key" type="button" title="Вставить букву Ӏ" aria-label="Вставить букву Ӏ (палочка)">Ӏ</button>
+          <button class="tool mic" id="mic" type="button" hidden aria-label="Сказать голосом" title="Сказать голосом">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+            <span id="mic-label">Голосом</span>
+          </button>
           <button class="tool" id="paste" type="button" hidden>Вставить</button>
           <button class="tool" id="clear" type="button">Очистить</button>
           <span class="grow"></span>
@@ -289,6 +300,7 @@
         <button class="act main" id="copy" type="button" disabled>Копировать</button>
         <button class="act" id="fix" type="button" disabled>Исправить</button>
         <button class="act" id="compare" type="button" disabled>Сравнить ИИ</button>
+        <button class="act" id="share" type="button" hidden disabled>Поделиться</button>
       </div>
 
       <details class="more" id="base-info" hidden>
@@ -410,8 +422,13 @@ function grow() { // поле растёт вместе с текстом
   els.input.style.height = Math.min(els.input.scrollHeight + 2, Math.round(window.innerHeight * 0.46)) + "px";
 }
 function refresh() {
-  els.count.textContent = `${els.input.value.length} / ${MAX}`;
+  // счётчик нужен, только когда текст подходит к пределу: на узком экране он мешает кнопкам
+  const n = els.input.value.length;
+  els.count.textContent = `${n} / ${MAX}`;
+  els.count.hidden = n < MAX * 0.8;
+  els.count.classList.toggle("near", n >= MAX * 0.95);
   els.key.hidden = els.src.value !== "inh";
+  micVisible();
   $("clear").hidden = !els.input.value;
   grow();
   const ex = $("examples"); ex.innerHTML = "";
@@ -424,7 +441,7 @@ function refresh() {
     ex.appendChild(b);
   }
 }
-function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = !on; $("acts").hidden = !on; }
+function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = $("share").disabled = !on; $("acts").hidden = !on; }
 function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = true; }
 function hideExtras() { els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; }
 function resetOutput(msg = "Перевод появится здесь") {
@@ -527,6 +544,52 @@ async function copyText(text) {
     } catch (e2) { return false; }
   }
 }
+/* ---------- поделиться (на телефоне — WhatsApp, Telegram и т.д.) ---------- */
+if (navigator.share) {
+  $("share").hidden = false;
+  $("acts").classList.add("four");
+  $("share").addEventListener("click", async () => {
+    if (!lastResult) return;
+    try { await navigator.share({ text: `${lastInput}\n${lastResult}` }); } catch (e) {} // окно закрыли — ничего не делаем
+  });
+}
+
+/* ---------- голосовой ввод ----------
+   Распознавание речи встроено в браузер (на iPhone — то же, что диктовка). Ингушский и чеченский телефоны
+   пока не распознают, поэтому для них кнопки нет. Сказанный текст сразу переводится. */
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SPEECH_LANG = { ru: "ru-RU", en: "en-US", kk: "kk-KZ", tr: "tr-TR", ar: "ar-SA", de: "de-DE", fr: "fr-FR" };
+let rec = null;
+function micVisible() { $("mic").hidden = !SPEECH || !SPEECH_LANG[els.src.value]; }
+function stopMic() { if (rec) { try { rec.stop(); } catch (e) {} } }
+if (SPEECH) {
+  $("mic").addEventListener("click", () => {
+    if (rec) { stopMic(); return; }
+    rec = new SPEECH();
+    rec.lang = SPEECH_LANG[els.src.value] || "ru-RU";
+    rec.interimResults = true;
+    rec.continuous = false;
+    const before = els.input.value.trim();
+    let heard = "";
+    $("mic").classList.add("on"); $("mic-label").textContent = "Слушаю…";
+    rec.onresult = (e) => {
+      heard = [...e.results].map((r) => r[0].transcript).join(" ").trim();
+      els.input.value = (before ? before + " " : "") + heard;
+      refresh();
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") setStatus("Разрешите сайту доступ к микрофону в настройках браузера.", "error");
+      else if (e.error === "no-speech") setStatus("Ничего не услышал. Нажмите «Голосом» и говорите сразу.", "error");
+    };
+    rec.onend = () => {
+      rec = null;
+      $("mic").classList.remove("on"); $("mic-label").textContent = "Голосом";
+      if (heard) translate();
+    };
+    try { rec.start(); } catch (e) { rec = null; $("mic").classList.remove("on"); $("mic-label").textContent = "Голосом"; }
+  });
+}
+
 els.copy.addEventListener("click", async () => {
   els.copy.textContent = (await copyText(lastResult)) ? "Скопировано" : "Не вышло скопировать";
   setTimeout(() => { els.copy.textContent = "Копировать"; }, 1500);
