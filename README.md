@@ -26,6 +26,7 @@ So this project goes the other way around. It trusts real sources first, says wh
 - Checks AI output against about 155,000 word forms from Ingush books and newspapers. Unknown words are underlined, known Chechen forms are swapped for Ingush ones, and the AI gets a second try at the doubtful words.
 - Has a review page (`/review`) where native speakers mark translations as correct, fix them, or translate a list of 200 everyday sentences. Checked answers are always used first.
 - Has a page that lists every grammar rule with its examples (`/rules`).
+- Has a «Учить» section (`/learn`): short Ingush lessons (greetings, introductions, family, home and food, numbers and time) built only from ready entries of the project reference and the PaydaDosh phrasebook, with four exercise types and progress saved on the phone.
 - Installs on a phone like an app. It also has a key for the letter Ӏ (palochka), voice input for languages the browser can recognize (not Ingush yet), history, copy and share, a "no AI" switch and a "compare AI models" button.
 
 ## How a translation is made

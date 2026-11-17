@@ -1245,6 +1245,17 @@ module.exports = async (req, res) => {
     });
   }
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
+  // раздел «Учить» (/learn): курс и упражнения из готовых записей базы (lib/learn.js)
+  if (action === "learn") {
+    const LEARN = require("../lib/learn.js");
+    const course = LEARN.buildCourse(SEED, KB);
+    if (body.op === "course") return res.status(200).json(LEARN.courseSummary(course));
+    if (body.op === "lesson") {
+      const out = LEARN.lessonPayload(course, String(body.id || ""), Number(body.seed) || 0);
+      return out ? res.status(200).json(out) : res.status(404).json({ error: "Нет такого урока" });
+    }
+    return res.status(400).json({ error: "Unknown op" });
+  }
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
