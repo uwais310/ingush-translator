@@ -1,0 +1,48 @@
+name: Wrong translation / bug / Неправильный перевод или ошибка
+description: The site translated something wrong, or something doesn't work. Сайт перевёл неправильно или что-то не работает.
+title: "Wrong translation: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time! You can write in Russian, Ingush or English. Можно писать по-русски.
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Direction / Направление
+      options:
+        - Russian → Ingush / С русского на ингушский
+        - Ingush → Russian / С ингушского на русский
+        - Another language / Другой язык
+        - Not about a translation, something doesn't work / Не перевод, что-то не работает
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: What you typed / Что вы ввели
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What the site answered / Что ответил сайт
+      description: "Copy the answer and the label under it (for example «Из базы», «Без ИИ: по правилам грамматики» or «ИИ»). A screenshot helps too. / Скопируйте ответ и надпись под ним, можно приложить скриншот."
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: Correct translation / Как правильно
+      description: If there are several correct ways, or it depends on who is speaking, write them all. / Если вариантов несколько или зависит от того, кто говорит, напишите все.
+  - type: textarea
+    id: source
+    attributes:
+      label: How do you know? / Откуда вы знаете?
+      description: Native speaker, family, a dictionary or a book. / Носитель языка, родные, словарь, книга.
+  - type: input
+    id: device
+    attributes:
+      label: Phone or browser (for bugs) / Телефон или браузер (для ошибок)
+      placeholder: "iPhone, Safari"
