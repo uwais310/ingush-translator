@@ -646,7 +646,10 @@ async function translate() {
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
   hideExtras(); setButtons(false); setStatus(""); closePanels(); setMeta("");
   els.output.classList.add("busy"); showText("…");
+  const my = ++reqId;
   controller = new AbortController();
+  // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
+  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("В базе и правилах этого нет, переводит ИИ. Обычно это несколько секунд."); }, 1200);
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
@@ -684,30 +687,34 @@ async function translate() {
     }
     setStatus(note, noteKind);
 
-    // второй проход: ИИ заменяет слова, которых нет в ингушских текстах; остаётся лучший вариант
-    if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) {
-      els.go.textContent = "Проверяю…";
-      setStatus("Проверяю слова по базе и исправляю…");
-      try {
-        const r = await api({ action: "repair", text, source: src, target: tgt, draft: lastResult }, controller.signal);
-        if (r.improved && r.translation) {
-          lastResult = fixT(String(r.translation).trim());
-          markInto(els.output, lastResult, r.unknown);
-          if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
-          setStatus("Перевод исправлен: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
-        } else setStatus(note, noteKind);
-      } catch (e) {
-        if (e.name === "AbortError") throw e;
-        setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
-      }
-    }
     addHistory(src, tgt, text, lastResult);
+    // второй проход (ИИ заменяет слова, которых нет в ингушских текстах) — в фоне: перевод уже на экране,
+    // кнопка свободна; если проверка найдёт лучше, перевод тихо обновится
+    if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) repairLater(my, text, src, tgt, note, noteKind, fixT);
   } catch (e) {
     lastResult = "";
     if (e.name !== "AbortError") showError(e);
   } finally {
+    clearTimeout(slowHint);
     busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
+  }
+}
+let reqId = 0;
+async function repairLater(my, text, src, tgt, note, noteKind, fixT) {
+  setStatus((note ? note + " " : "") + "Проверяю слова по базе, перевод может уточниться…", noteKind);
+  try {
+    const r = await api({ action: "repair", text, source: src, target: tgt, draft: lastResult });
+    if (my !== reqId) return; // уже переводят другой текст
+    if (r.improved && r.translation) {
+      lastResult = fixT(String(r.translation).trim());
+      markInto(els.output, lastResult, r.unknown);
+      if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
+      setStatus("Перевод уточнён: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
+      addHistory(src, tgt, text, lastResult);
+    } else setStatus(note, noteKind);
+  } catch (e) {
+    if (my === reqId) setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
   }
 }
 els.go.addEventListener("click", translate);

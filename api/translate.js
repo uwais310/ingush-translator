@@ -555,6 +555,9 @@ function whyFailed(e) {
   return `ошибка ${e.status || "связи"}`;
 }
 
+// Сколько ждать сильную модель, если у быстрой ответ уже готов (на хостинге, где времени мало).
+const FAST_GRACE_MS = Number(process.env.FAST_GRACE_SECONDS) * 1000 || 4000;
+
 // Сколько миллисекунд у нас есть на ответ.
 function timeBudget(req) {
   const env = Number(process.env.TIME_LIMIT_SECONDS) * 1000;
@@ -681,10 +684,16 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
     // Ждём по порядку силы: если сильная не ответила, ответ следующей уже готов.
     const seen = new Set(), firsts = [], rest = [];
     for (const a of queue) (seen.has(a[0]) ? rest : (seen.add(a[0]), firsts)).push(a);
+    // У Gemini сильная модель (Hydrogen) думает долго, и у неё маленький дневной лимит. Вместе с ней сразу
+    // запускаем следующую, быструю (Flash): если сильная не успеет за несколько секунд или ответит «лимит»,
+    // ответ Flash уже готов, и ждать не нужно.
+    const gi = firsts.findIndex(([p]) => p === "gemini");
+    const partner = rest.findIndex(([p]) => p === "gemini");
+    if (gi >= 0 && partner >= 0) firsts.splice(gi + 1, 0, rest.splice(partner, 1)[0]);
     const ms = Math.max(1500, budget - 900);
     const runs = firsts.map(([p, model]) => attempt(p, model, ms).then((r) => ({ r }), (e) => ({ e })));
-    // сильную модель ждём не до конца: если она думает слишком долго, а у следующей ответ готов — берём его
-    const graceEnd = started + Math.max(3500, Math.round(budget * 0.65));
+    // сильную модель ждём не до конца: если она думает дольше FAST_GRACE_MS, а у следующей ответ готов — берём его
+    const graceEnd = started + Math.min(FAST_GRACE_MS, Math.max(2500, Math.round(budget * 0.65)));
     const wait = (i) => Promise.race([runs[i], new Promise((res) => setTimeout(() => res(null), Math.max(0, graceEnd - Date.now())))]);
     const pending = [];
     for (let i = 0; i < firsts.length; i++) {
@@ -693,8 +702,10 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
       if (out.r) return out.r;
       failed(firsts[i][0], firsts[i][1], out.e);
     }
-    for (const i of pending) { // готовых ответов нет — дожидаемся тех, кто ещё думает
-      const out = await runs[i];
+    // готовых ответов нет — берём первый, который придёт (а не ждём сильную модель до конца)
+    while (pending.length) {
+      const { i, out } = await Promise.race(pending.map((j) => runs[j].then((o) => ({ i: j, out: o }))));
+      pending.splice(pending.indexOf(i), 1);
       if (out.r) return out.r;
       failed(firsts[i][0], firsts[i][1], out.e);
     }
