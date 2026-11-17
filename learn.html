@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a6b3d">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Учить ингушский — Ингушский переводчик</title>
+<style>
+  :root {
+    --snow: #ffffff; --mist: #f2f6f3; --ink: #14201a; --stone: #5d6a63; --line: #dbe5df;
+    --green: #0a6b3d; --green-deep: #07542f; --leaf: #e2f3e9; --on-green-soft: rgba(255, 255, 255, .8);
+    --amber-ink: #7a4a00; --amber-bg: #fff4dc; --red: #b3261e; --red-bg: #fdeceb;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --snow: #111b16; --mist: #17241d; --ink: #e9f1ec; --stone: #9aaba2; --line: #26372e; --green: #49c486; --green-deep: #6ad49c; --leaf: #173426; --amber-ink: #ffc978; --amber-bg: #33270f; --red: #ff8a80; --red-bg: #3a1714; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--snow); -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--snow); color: var(--ink); font: 17px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+  .band { background: #0a6b3d; color: #fff; }
+  @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
+  .band-in { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+  .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 10px; }
+  .sign { width: 40px; height: 40px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .sign svg { width: 30px; height: 30px; display: block; }
+  h1 { margin: 0; font-size: 19px; line-height: 1.15; }
+  .sub { margin: 2px 0 0; font-size: 13px; color: var(--on-green-soft); }
+  .band a { color: #fff; text-underline-offset: 3px; }
+  .stats { margin-left: auto; display: flex; gap: 8px; flex: none; }
+  .chip { background: rgba(255,255,255,.16); border-radius: 999px; padding: 6px 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  main { flex: 1; width: 100%; max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid #f2b705; outline-offset: 2px; }
+  .lead { margin: 0 0 14px; color: var(--stone); font-size: 15px; }
+  .unit { margin: 0 0 22px; }
+  .unit h2 { margin: 0 0 4px; font-size: 18px; }
+  .unit .meta { margin: 0 0 10px; font-size: 14px; color: var(--stone); }
+  .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .lesson { min-height: 72px; text-align: left; border: 2px solid var(--line); background: var(--snow); border-radius: 16px; padding: 10px 12px; display: grid; gap: 2px; }
+  .lesson b { font-size: 16px; }
+  .lesson span { font-size: 13px; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lesson.done { border-color: var(--green); background: var(--leaf); }
+  .lesson.done b::after { content: " ✓"; color: var(--green); }
+  .lesson.next { border-color: var(--green); box-shadow: 0 0 0 3px var(--leaf); }
+  .bar { height: 12px; background: var(--mist); border-radius: 999px; overflow: hidden; flex: 1; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--green); border-radius: 999px; transition: width .25s; }
+  .lhead { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .x { width: 44px; height: 44px; border: 0; background: transparent; font-size: 26px; line-height: 1; border-radius: 12px; color: var(--stone); }
+  .task { font-size: 15px; color: var(--stone); margin: 0 0 8px; }
+  .prompt { font-size: 24px; font-weight: 700; margin: 0 0 6px; overflow-wrap: anywhere; }
+  .prompt.inh { color: var(--green-deep); }
+  .hint { display: inline-block; font-size: 14px; background: var(--amber-bg); color: var(--amber-ink); border-radius: 8px; padding: 3px 8px; margin: 0 0 12px; }
+  .listen { border: 2px solid var(--line); background: var(--snow); border-radius: 12px; min-height: 44px; padding: 6px 12px; margin: 0 0 12px; }
+  .opts { display: grid; gap: 10px; margin-top: 10px; }
+  .opt, .tile, .mt { border: 2px solid var(--line); background: var(--snow); border-radius: 14px; min-height: 52px; padding: 10px 14px; text-align: left; font-size: 18px; overflow-wrap: anywhere; }
+  .opt[aria-pressed="true"], .mt[aria-pressed="true"] { border-color: var(--green); background: var(--leaf); }
+  .opt .k { display: inline-block; min-width: 1.6em; color: var(--stone); font-size: 14px; }
+  .answer-row { min-height: 64px; border-bottom: 2px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; margin: 8px 0 14px; }
+  .bank { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tile { min-height: 48px; padding: 8px 12px; text-align: center; }
+  .bank .tile[disabled] { visibility: hidden; }
+  .answer-row .tile[disabled] { opacity: 1; }
+  .opt.right { border-color: var(--green); background: var(--leaf); }
+  .opt.wrong { border-color: var(--red); background: var(--red-bg); }
+  .pairs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .pairs .col { display: grid; gap: 10px; align-content: start; }
+  .mt { font-size: 16px; }
+  .mt.ok { border-color: var(--green); background: var(--leaf); opacity: .55; }
+  .mt.bad { border-color: var(--red); background: var(--red-bg); }
+  .typed { display: flex; gap: 8px; margin-top: 10px; }
+  .typed input { flex: 1; min-width: 0; font: inherit; font-size: 20px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; background: var(--snow); color: var(--ink); }
+  .typed input:focus { border-color: var(--green); outline: none; box-shadow: 0 0 0 3px var(--leaf); }
+  .pal { width: 56px; border: 2px solid var(--line); border-radius: 14px; background: var(--mist); font-size: 22px; font-weight: 700; }
+  .foot { position: sticky; bottom: 0; background: var(--snow); padding: 14px 0 calc(14px + env(safe-area-inset-bottom)); margin-top: 18px; }
+  .fb { border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; font-size: 16px; }
+  .fb.ok { background: var(--leaf); color: var(--green-deep); }
+  .fb.bad { background: var(--red-bg); color: var(--red); }
+  .fb b { display: block; font-size: 17px; }
+  .main-btn { width: 100%; min-height: 54px; border: 0; border-radius: 14px; background: #0a6b3d; color: #fff; font-size: 18px; font-weight: 700; }
+  .main-btn[disabled] { background: var(--line); color: var(--stone); cursor: default; }
+  .ghost { width: 100%; min-height: 50px; border: 2px solid var(--line); border-radius: 14px; background: var(--snow); font-size: 16px; margin-top: 10px; }
+  .done-card { text-align: center; padding: 20px 0; }
+  .done-card .big { font-size: 44px; font-weight: 800; color: var(--green); margin: 6px 0; }
+  .note { font-size: 13px; color: var(--stone); margin-top: 18px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="band top">
+  <div class="band-in">
+    <div class="sign" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" stroke="#d3212c" stroke-width="3.6" stroke-linecap="round">
+        <circle cx="24" cy="24" r="7.6"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(120 24 24)"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(240 24 24)"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Учить ингушский</h1>
+      <p class="sub"><a href="/">К переводчику</a></p>
+    </div>
+    <div class="stats" aria-live="polite">
+      <span class="chip" id="xp" title="Очки">0 очк.</span>
+      <span class="chip" id="streak" title="Дней подряд">0 дн.</span>
+    </div>
+  </div>
+</header>
+
+<main id="app"><p class="lead">Загружаю уроки…</p></main>
+
+<script>
+"use strict";
+// Прогресс хранится только на этом устройстве, без регистрации.
+const KEY = "inh-learn-v1";
+const COURSE_KEY = "inh-learn-v1-course";          // кеш списка уроков (для работы без сети)
+const LESSON_KEY = (id) => "inh-learn-v1-lesson:" + id; // кеш упражнений открытых уроков
+const PAL = "Ӏ";
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : String(k));
+  return n;
+};
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+let P = Object.assign({ xp: 0, streak: 0, lastDay: "", done: {}, plays: {} }, load(KEY, {}));
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const dayDiff = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
+function streakNow() { return P.lastDay && dayDiff(P.lastDay, today()) <= 1 ? P.streak : 0; }
+function showStats() {
+  $("#xp").textContent = `${P.xp} очк.`;
+  const s = streakNow();
+  $("#streak").textContent = `🔥 ${s} дн.`;
+  $("#streak").title = "Дней подряд с уроками: " + s;
+}
+
+// ---------- сервер ----------
+async function api(body) {
+  const r = await fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "learn", ...body }) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+// ---------- проверка (та же, что в lib/learn.js) ----------
+const answerKey = (s) => String(s == null ? "" : s).replace(/[\u0300\u0301]/g, "").replace(/[1Il|ӏӀІі]/g, "ӏ").toLowerCase()
+  .replace(/ё/g, "е").replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim();
+const variants = (s) => String(s || "").split(/\s+\/\s+|\s*;\s*/).map((v) => v.trim()).filter(Boolean);
+function checkAnswer(ex, user) {
+  const given = answerKey(Array.isArray(user) ? user.join(" ") : user);
+  if (!given) return { ok: false, expected: ex.answer };
+  const ok = [ex.answer, ...(ex.accept || [])].some((a) => [a, ...variants(a)].some((v) => answerKey(v) === given));
+  return { ok, expected: ex.answer };
+}
+
+// ---------- карта тем ----------
+let COURSE = null;
+async function home() {
+  showStats();
+  const app = $("#app");
+  try { COURSE = await api({ op: "course" }); save(COURSE_KEY, COURSE); }
+  catch { COURSE = load(COURSE_KEY, null); }
+  if (!COURSE || !COURSE.units) { app.replaceChildren(el("p", { class: "lead" }, "Нет связи, а уроки ещё не загружались на этом устройстве. Откройте страницу, когда будет интернет.")); return; }
+  const all = COURSE.units.flatMap((u) => u.lessons);
+  const next = all.find((l) => !P.done[l.id]);
+  app.replaceChildren(
+    el("p", { class: "lead" }, "Короткие уроки из готовых фраз справочника и разговорника PaydaDosh. Пометки вроде «к женщине» или «говорит мужчина» подсказывают, какая нужна форма."),
+    ...COURSE.units.map((u, ui) => {
+      const done = u.lessons.filter((l) => P.done[l.id]).length;
+      return el("section", { class: "unit" },
+        el("h2", {}, `${ui + 1}. ${u.title}`),
+        el("p", { class: "meta" }, `Пройдено ${done} из ${u.lessons.length}`),
+        el("div", { class: "lessons" }, u.lessons.map((l) => el("button", {
+          class: "lesson" + (P.done[l.id] ? " done" : "") + (next && next.id === l.id ? " next" : ""),
+          "aria-label": `${u.title}, ${l.title}${P.done[l.id] ? ", пройден" : ""}`,
+          onclick: () => startLesson(l.id),
+        }, el("b", {}, l.title), el("span", {}, (l.preview || []).join(", ")))))
+      );
+    }),
+    el("p", { class: "note" }, "Прогресс хранится только в этом браузере. Ингушский текст взят из базы слово в слово, ИИ его не сочиняет."),
+  );
+  if (next) { const b = app.querySelector(".lesson.next"); if (b && document.activeElement === document.body) b.focus({ preventScroll: true }); }
+}
+
+// ---------- урок ----------
+const KNOWN = new Set(["choose", "tiles", "match", "type"]); // незнакомые типы пропускаем
+let L = null;
+async function startLesson(id) {
+  let data = null;
+  const seed = (P.plays[id] || 0);
+  try { data = await api({ op: "lesson", id, seed }); save(LESSON_KEY(id), data); }
+  catch { data = load(LESSON_KEY(id), null); }
+  if (!data) { alert("Нет связи. Этот урок ещё не открывался на этом устройстве."); return; }
+  const queue = (data.exercises || []).filter((e) => KNOWN.has(e.type));
+  L = { id, data, queue, pos: 0, total: queue.length, firstTry: 0, points: 0, retried: new Set(), repeats: new Map() };
+  history.pushState({ lesson: id }, "", "#" + id);
+  renderExercise();
+}
+function progress() { return L ? L.pos / L.queue.length : 0; }
+
+function renderExercise() {
+  const ex = L.queue[L.pos];
+  const app = $("#app");
+  const bar = el("i", {}); bar.style.width = Math.round(progress() * 100) + "%";
+  const head = el("div", { class: "lhead" },
+    el("button", { class: "x", "aria-label": "Выйти из урока", onclick: () => { L = null; history.replaceState(null, "", location.pathname); home(); } }, "×"),
+    el("div", { class: "bar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": L.queue.length, "aria-valuenow": L.pos, "aria-label": "Прогресс урока" }, bar));
+  const body = el("div", {});
+  const foot = el("div", { class: "foot" });
+  const checkBtn = el("button", { class: "main-btn", disabled: true }, "Проверить");
+  foot.append(checkBtn);
+  app.replaceChildren(head, body, foot);
+
+  const isRetry = L.retried.has(L.pos);
+  const titles = { choose: ex.promptLang === "inh" ? "Выберите перевод на русский" : "Выберите перевод на ингушский", tiles: "Соберите фразу по-ингушски", match: "Соедините пары", type: "Напишите по-ингушски" };
+  body.append(el("p", { class: "task" }, (isRetry ? "Ещё раз: " : "") + titles[ex.type]));
+  if (ex.type !== "match") body.append(el("p", { class: "prompt" + (ex.promptLang === "inh" ? " inh" : ""), lang: ex.promptLang === "inh" ? "inh" : "ru" }, ex.prompt));
+  if (ex.hint) body.append(el("div", {}, el("span", { class: "hint" }, "Подсказка: " + ex.hint)));
+  if (ex.audio) body.append(el("div", {}, el("button", { class: "listen", onclick: () => new Audio(ex.audio).play().catch(() => {}) }, "🔊 Прослушать")));
+
+  let getAnswer = () => null;
+  const ready = (v) => { checkBtn.disabled = !v; };
+  const finish = (ok, expected) => {
+    if (ok) {
+      if (!isRetry) L.firstTry++;
+      L.points += isRetry ? 5 : 10;
+    } else if ((L.repeats.get(ex) || 0) < 2) {
+      // ошибка: повторим это упражнение в конце урока (не больше двух раз)
+      L.repeats.set(ex, (L.repeats.get(ex) || 0) + 1);
+      L.queue.push(ex); L.retried.add(L.queue.length - 1);
+    }
+    body.querySelectorAll("button, input").forEach((b) => { if (!b.classList.contains("listen")) b.disabled = true; });
+    body.querySelectorAll(".opt").forEach((b) => { if (b.dataset.v === ex.answer) b.classList.add("right"); else if (b.getAttribute("aria-pressed") === "true") b.classList.add("wrong"); });
+    const fb = el("div", { class: "fb " + (ok ? "ok" : "bad"), role: "status" },
+      el("b", {}, ok ? "Верно!" : "Не совсем."),
+      !ok && ex.type !== "match" ? el("span", {}, "Правильно: ", el("span", { lang: ex.promptLang === "inh" ? "ru" : "inh" }, expected)) : null,
+      !ok && ex.type === "match" ? el("span", {}, "Повторим в конце урока.") : null);
+    const next = el("button", { class: "main-btn", onclick: () => { L.pos++; if (L.pos >= L.queue.length) summary(); else renderExercise(); } }, "Дальше");
+    foot.replaceChildren(fb, next);
+    next.focus();
+  };
+  checkBtn.addEventListener("click", () => { const a = getAnswer(); if (a == null) return; const r = checkAnswer(ex, a); finish(r.ok, r.expected); });
+
+  if (ex.type === "choose") {
+    let picked = null;
+    const btns = ex.options.map((o, i) => el("button", { class: "opt", "aria-pressed": "false", "data-v": o, lang: ex.promptLang === "inh" ? "ru" : "inh", onclick: (e) => {
+      picked = o; btns.forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); ready(true);
+    } }, el("span", { class: "k", "aria-hidden": "true" }, i + 1), o));
+    body.append(el("div", { class: "opts", role: "group", "aria-label": "Варианты" }, btns));
+    getAnswer = () => picked;
+    L.keys = (e) => { const n = Number(e.key); if (n >= 1 && n <= btns.length && !btns[n - 1].disabled) btns[n - 1].click(); };
+  } else if (ex.type === "tiles") {
+    const row = el("div", { class: "answer-row", "aria-label": "Ваш ответ" });
+    const chosen = [];
+    const bankBtns = ex.tiles.map((t) => {
+      const b = el("button", { class: "tile", lang: "inh", onclick: () => {
+        b.disabled = true;
+        const put = el("button", { class: "tile", lang: "inh", "aria-label": t + " (убрать)", onclick: () => { put.remove(); chosen.splice(chosen.indexOf(entry), 1); b.disabled = false; b.focus(); ready(chosen.length); } }, t);
+        const entry = { t, put };
+        chosen.push(entry); row.append(put); ready(chosen.length);
+      } }, t);
+      return b;
+    });
+    body.append(row, el("div", { class: "bank", role: "group", "aria-label": "Слова" }, bankBtns));
+    getAnswer = () => chosen.map((c) => c.t).join(" ");
+    L.keys = null;
+  } else if (ex.type === "type") {
+    const input = el("input", { type: "text", autocomplete: "off", autocapitalize: "sentences", spellcheck: "false", lang: "inh", "aria-label": "Перевод по-ингушски", placeholder: "Ваш перевод" });
+    const pal = el("button", { class: "pal", type: "button", "aria-label": "Вставить палочку Ӏ", onclick: () => {
+      const s = input.selectionStart ?? input.value.length, e2 = input.selectionEnd ?? s;
+      input.value = input.value.slice(0, s) + PAL + input.value.slice(e2); input.focus(); input.setSelectionRange(s + 1, s + 1); ready(input.value.trim());
+    } }, PAL);
+    input.addEventListener("input", () => ready(input.value.trim()));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && input.value.trim() && !checkBtn.disabled) { e.preventDefault(); checkBtn.click(); } });
+    body.append(el("div", { class: "typed" }, input, pal));
+    getAnswer = () => input.value;
+    L.keys = null;
+    setTimeout(() => input.focus(), 0);
+  } else if (ex.type === "match") {
+    // слева русское, справа ингушское; нажмите одно, потом пару к нему
+    checkBtn.hidden = true;
+    const order = (arr) => arr.map((x, i) => [x, (i * 7 + 3) % arr.length]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
+    const left = ex.pairs.map((p) => ({ side: "ru", p }));
+    const right = order(ex.pairs.slice()).map((p) => ({ side: "inh", p }));
+    let sel = null, matched = 0, mistakes = 0;
+    const mk = (o) => {
+      const b = el("button", { class: "mt", "aria-pressed": "false", lang: o.side === "inh" ? "inh" : "ru", onclick: () => {
+        if (b.disabled) return;
+        if (!sel || sel.o.side === o.side) {
+          if (sel) sel.b.setAttribute("aria-pressed", "false");
+          sel = { o, b }; b.setAttribute("aria-pressed", "true"); return;
+        }
+        if (sel.o.p === o.p) {
+          for (const x of [sel.b, b]) { x.classList.add("ok"); x.disabled = true; x.setAttribute("aria-pressed", "false"); }
+          matched++;
+          sel = null;
+          if (matched === ex.pairs.length) finish(mistakes === 0, "");
+          else { const nx = body.querySelector(".mt:not([disabled])"); if (nx) nx.focus(); }
+        } else {
+          mistakes++;
+          const a = sel.b; a.setAttribute("aria-pressed", "false"); sel = null;
+          for (const x of [a, b]) { x.classList.add("bad"); setTimeout(() => x.classList.remove("bad"), 600); }
+        }
+      } }, o.side === "inh" ? o.p.inh : o.p.ru);
+      return b;
+    };
+    body.append(el("div", { class: "pairs" }, el("div", { class: "col", role: "group", "aria-label": "По-русски" }, left.map(mk)), el("div", { class: "col", role: "group", "aria-label": "По-ингушски" }, right.map(mk))));
+    L.keys = null;
+  }
+}
+
+function summary() {
+  const R = L; L = null; // урок закончен
+  history.replaceState(null, "", location.pathname);
+  const id = R.id;
+  const day = today();
+  if (P.lastDay !== day) { P.streak = P.lastDay && dayDiff(P.lastDay, day) === 1 ? P.streak + 1 : 1; P.lastDay = day; }
+  P.xp += R.points;
+  const prev = P.done[id];
+  P.done[id] = { best: Math.max(prev ? prev.best : 0, R.firstTry), of: R.total, at: day };
+  P.plays[id] = (P.plays[id] || 0) + 1;
+  save(KEY, P);
+  showStats();
+  const again = () => startLesson(id);
+  const back = el("button", { class: "main-btn", onclick: () => home() }, "К урокам");
+  $("#app").replaceChildren(el("div", { class: "done-card", role: "status" },
+    el("h2", {}, "Урок пройден"),
+    el("div", { class: "big" }, `+${R.points}`),
+    el("p", {}, `Очки за урок. Верно с первого раза: ${R.firstTry} из ${R.total}.`),
+    el("p", { class: "task" }, `Дней подряд: ${P.streak}.`)),
+    back, el("button", { class: "ghost", onclick: again }, "Пройти ещё раз"));
+  back.focus();
+}
+
+document.addEventListener("keydown", (e) => { if (L && L.keys && !e.target.matches("input")) L.keys(e); });
+window.addEventListener("popstate", () => { if (L) { L = null; home(); } });
+
+if (location.hash.length > 1) { const id = decodeURIComponent(location.hash.slice(1)); home().then(() => startLesson(id)); } else home();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
+</script>
+</body>
+</html>
