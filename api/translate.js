@@ -37,6 +37,8 @@ const SEED = require("../data/phrases.json"); // база пар; verified ст�
 const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор слов и примеров под текст
 // перевод по правилам грамматики без ИИ: библиотека слов lib/rules/lexicon.js + библиотека правил lib/rules/grammar.js
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
+// русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
+const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -272,19 +274,25 @@ const wordKey = (w) =>
 // Слова в [квадратных скобках] ИИ сам пометил как неизвестные — их не проверяем.
 const noBrackets = (t) => String(t || "").replace(/\[[^\]\n]{0,80}\]/g, " ");
 
-function checkIngush(text) {
+// source — исходный текст: слово, перенесённое из него как есть, точно русское (lib/postcheck.js).
+// russian — такие слова отдельно; они же входят в unknown (страница их подчёркивает, второй проход заменяет).
+function checkIngush(text, source = "") {
   const found = noBrackets(text).match(/[Ѐ-ӿ]+(?:-[Ѐ-ӿ]+)*/g) || [];
   const set = words();
+  const russian = POST.russian(text, source);
+  const ru = new Set(russian.map(wordKey));
   const unknown = new Set();
   let checked = 0, known = 0;
   for (const t of found) {
     const k = wordKey(t);
     if (k.length < 2) continue;
     checked++;
-    const ok = set.has(k) || (k.includes("-") && k.split("-").every((p) => p.length < 2 || set.has(p)));
+    const ok = !ru.has(k) && (set.has(k) || (k.includes("-") && k.split("-").every((p) => p.length < 2 || set.has(p))));
     if (ok) known++; else unknown.add(t);
   }
-  return { unknown: [...unknown], coverage: checked ? Math.round((known / checked) * 100) / 100 : 1 };
+  const out = { unknown: [...unknown], coverage: checked ? Math.round((known / checked) * 100) / 100 : 1 };
+  if (russian.length) out.russian = russian;
+  return out;
 }
 
 // Слова с заглавной буквы не в начале предложения — имена и названия (в нижнем регистре).
@@ -305,7 +313,7 @@ function namesIn(text) {
 
 // Подозрительные слова перевода: их нет в ингушских текстах, и это не имена.
 function suspects(translation, sourceText) {
-  const { unknown } = checkIngush(translation); // слова в [скобках] сюда не попадают
+  const { unknown } = checkIngush(translation, sourceText); // слова в [скобках] сюда не попадают
   if (!unknown.length) return [];
   const names = namesIn(translation);
   const srcNames = new Set([...namesIn(sourceText)].map((w) => w.slice(0, 4)));
@@ -1276,7 +1284,7 @@ module.exports = async (req, res) => {
     if (r.alternatives || r.note) result.details = { alternatives: r.alternatives || [], note: r.note || "" };
     if (r.kind === "rules" || r.withRules) result.rules = true;
     // слова из словаря и собранные правилами уже проверены по источникам — подчёркивать их не нужно
-    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed" && r.kind !== "rules") Object.assign(result, checkIngush(result.translation));
+    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed" && r.kind !== "rules") Object.assign(result, checkIngush(result.translation, input));
     result.variants = exactVariants(r, input, source, target, pool, fixT);
     return result;
   };
@@ -1354,7 +1362,7 @@ module.exports = async (req, res) => {
     for (const r of results) {
       if (r.text) {
         r.text = fixT(readTranslation(r.text).translation || r.text);
-        if (target === "inh") Object.assign(r, checkIngush(r.text));
+        if (target === "inh") Object.assign(r, checkIngush(r.text, input));
       }
     }
     return res.status(200).json({ results, saved: saved || null, examples: examples.length });
@@ -1365,7 +1373,7 @@ module.exports = async (req, res) => {
     const draft = fixT(String(body.draft || "")).trim();
     if (target !== "inh" || !draft || draft.length > MAX_CHARS * 2) return res.status(400).json({ error: "Нечего исправлять" });
     const before = suspects(draft, input);
-    if (!before.length) return res.status(200).json({ translation: draft, improved: false, ...checkIngush(draft) });
+    if (!before.length) return res.status(200).json({ translation: draft, improved: false, ...checkIngush(draft, input) });
     const textKey = `${source}|${target}|t|${input}`;
     const remember = (extra) => { const old = CACHE.get(textKey); if (old && old.translation === draft) cacheSet(textKey, { ...old, ...extra, repaired: true }); };
     try {
@@ -1375,10 +1383,10 @@ module.exports = async (req, res) => {
       const sane = fixed.length >= draft.length * 0.5 && fixed.length <= draft.length * 2 + 20;
       const improved = sane && after.length < before.length; // лучше — значит меньше слов, которых нет в ингушских текстах
       const translation = improved ? fixed : draft;
-      const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation) };
+      const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation, input) };
       result.variants = finishVariants([improved ? { ...aiVariant(translation, ""), sourceLabel: "ИИ, исправлено по базе" } : aiVariant(translation, "")], fixT);
       if (hurried) result.fast = true;
-      remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after } : {});
+      remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after, russian: result.russian } : {});
       return res.status(200).json(result);
     } catch (e) {
       const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
@@ -1428,7 +1436,7 @@ module.exports = async (req, res) => {
       // чеченские формы, которых в ингушском нет, заменяем по таблице
       const f = BASE.chechenFix(result.translation);
       if (f.fixed.length) { result.translation = f.text; result.fixed = f.fixed; }
-      Object.assign(result, checkIngush(result.translation));
+      Object.assign(result, checkIngush(result.translation, input));
       if (mode !== "word") result.suspect = suspects(result.translation, input); // для второго прохода
     }
     if (mode !== "word") { result.words = words; result.similar = similar; }
