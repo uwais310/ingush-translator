@@ -37,6 +37,8 @@ const SEED = require("../data/phrases.json"); // база пар; verified ст�
 const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор слов и примеров под текст
 // перевод по правилам грамматики без ИИ: библиотека слов lib/rules/lexicon.js + библиотека правил lib/rules/grammar.js
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
+// русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
+const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -242,6 +244,7 @@ const PAL_RE = new RegExp(`([\\u0400-\\u04FF])([${LOOK}])|([${LOOK}])(?=[\\u0400
 const fixPalochka = (s) =>
   String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 
+// Здесь только чистка разметки. Русские слова в ингушском ответе ловит lib/postcheck.js (checkIngush).
 const cleanOutput = (t) =>
   String(t || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -270,19 +273,25 @@ const wordKey = (w) =>
 // Слова в [квадратных скобках] ИИ сам пометил как неизвестные — их не проверяем.
 const noBrackets = (t) => String(t || "").replace(/\[[^\]\n]{0,80}\]/g, " ");
 
-function checkIngush(text) {
+// source — исходный текст: слово, перенесённое из него как есть, точно русское (lib/postcheck.js).
+// russian — такие слова отдельно; они же входят в unknown (страница их подчёркивает, второй проход заменяет).
+function checkIngush(text, source = "") {
   const found = noBrackets(text).match(/[Ѐ-ӿ]+(?:-[Ѐ-ӿ]+)*/g) || [];
   const set = words();
+  const russian = POST.russian(text, source);
+  const ru = new Set(russian.map(wordKey));
   const unknown = new Set();
   let checked = 0, known = 0;
   for (const t of found) {
     const k = wordKey(t);
     if (k.length < 2) continue;
     checked++;
-    const ok = set.has(k) || (k.includes("-") && k.split("-").every((p) => p.length < 2 || set.has(p)));
+    const ok = !ru.has(k) && (set.has(k) || (k.includes("-") && k.split("-").every((p) => p.length < 2 || set.has(p))));
     if (ok) known++; else unknown.add(t);
   }
-  return { unknown: [...unknown], coverage: checked ? Math.round((known / checked) * 100) / 100 : 1 };
+  const out = { unknown: [...unknown], coverage: checked ? Math.round((known / checked) * 100) / 100 : 1 };
+  if (russian.length) out.russian = russian;
+  return out;
 }
 
 // Слова с заглавной буквы не в начале предложения — имена и названия (в нижнем регистре).
@@ -303,7 +312,7 @@ function namesIn(text) {
 
 // Подозрительные слова перевода: их нет в ингушских текстах, и это не имена.
 function suspects(translation, sourceText) {
-  const { unknown } = checkIngush(translation); // слова в [скобках] сюда не попадают
+  const { unknown } = checkIngush(translation, sourceText); // слова в [скобках] сюда не попадают
   if (!unknown.length) return [];
   const names = namesIn(translation);
   const srcNames = new Set([...namesIn(sourceText)].map((w) => w.slice(0, 4)));
@@ -486,6 +495,7 @@ async function callGemini(model, prompt, json, timeoutMs, opts = {}) {
 const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, prompt, json, timeoutMs, opts = {}) => {
   const started = Date.now();
   const send = (body, ms) => postJson(url, { Authorization: `Bearer ${process.env[keyEnv]}`, ...extraHeaders }, { model, ...body }, ms);
+  const extra = opts.extra || {}; // особые настройки модели (например, «думай мало»); при ошибке 400 повтор без них
   const { system, user } = asParts(prompt);
   const sys = !system ? null
     : opts.cache && system.length >= 4000 ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
@@ -493,7 +503,7 @@ const openAiCompatible = (url, keyEnv, extraHeaders = {}) => async (model, promp
   const messages = (s) => (s ? [{ role: "system", content: s }, { role: "user", content: user }] : [{ role: "user", content: user }]);
   let data;
   try {
-    data = await send({ messages: messages(sys), temperature: temperature() }, timeoutMs);
+    data = await send({ ...extra, messages: messages(sys), temperature: temperature() }, timeoutMs);
   } catch (e) {
     // модель не приняла настройки запроса — повторяем самым простым способом (всё одним сообщением)
     const left = timeoutMs - (Date.now() - started);
@@ -523,7 +533,20 @@ const PROVIDERS = {
 // Платные модели (OpenRouter, всё, что не «:free»): им идёт полный справочник, как Gemini.
 const isPaid = (p, model) => p === "openrouter" && model !== "openrouter/free" && !model.endsWith(":free");
 const tierFor = (p, model) => (isPaid(p, model) ? "full" : PROVIDERS[p].tier);
-const callOpts = (p, model, fast) => ({ fast, cache: p === "openrouter" && model.startsWith("anthropic/") });
+// GPT-OSS на Groq — модель «с размышлением»: просим думать мало, иначе на Netlify (10 с) не успевает.
+const callOpts = (p, model, fast) => ({
+  fast,
+  cache: p === "openrouter" && model.startsWith("anthropic/"),
+  ...(p === "groq" && /gpt-oss/.test(model) ? { extra: { reasoning_effort: "low" } } : {}),
+});
+// Сколько ждать одну модель, когда времени мало (Netlify, ~10 с на всё). Groq отвечает за 1–3 с, если дольше —
+// значит, занят; бесплатные модели OpenRouter — до 6 с; Gemini и платные — всё оставшееся время.
+// Так зависшая быстрая модель не съедает время, которое нужно запасным.
+function capFor(p, model, fast, left) {
+  if (!fast) return left;
+  const cap = p === "groq" ? 5000 : p === "openrouter" && !isPaid(p, model) ? 6000 : left;
+  return Math.max(1200, Math.min(left, cap));
+}
 // Платные модели для кнопки «Сравнить ИИ»: [модель, оценка цены одного перевода с полным справочником].
 // Цены за миллион входных токенов на OpenRouter (ноябрь 2026): Opus 5.5 — $4, Sonnet 5.5 — $2,
 // Haiku 5.5 и GPT-6 Luna — $0.10, DeepSeek V4.1 Flash — $0.30, GLM 5.3 Flash — около $0.10.
@@ -580,6 +603,12 @@ function prompts(build) {
 // Бесплатные модели Gemini (ноябрь 2026, ai.google.dev/gemini-api/docs/pricing): Gemini 4 Hydrogen —
 // самая сильная из бесплатных (у неё маленький дневной лимит); 3.8 Flash и 3.6 Flash — запасные;
 // 3.5 Flash-Lite — самая быстрая. Модель, которая ответила «лимит», какое-то время пропускается (COOL).
+// Остальные бесплатные (проверено 17.11.2026 по openrouter.ai/api/v1/models и console.groq.com/docs/models;
+// Kimi K2 и qwen3-32b с Groq и kimi-k2:free с OpenRouter убраны — «нет такой модели»):
+//   Groq: GPT-OSS 120B (основная, хорошо знает русский), Qwen 3.8 27B (preview), GPT-OSS 20B — самая быстрая;
+//   OpenRouter: Gemma 4 31B (Google, многоязычная), Nemotron 3 Ultra (NVIDIA), openrouter/free — что свободно.
+//   Grok (платно, xAI): grok-4.20-non-reasoning — без размышлений, успевает за 10 с.
+// Модель, которой больше нет (404), на полчаса убирается из очереди (DEAD), чтобы не терять на ней время.
 const PAID_DEFAULT = "anthropic/claude-haiku-5.5";
 function defaultSequence() {
   const paid = String(process.env.OPENROUTER_MODEL || PAID_DEFAULT).trim();
@@ -588,13 +617,14 @@ function defaultSequence() {
     ["gemini", "gemini-4-hydrogen"],
     ["gemini", "gemini-3.8-flash"],
     ["gemini", "gemini-3.6-flash"],
-    ["grok", "grok-4"],
-    ["groq", "moonshotai/kimi-k2-instruct-0905"],
-    ["groq", "moonshotai/kimi-k2-instruct"],
-    ["openrouter", "moonshotai/kimi-k2:free"],
+    ["grok", "grok-4.20-non-reasoning"],
+    ["groq", "openai/gpt-oss-120b"],
+    ["groq", "qwen/qwen3.8-27b"],
+    ["openrouter", "google/gemma-4-31b-it:free"],
+    ["openrouter", "nvidia/nemotron-3-ultra-550b-a55b:free"],
     ["openrouter", "openrouter/free"],
     ["gemini", "gemini-3.5-flash-lite"],
-    ["groq", "qwen/qwen3-32b"],
+    ["groq", "openai/gpt-oss-20b"],
   ];
 }
 const MODEL_ENV = { gemini: "GEMINI_MODELS", groq: "GROQ_MODELS", openrouter: "OPENROUTER_MODELS", grok: "XAI_MODELS" };
@@ -644,6 +674,11 @@ function coolDown(p, model, e) {
   const step = hits === 1 ? 60_000 : hits === 2 ? 5 * 60_000 : 30 * 60_000;
   COOL.set(k, Date.now() + Math.min(30 * 60_000, Math.max(step, asked)));
 }
+// Модели нет (404 / «model not found») или бесплатная модель сказала «нет денег» (402): не спрашиваем её
+// какое-то время совсем — на каждом переводе это стоило бы полсекунды-секунду.
+const DEAD = new Map();
+const isDead = (p, model) => (DEAD.get(coolKey(p, model)) || 0) > Date.now();
+const noSuchModel = (e) => e.status === 404 || (e.status === 400 && /model.*(not found|does not exist|not a valid|decommissioned|not supported)|no endpoints/i.test(String(e.message)));
 const coolClear = (p, model) => { COOL.delete(coolKey(p, model)); COOL_HITS.delete(coolKey(p, model)); };
 
 // Пробует модели, пока одна не ответит. Возвращает { text, by }.
@@ -656,7 +691,7 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
   const deadKeys = new Set();
   const slow = new Set(); // сервис не успел ответить — сначала пробуем другие сервисы
   const trail = []; // кто и почему не ответил
-  let last = null, sawLimit = false;
+  let last = null, sawLimit = false, gone = 0; // gone — сколько моделей «нет / нет денег»
 
   const attempt = async (p, model, ms) => {
     const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), json, ms, callOpts(p, model, fast)));
@@ -668,12 +703,13 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
     last = e;
     trail.push(`${modelLabel(p, model)}: ${whyFailed(e)}`);
     console.error(`${p} ${model}:`, e.status, e.message);
-    if (e.status === 402) { BROKE_AT[p] = Date.now(); return; }
+    if (noSuchModel(e)) { gone++; DEAD.set(coolKey(p, model), Date.now() + 30 * 60_000); return; }
+    if (e.status === 402) { gone++; BROKE_AT[p] = Date.now(); if (!isPaid(p, model)) DEAD.set(coolKey(p, model), Date.now() + 10 * 60_000); return; }
     if (e.status === 429) { sawLimit = true; coolDown(p, model, e); }
     if (e.status === 504) slow.add(p);
     if (isBadKey(e)) { deadKeys.add(p); e.badKey = PROVIDERS[p].keyEnv; }
   };
-  const usable = ([p, model]) => !deadKeys.has(p) && !(isBroke(p) && isPaid(p, model));
+  const usable = ([p, model]) => !deadKeys.has(p) && !(isBroke(p) && isPaid(p, model)) && !isDead(p, model);
 
   let queue = attempts().filter(usable);
   // модели на «паузе после лимита» — в конец очереди
@@ -691,7 +727,7 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
     const partner = rest.findIndex(([p]) => p === "gemini");
     if (gi >= 0 && partner >= 0) firsts.splice(gi + 1, 0, rest.splice(partner, 1)[0]);
     const ms = Math.max(1500, budget - 900);
-    const runs = firsts.map(([p, model]) => attempt(p, model, ms).then((r) => ({ r }), (e) => ({ e })));
+    const runs = firsts.map(([p, model]) => attempt(p, model, capFor(p, model, fast, ms)).then((r) => ({ r }), (e) => ({ e })));
     // сильную модель ждём не до конца: если она думает дольше FAST_GRACE_MS, а у следующей ответ готов — берём его
     const graceEnd = started + Math.min(FAST_GRACE_MS, Math.max(2500, Math.round(budget * 0.65)));
     const wait = (i) => Promise.race([runs[i], new Promise((res) => setTimeout(() => res(null), Math.max(0, graceEnd - Date.now())))]);
@@ -720,13 +756,19 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
     const left = budget - (Date.now() - started);
     if (left < 1200) break;
     try {
-      return await attempt(p, model, Math.min(left - 200, cap));
+      return await attempt(p, model, capFor(p, model, fast, Math.min(left - 200, cap)));
     } catch (e) {
       failed(p, model, e);
     }
   }
   if (last && last.badKey && attempts().every(([p]) => deadKeys.has(p))) throw httpError(401, `Check ${last.badKey}. ${last.message}`);
-  const err = httpError(sawLimit ? 429 : 503, "Все переводчики сейчас заняты. Попробуйте через минуту.");
+  // Понятное сообщение: почему ИИ не ответил. Слова и фразы из базы при этом работают (их ищут до ИИ).
+  const msg = sawLimit
+    ? "Бесплатные ИИ-переводчики исчерпали лимит. Попробуйте через минуту или переведите короче."
+    : gone && gone >= trail.length
+      ? "ИИ-переводчики сейчас недоступны (нет средств на счёте или модель отключена). Слова и фразы из базы работают."
+      : "Все переводчики сейчас заняты. Попробуйте через минуту.";
+  const err = httpError(sawLimit ? 429 : 503, msg);
   err.detail = trail.slice(0, 8).join("; ");
   throw err;
 }
@@ -1241,7 +1283,7 @@ module.exports = async (req, res) => {
     if (r.alternatives || r.note) result.details = { alternatives: r.alternatives || [], note: r.note || "" };
     if (r.kind === "rules" || r.withRules) result.rules = true;
     // слова из словаря и собранные правилами уже проверены по источникам — подчёркивать их не нужно
-    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed" && r.kind !== "rules") Object.assign(result, checkIngush(result.translation));
+    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed" && r.kind !== "rules") Object.assign(result, checkIngush(result.translation, input));
     result.variants = exactVariants(r, input, source, target, pool, fixT);
     return result;
   };
@@ -1319,7 +1361,7 @@ module.exports = async (req, res) => {
     for (const r of results) {
       if (r.text) {
         r.text = fixT(readTranslation(r.text).translation || r.text);
-        if (target === "inh") Object.assign(r, checkIngush(r.text));
+        if (target === "inh") Object.assign(r, checkIngush(r.text, input));
       }
     }
     return res.status(200).json({ results, saved: saved || null, examples: examples.length });
@@ -1330,7 +1372,7 @@ module.exports = async (req, res) => {
     const draft = fixT(String(body.draft || "")).trim();
     if (target !== "inh" || !draft || draft.length > MAX_CHARS * 2) return res.status(400).json({ error: "Нечего исправлять" });
     const before = suspects(draft, input);
-    if (!before.length) return res.status(200).json({ translation: draft, improved: false, ...checkIngush(draft) });
+    if (!before.length) return res.status(200).json({ translation: draft, improved: false, ...checkIngush(draft, input) });
     const textKey = `${source}|${target}|t|${input}`;
     const remember = (extra) => { const old = CACHE.get(textKey); if (old && old.translation === draft) cacheSet(textKey, { ...old, ...extra, repaired: true }); };
     try {
@@ -1340,10 +1382,10 @@ module.exports = async (req, res) => {
       const sane = fixed.length >= draft.length * 0.5 && fixed.length <= draft.length * 2 + 20;
       const improved = sane && after.length < before.length; // лучше — значит меньше слов, которых нет в ингушских текстах
       const translation = improved ? fixed : draft;
-      const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation) };
+      const result = { translation, improved, model: by, ai: true, before: before.length, after: improved ? after.length : before.length, ...checkIngush(translation, input) };
       result.variants = finishVariants([improved ? { ...aiVariant(translation, ""), sourceLabel: "ИИ, исправлено по базе" } : aiVariant(translation, "")], fixT);
       if (hurried) result.fast = true;
-      remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after } : {});
+      remember(improved ? { translation, unknown: result.unknown, coverage: result.coverage, suspect: after, russian: result.russian } : {});
       return res.status(200).json(result);
     } catch (e) {
       const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
@@ -1393,7 +1435,7 @@ module.exports = async (req, res) => {
       // чеченские формы, которых в ингушском нет, заменяем по таблице
       const f = BASE.chechenFix(result.translation);
       if (f.fixed.length) { result.translation = f.text; result.fixed = f.fixed; }
-      Object.assign(result, checkIngush(result.translation));
+      Object.assign(result, checkIngush(result.translation, input));
       if (mode !== "word") result.suspect = suspects(result.translation, input); // для второго прохода
     }
     if (mode !== "word") { result.words = words; result.similar = similar; }
