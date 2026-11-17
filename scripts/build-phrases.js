@@ -24,27 +24,39 @@ const LOOK = "1Il|ІіΙⅠǀ";
 const PAL = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(?=[\\u0400-\\u04FF])", "g");
 const fixPal = (s) => String(s).replace(/ӏ/g, "Ӏ").replace(PAL, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 const clean = (s) => String(s || "").replace(/[­​]/g, "").replace(/\s+/g, " ").trim();
+// пометки внутри текста («(говорит мужчина)», «(й, б, д)») уходят в поле note — lib/notes.js
+const { splitNotes, cleanPair, NOTE_INH, NOTE_RU } = require("../lib/notes.js");
 // как в api/translate.js: без ударений и надстрочных знаков (в списке слов «й» записана как «и»)
 const wkey = (w) => w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC").toLowerCase().replace(/Ӏ/g, "ӏ");
 const inhWords = (s) => (s.replace(/\([^()]*\)/g, " ").match(/[А-Яа-яЁёӀӏ]+/g) || []).map(wkey);
 const CHECHEN = new Set(Object.keys(BASE.CHECHEN));
 
-// Ключ для дублей — как было до учёта ударений в lib/base.js: «ва́ла» и «вала» — разные записи,
-// иначе пересборка выкинула бы уже существующие записи (и их id, по которым хранятся решения /review).
+// Ключ для дублей и прежних id — как в lib/base.js до учёта ударений: «де́за» и «деза» — разные записи.
+// С новым BASE.key (ударения убираются) пересборка выкидывала 117 существующих записей вместе с их id
+// (по id хранятся решения носителя на /review), поэтому здесь ключ свой.
 const dkey = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/Ӏ/g, "ӏ").replace(/\([^()]*\)/g, " ").replace(/[^а-яӏa-z0-9]+/g, " ").trim();
 const out = new Map(), stats = {}, dropped = {};
 // id прежних записей не меняются: по ним хранятся решения носителя с /review. Если ту же пару теперь
 // первым даёт другой источник (например, PaydaDosh вместо PanLex), id берётся из старого data/phrases.json.
 const OLD_IDS = new Map();
 try {
-  for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8")))
+  for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8"))) {
     OLD_IDS.set(`${dkey(clean(p.ru))}|${dkey(fixPal(clean(p.inh)))}`, p.id);
+    // тот же ключ без пометок — чтобы после чистки у записи остался прежний id
+    const r = splitNotes(clean(p.ru), NOTE_RU).text, i = splitNotes(fixPal(clean(p.inh)), NOTE_INH).text;
+    const k = `${dkey(r)}|${dkey(i)}`;
+    if (!OLD_IDS.has(k)) OLD_IDS.set(k, p.id);
+  }
 } catch {}
 const bump = (o, k) => { o[k] = (o[k] || 0) + 1; };
 // strict: проверять каждое ингушское слово по частотному словарю (для строк словарика с пояснениями — нет)
 function add(kind, ru, inh, source, extra = {}, strict = true) {
   ru = clean(ru); inh = fixPal(clean(inh));
   if (!ru || !inh) return;
+  if (kind === "phrase") {
+    const c = cleanPair(ru, inh, extra.note);
+    if (c.ru !== ru || c.inh !== inh) { ru = c.ru; inh = c.inh; extra = { ...extra, note: c.note }; }
+  }
   const ws = inhWords(inh);
   if (ws.some((w) => CHECHEN.has(w))) return bump(dropped, `${source}: чеченская форма`);
   if (strict && ws.some((w) => w.length > 1 && !WORDS.has(w))) return bump(dropped, `${source}: слова нет в ингушских текстах`);
@@ -106,35 +118,7 @@ for (const f of files) {
   }
 }
 
-// 5. Пометки внутри ингушского текста — в поле note, чтобы их не копировали вместе с переводом:
-//    «Со цӀа воал. (говорит мужчина)» → inh «Со цӀа воал.», note «говорит мужчина»;
-//    «Бага ваха (й, б, д)» → inh «Бага ваха», note «й, б, д» (классы). Ингушские слова не меняются,
-//    варианты слов в скобках («(шун)», «(еза)») остаются в тексте. id не меняются.
-//    У PaydaDosh раздел сайта («разговорник: уроки (УРОКИ)») хранится отдельно, в поле section.
-//    Записи словаря проекта не трогаем: их note — строка словаря целиком.
-const CLASS_NOTE = /^[вйдби](?:\s*[,/]\s*[вйдби])*$/i;
-const RU_NOTE = /^(говорит (мужчина|женщина)|к (мужчине|женщине|нескольким|старшему|младшему|ребёнку|детям|1 человеку|одному человеку)|к нескольким|вежливо|объект (мужчина|женщина)|о мужч\.\/жен\.[^()]*|домой|мн\.|ед\.|усиленная просьба|прямо сейчас|как-нибудь)$/i;
-const isNote = (c) => c.split(/\s*·\s*/).every((x) => CLASS_NOTE.test(x.trim()) || RU_NOTE.test(x.trim()));
-const moved = { note: 0, section: 0 };
-for (const [k, p] of out) {
-  if (!p.license) continue;
-  let section;
-  if (/^PaydaDosh,\s*/.test(p.note || "")) { section = p.note.replace(/^PaydaDosh,\s*/, ""); delete p.note; moved.section++; }
-  const notes = [];
-  const inh = p.inh.replace(/\s*\(([^()]*)\)/g, (m, c) => (isNote(c.trim()) ? (notes.push(c.trim().replace(/\s*,\s*/g, ", ")), " ") : m))
-    .replace(/\s+([.!?,;:])/g, "$1").replace(/\s+/g, " ").trim();
-  let note = p.note;
-  if (notes.length && inh) {
-    const parts = notes.map((n) => (CLASS_NOTE.test(n) && (notes.length > 1 || note) ? `класс ${n}` : n));
-    note = [...parts, note].filter(Boolean).join("; ");
-    moved.note++;
-  }
-  const { id, kind, ru, source, verified, note: _n, inh: _i, ...rest } = p;
-  out.set(k, { id, kind, ru, inh: notes.length && inh ? inh : p.inh, ...(note ? { note } : {}), ...(section ? { section } : {}), ...rest, source, verified });
-}
-
 const list = [...out.values()];
 fs.writeFileSync(path.join(ROOT, "data", "phrases.json"), "[\n" + list.map((x) => JSON.stringify(x)).join(",\n") + "\n]\n");
 console.log("пар в базе:", list.length, stats);
-console.log("пометки из ингушского текста перенесены в note:", moved.note, "· разделы PaydaDosh перенесены в section:", moved.section);
 console.log("не вошли:", dropped);

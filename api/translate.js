@@ -733,19 +733,21 @@ async function ask(prompt, json = false, budget = DEADLINE_MS) {
 
 // Для кнопки «Сравнить»: по одной бесплатной модели от каждого сервиса и, если на счёте OpenRouter
 // есть деньги, платные модели из COMPARE_PAID — все параллельно.
-async function askAll(prompt, budget = DEADLINE_MS) {
+// all — все модели, а не по одной от сервиса (для замера scripts/check-ai.js). У каждого ответа — время, ms.
+async function askAll(prompt, budget = DEADLINE_MS, all = false) {
   const seen = new Set();
-  const free = attempts().filter(([p, model]) => !isPaid(p, model)).filter(([p]) => (seen.has(p) ? false : seen.add(p)));
+  const free = attempts().filter(([p, model]) => !isPaid(p, model)).filter(([p]) => (all || seen.has(p) ? all : seen.add(p)));
   const paid = hasKey("openrouter") && !isBroke("openrouter") ? COMPARE_PAID.map(([model, price]) => ["openrouter", model, price]) : [];
   const fast = budget < LONG_BUDGET_MS;
   const results = await Promise.all([...paid, ...free].map(async ([p, model, price]) => {
     const by = modelLabel(p, model) + (price ? ` · ${price}` : "");
+    const t0 = Date.now();
     try {
       const text = cleanOutput(await PROVIDERS[p].call(model, prompt(tierNow(p, model, fast)), false, budget - 500, callOpts(p, model, fast)));
-      return text ? { by, text } : { by, error: "Пустой ответ" };
+      return text ? { by, text, ms: Date.now() - t0 } : { by, error: "Пустой ответ", ms: Date.now() - t0 };
     } catch (e) {
       if (e.status === 402) { BROKE_AT[p] = Date.now(); return { by, noMoney: true }; }
-      return { by, error: e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : e.status === 404 ? "Нет такой модели" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
+      return { by, ms: Date.now() - t0, error: e.status === 429 ? "Лимит исчерпан" : e.status === 504 ? "Не успел ответить" : e.status === 404 ? "Нет такой модели" : isBadKey(e) ? "Ключ не работает" : "Занят или недоступен" };
     }
   }));
   return results.filter((r) => !r.noMoney); // денег на счёте нет — платные модели просто не показываем
@@ -882,10 +884,11 @@ function sourceTitle(p) {
 }
 // Пометы источника вроде «PaydaDosh, разговорник: уроки (УРОКИ)» человеку не нужны — это адрес записи, а не пояснение.
 // Одна буква класса («д», «й-й») подписывается словом «класс».
+// Пометка записи — части через « · »: «PaydaDosh, разговорник: … · говорит мужчина». Адрес записи
+// («PaydaDosh, …») человеку не нужен, остальное (кто говорит, к кому, класс) — показываем.
 function glossNote(n) {
-  const t = String(n || "").trim();
-  if (!t || /^PaydaDosh,/.test(t)) return "";
-  return /^[вйдб](\s*[-,/]\s*[вйдб])*$/.test(t) ? `класс ${t}` : t;
+  return String(n || "").split(" · ").map((x) => x.trim()).filter((x) => x && !/^PaydaDosh,/.test(x))
+    .map((x) => (/^[вйдб](\s*[-,/]\s*[вйдб])*$/.test(x) ? `класс ${x}` : x)).join(" · ");
 }
 function seedResult(p, src, more = []) {
   const sp = src === "ru" ? splitNote(p.inh) : { text: noParens(p.ru), note: "" };
@@ -930,9 +933,9 @@ function resolveExact(text, src, tgt, pool) {
   const exactItems = d && !d.lemma ? d.items : [];
   if (p && pp !== 5 && (!d || d.lemma || pp <= d.prio)) return seedResult(p, src, exactItems);
   if (d && !d.lemma) return d;
-  // предложение, которое можно собрать по правилам грамматики (русский → ингушский, от двух слов)
-  if (src === "ru" && RET.wordsOf(text).length >= 2) {
-    const rr = RULES.translate(text);
+  // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
+  if (RET.wordsOf(text).length >= 2) {
+    const rr = src === "ru" ? RULES.translate(text) : RULES.translateInh(text);
     if (rr) {
       return {
         translation: rr.translation, label: "Без ИИ: по правилам грамматики", kind: "rules", rules: rr,
@@ -1085,7 +1088,7 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
 //   2 — остальные короткие фразы (до 6 слов); 3 — слова из настоящих текстов (чем чаще, тем раньше);
 //   4 — остальные слова; 5 — длинные фразы, пословицы и обороты; 6 — имена собственные.
 // Внутри группы — по надёжности источника, потом короче раньше. Решения хранятся по id пары, как и раньше.
-const EVERYDAY_TAG = /^(?:PaydaDosh, )?разговорник: (переводы носителей|уроки|ситуации|обряды и праздники)/; // раздел PaydaDosh (поле section)
+const EVERYDAY_TAG = /^PaydaDosh, разговорник: (переводы носителей|уроки|ситуации|обряды и праздники)/;
 let REVIEW_ORDER = null;
 function reviewOrder() {
   if (REVIEW_ORDER) return REVIEW_ORDER;
@@ -1095,7 +1098,7 @@ function reviewOrder() {
     if (p.kind === "phrase") {
       if (src.rank === 2) return 0;
       const n = words(p.ru);
-      if (n <= 6 && src.source === "paydadosh" && EVERYDAY_TAG.test(p.section || p.note || "")) return 1;
+      if (n <= 6 && src.source === "paydadosh" && EVERYDAY_TAG.test(p.note || "")) return 1;
       return n <= 6 ? 2 : 5;
     }
     return p.count ? 3 : 4;
@@ -1174,9 +1177,9 @@ async function reviewAction(action, body, res) {
     const reviewed = Object.keys(review).filter((id) => seedIndex().byId.has(id)).length;
     if (index < 0) return res.status(200).json({ done: true, reviewed, total: n });
     const p = SEED[order[index]];
-    const { id, ru, inh, kind, source, note, section, count } = p;
+    const { id, ru, inh, kind, source, note, count } = p;
     const { sourceLabel } = seedSource(p);
-    return res.status(200).json({ item: { id, ru, inh, kind, source, sourceLabel, also: p.also || [], note: note || "", section: section || "", count: count || 0 }, index, reviewed, total: n });
+    return res.status(200).json({ item: { id, ru, inh, kind, source, sourceLabel, also: p.also || [], note: note || "", count: count || 0 }, index, reviewed, total: n });
   } catch (e) {
     console.error("review:", e.status, e.message);
     return res.status(e.status || 500).json({ error: e.status === 501 ? e.message : "Не получилось. Попробуйте ещё раз." });
@@ -1194,7 +1197,8 @@ module.exports = async (req, res) => {
   if (action === "rules") {
     const L = require("../lib/rules/lexicon.js");
     return res.status(200).json({
-      rules: RULES.RULES.map((r) => ({ id: r.id, name: r.name, examples: r.examples.map(([ru, inh]) => ({ ru, inh, ours: (RULES.translate(ru) || {}).translation || "" })) })),
+      // ours — как правила переводят образец с русского, back — как обратно с ингушского
+      rules: RULES.RULES.map((r) => ({ id: r.id, name: r.name, examples: r.examples.map(([ru, inh]) => ({ ru, inh, ours: (RULES.translate(ru) || {}).translation || "", back: (RULES.translateInh(inh) || {}).translation || "" })) })),
       verbs: L.VERBS.map((v) => ({ ru: v.id, inh: typeof v.pres === "string" ? v.pres : v.pres ? Object.values(v.pres).join(" / ") : v.part, example: v.example })),
     });
   }
@@ -1257,7 +1261,10 @@ module.exports = async (req, res) => {
     }
     return null;
   };
-  if (action !== "compare") {
+  // test: true — замер настоящего ИИ (scripts/check-ai.js): не отвечать из базы и правил и не показывать ИИ
+  // эту же фразу в примерах (иначе ИИ просто перепишет готовый ответ); в «Сравнить» — все модели.
+  const test = body && body.test === true;
+  if (action !== "compare" && !test) {
     const r = tryExact();
     if (r) return res.status(200).json(r);
   }
@@ -1265,9 +1272,12 @@ module.exports = async (req, res) => {
   // примеры для ИИ: для русского ↔ ингушского — 16 самых похожих пар (lib/retrieval.js),
   // для других языков — исправления носителей с теми же словами (как раньше)
   const distilled = isRuInh(source, target) ? await loadDistilled() : [];
-  const examples = isRuInh(source, target)
-    ? RET.pickFewShots(input, source, target, pool, distilled, 16)
-    : pickExamples(pool, input, source, target);
+  const same = (x) => RET.normalize(x || "").replace(/[^а-яӏ ]/g, "").trim();
+  const examples = (isRuInh(source, target)
+    ? RET.pickFewShots(input, source, target, pool, distilled, test ? 17 : 16)
+    : pickExamples(pool, input, source, target))
+    .filter((e) => !test || (same(e.ru) !== same(input) && same(e.inh) !== same(input) && same(e.text) !== same(input)))
+    .slice(0, 16);
   let budget = timeBudget(req);
   const hurried = budget < LONG_BUDGET_MS; // времени мало: ИИ отвечает в быстром режиме, думает меньше
 
@@ -1275,7 +1285,7 @@ module.exports = async (req, res) => {
   let corpus = [];
   if (hasIngush(source, target) && (source === "ru" || source === "inh")) {
     const t0 = Date.now();
-    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 300)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15);
+    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 300)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15).filter(([inh, ru]) => !test || (same(ru) !== same(input) && same(inh) !== same(input)));
     budget -= Date.now() - t0;
   }
   // корпус мог только что загрузиться: ещё раз ищем готовый ответ (целый текст или по предложениям)
@@ -1305,7 +1315,7 @@ module.exports = async (req, res) => {
 
   // --- сравнить все ИИ ---
   if (action === "compare") {
-    const results = await askAll(prompts((tier) => textPrompt(input, source, target, examples, tier, corpus)), budget);
+    const results = await askAll(prompts((tier) => textPrompt(input, source, target, examples, tier, corpus)), budget, test);
     for (const r of results) {
       if (r.text) {
         r.text = fixT(readTranslation(r.text).translation || r.text);
