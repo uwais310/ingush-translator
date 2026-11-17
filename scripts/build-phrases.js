@@ -31,16 +31,20 @@ const wkey = (w) => w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC").
 const inhWords = (s) => (s.replace(/\([^()]*\)/g, " ").match(/[А-Яа-яЁёӀӏ]+/g) || []).map(wkey);
 const CHECHEN = new Set(Object.keys(BASE.CHECHEN));
 
+// Ключ для дублей и прежних id — как в lib/base.js до учёта ударений: «де́за» и «деза» — разные записи.
+// С новым BASE.key (ударения убираются) пересборка выкидывала 117 существующих записей вместе с их id
+// (по id хранятся решения носителя на /review), поэтому здесь ключ свой.
+const dkey = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/Ӏ/g, "ӏ").replace(/\([^()]*\)/g, " ").replace(/[^а-яӏa-z0-9]+/g, " ").trim();
 const out = new Map(), stats = {}, dropped = {};
 // id прежних записей не меняются: по ним хранятся решения носителя с /review. Если ту же пару теперь
 // первым даёт другой источник (например, PaydaDosh вместо PanLex), id берётся из старого data/phrases.json.
 const OLD_IDS = new Map();
 try {
   for (const p of JSON.parse(fs.readFileSync(path.join(ROOT, "data", "phrases.json"), "utf8"))) {
-    OLD_IDS.set(`${BASE.key(clean(p.ru))}|${BASE.key(fixPal(clean(p.inh)))}`, p.id);
+    OLD_IDS.set(`${dkey(clean(p.ru))}|${dkey(fixPal(clean(p.inh)))}`, p.id);
     // тот же ключ без пометок — чтобы после чистки у записи остался прежний id
     const r = splitNotes(clean(p.ru), NOTE_RU).text, i = splitNotes(fixPal(clean(p.inh)), NOTE_INH).text;
-    const k = `${BASE.key(r)}|${BASE.key(i)}`;
+    const k = `${dkey(r)}|${dkey(i)}`;
     if (!OLD_IDS.has(k)) OLD_IDS.set(k, p.id);
   }
 } catch {}
@@ -56,7 +60,7 @@ function add(kind, ru, inh, source, extra = {}, strict = true) {
   const ws = inhWords(inh);
   if (ws.some((w) => CHECHEN.has(w))) return bump(dropped, `${source}: чеченская форма`);
   if (strict && ws.some((w) => w.length > 1 && !WORDS.has(w))) return bump(dropped, `${source}: слова нет в ингушских текстах`);
-  const key = `${BASE.key(ru)}|${BASE.key(inh)}`;
+  const key = `${dkey(ru)}|${dkey(inh)}`;
   if (out.has(key)) {
     // та же пара из другого источника — запомним и его (так видно, что пару подтверждают двое)
     const prev = out.get(key);
