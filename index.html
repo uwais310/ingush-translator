@@ -2,8 +2,10 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0b6b45">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a6b3d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1a13" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Ингушский переводчик: слова, фразы и целые тексты. Сначала проверенная база и словари, потом ИИ.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -12,373 +14,365 @@
 <meta name="apple-mobile-web-app-title" content="ГӀалгӀай">
 <title>Ингушский переводчик</title>
 <style>
-  /* Минималистичный дизайн: белый фон, один зелёный акцент, системный шрифт.
-     Текст сверху, перевод снизу (на широком экране — рядом). */
+  /* Дизайн повторяет флаг Ингушетии: белое поле между двумя зелёными полосами и красный солнечный знак.
+     Зелёная шапка — верхняя полоса, зелёный подвал — нижняя, вся работа идёт на белом.
+     Красный цвет есть только в знаке. Шрифт системный: в нём точно есть буква Ӏ. */
   :root {
-    --bg: #ffffff;
-    --surface: #ffffff;
-    --surface-2: #f7f9f8;
-    --ink: #111816;
-    --muted: #5f6b66;
-    --line: #e4e9e6;
-    --accent: #0a7a4b;
-    --accent-hover: #086a41;
-    --accent-ink: #ffffff;
-    --accent-soft: #ebf6f0;
-    --sun: #0a7a4b;
-    --warn-ink: #8a5300;
-    --warn-bg: #fff5e3;
-    --ok-ink: #0a7a4b;
-    --ok-bg: #ebf6f0;
-    --shadow: 0 1px 2px rgba(16, 24, 20, .04), 0 8px 24px rgba(16, 24, 20, .06);
-    --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
-    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
-    --radius: 20px;
+    --snow: #ffffff;       /* поле */
+    --mist: #f2f6f3;       /* подложка перевода */
+    --ink: #14201a;
+    --stone: #5d6a63;      /* второстепенный текст */
+    --line: #dbe5df;
+    --green: #0a6b3d;      /* полосы, кнопки, перевод */
+    --green-deep: #07542f;
+    --leaf: #e2f3e9;       /* мягкая зелёная заливка */
+    --on-green: #ffffff;
+    --on-green-soft: rgba(255, 255, 255, .78);
+    --sun: #d3212c;        /* солнечный знак */
+    --amber-ink: #7a4a00;
+    --amber-bg: #fff4dc;
+    --amber-line: #f1d9a3;
+    --radius: 18px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0e1412; --surface: #151d1a; --surface-2: #19221f; --ink: #e8efec; --muted: #97a59f;
-      --line: #26322d; --accent: #3ec28a; --accent-hover: #52cf98; --accent-ink: #04140c; --accent-soft: #16302a;
-      --sun: #3ec28a; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; --ok-bg: #133227;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
+    :root {
+      --snow: #111b16; --mist: #17241d; --ink: #e9f1ec; --stone: #9aaba2; --line: #26372e;
+      --green: #49c486; --green-deep: #6ad49c; --leaf: #173426; --on-green: #ffffff; --on-green-soft: rgba(255, 255, 255, .74);
+      --sun: #f0545c; --amber-ink: #ffc978; --amber-bg: #33270f; --amber-line: #5a4418;
+      color-scheme: dark;
     }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0e1412; --surface: #151d1a; --surface-2: #19221f; --ink: #e8efec; --muted: #97a59f;
-    --line: #26322d; --accent: #3ec28a; --accent-hover: #52cf98; --accent-ink: #04140c; --accent-soft: #16302a;
-    --sun: #3ec28a; --warn-ink: #ffc46b; --warn-bg: #33270f; --ok-ink: #6ee0a8; --ok-bg: #133227;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); }
-  body { font-family: var(--font-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 16px 16px 48px; display: grid; gap: 20px; }
+  [hidden] { display: none !important; }
+  html { background: var(--snow); -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--snow); color: var(--ink);
+    font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+  button, select, textarea, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--green) 55%, transparent); outline-offset: 2px; border-radius: 6px; }
 
-  header { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
-  .logo { width: 36px; height: 36px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
-    font: 700 20px var(--font-display); flex: none; letter-spacing: -.02em; }
-  h1 { font-family: var(--font-display); font-size: 19px; font-weight: 650; letter-spacing: -.015em; line-height: 1.15; margin: 0; }
-  .tagline { color: var(--muted); font-size: 13px; }
+  /* ---------- верхняя полоса ---------- */
+  .band { background: #0a6b3d; color: var(--on-green); }
+  @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
+  .band-in { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 12px; }
+  .sign { width: 44px; height: 44px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .sign svg { width: 34px; height: 34px; display: block; }
+  h1 { margin: 0; font-size: 20px; line-height: 1.15; font-weight: 700; letter-spacing: -.01em; }
+  .sub { margin: 2px 0 0; font-size: 13px; color: var(--on-green-soft); }
 
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
-  .langbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); }
-  select {
-    width: 100%; appearance: none; -webkit-appearance: none; border: 0; border-radius: 12px; background: transparent;
-    color: var(--ink); font: 600 16px var(--font-body); padding: 10px 12px; cursor: pointer; text-align: center; text-align-last: center;
-    transition: background .15s;
-  }
-  select:hover, select:focus-visible { background: var(--surface-2); outline: none; }
-  #tgt { text-align: center; text-align-last: center; }
-  .icon-btn {
-    width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent-soft);
-    color: var(--accent); font-size: 18px; cursor: pointer; display: grid; place-items: center; transition: transform .25s, background .15s;
-  }
-  .icon-btn:hover { background: var(--accent); color: var(--accent-ink); }
-  .icon-btn:active { transform: rotate(180deg); }
+  /* ---------- белое поле ---------- */
+  main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 14px 16px 28px; display: grid; gap: 22px; align-content: start; }
 
-  .panes { display: grid; grid-template-columns: 1fr; }
-  .pane { display: flex; flex-direction: column; min-width: 0; }
-  .pane > textarea { flex: 1; }
-  .pane.out { background: var(--surface-2); border-top: 1px solid var(--line); }
-  textarea, .output {
-    width: 100%; border: 0; background: transparent; color: var(--ink); resize: none; outline: none;
-    font-family: var(--font-body); font-size: 22px; line-height: 1.4; letter-spacing: -.01em; padding: 18px 18px 8px; min-height: 128px;
-    white-space: pre-wrap; overflow-wrap: anywhere;
-  }
-  textarea::placeholder { color: var(--muted); opacity: .7; }
-  .output { font-weight: 500; }
-  .output.placeholder { color: var(--muted); font-size: 17px; font-weight: 400; opacity: .8; }
-  .output.busy { color: transparent; position: relative; }
-  .output.busy::after {
-    content: ""; position: absolute; left: 18px; right: 30%; top: 24px; height: 14px; border-radius: 7px;
-    background: linear-gradient(90deg, var(--line) 0%, var(--accent-soft) 50%, var(--line) 100%); background-size: 200% 100%;
-    animation: shimmer 1.1s linear infinite; box-shadow: 0 26px 0 -1px var(--line);
-  }
-  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-  .toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px 12px; flex-wrap: wrap; }
+  .langbar { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; gap: 8px; }
+  .lang { position: relative; }
+  .lang select { width: 100%; appearance: none; -webkit-appearance: none; border: 1.5px solid var(--line); border-radius: 12px; background: var(--snow);
+    padding: 11px 30px 11px 14px; font-weight: 650; font-size: 16px; cursor: pointer; text-overflow: ellipsis; }
+  .lang::after { content: ""; position: absolute; right: 13px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--stone); border-bottom: 2px solid var(--stone);
+    transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+  .lang select:hover { border-color: var(--green); }
+  .swap { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--snow); color: var(--green); cursor: pointer; display: grid; place-items: center; }
+  .swap svg { width: 20px; height: 20px; transition: transform .25s ease; }
+  .swap:hover { border-color: var(--green); background: var(--leaf); }
+  .swap:active svg { transform: rotate(180deg); }
+
+  .work { display: grid; gap: 14px; }
+  .field { border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--snow); overflow: hidden; transition: border-color .15s; }
+  .field:focus-within { border-color: var(--green); }
+  textarea { display: block; width: 100%; border: 0; outline: 0; background: transparent; resize: none; }
+  #input { min-height: 112px; max-height: 46vh; padding: 16px 16px 6px; font-size: 21px; line-height: 1.4; overflow-wrap: anywhere; }
+  #input::placeholder { color: var(--stone); opacity: .75; }
+  .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; }
   .grow { flex: 1; }
-  .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; opacity: .8; }
-  .btn {
-    border: 0; background: transparent; color: var(--muted); border-radius: 999px;
-    font: 500 14px var(--font-body); padding: 8px 12px; cursor: pointer; min-height: 38px; transition: background .15s, color .15s;
-  }
-  .btn:hover { background: var(--accent-soft); color: var(--accent); }
-  .btn.key { font: 700 19px var(--font-body); color: var(--accent); background: var(--accent-soft); min-width: 42px; padding: 4px 12px; }
-  .btn.key:hover { background: var(--accent); color: var(--accent-ink); }
-  .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 15px; padding: 10px 22px; min-height: 42px; margin-left: auto; }
-  .btn.primary:hover { background: var(--accent-hover); color: var(--accent-ink); }
-  .btn.primary:disabled { opacity: .7; }
-  .btn.small { min-height: 34px; padding: 6px 12px; font-size: 14px; }
-  .btn:disabled { opacity: .4; cursor: default; background: transparent; }
-  .btn.primary:disabled { background: var(--accent); color: var(--accent-ink); }
-  #copy:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .count { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; padding-right: 6px; white-space: nowrap; }
+  .count.near { color: var(--amber-ink); font-weight: 600; }
+  .tool { border: 0; background: transparent; color: var(--stone); border-radius: 10px; padding: 8px 10px; min-height: 40px; font-size: 14px; font-weight: 550; cursor: pointer; }
+  .tool:hover { background: var(--leaf); color: var(--green); }
+  .tool.mic { display: inline-flex; align-items: center; gap: 6px; }
+  .tool.mic svg { width: 19px; height: 19px; }
+  .tool.mic.on { background: var(--sun); color: #fff; }
+  .tool.mic.on svg { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .tool.key { min-width: 46px; font-size: 20px; font-weight: 700; color: var(--green); background: var(--leaf); padding: 2px 12px; }
 
-  .unk { background: var(--warn-bg); color: inherit; border-radius: 4px; padding: 0 2px; text-decoration: underline dotted var(--warn-ink); text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
-  .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-  #meta { flex: 1 1 100%; }
-  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
-  .pill.low { background: var(--warn-bg); color: var(--warn-ink); }
-  .pill.ok { background: var(--ok-bg); color: var(--ok-ink); }
-  .pill.pos { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
+  .go-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .go { flex: 1 1 200px; min-height: 52px; border: 0; border-radius: 14px; background: #0a6b3d; color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; transition: background .15s, transform .08s; }
+  .go:hover { background: #07542f; }
+  .go:active { transform: scale(.985); }
+  .go:disabled { opacity: .75; cursor: progress; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--stone); cursor: pointer; user-select: none; min-height: 44px; }
+  .switch input { appearance: none; -webkit-appearance: none; width: 38px; height: 22px; border-radius: 99px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; flex: none; }
+  .switch input::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .switch input:checked { background: var(--green); }
+  .switch input:checked::after { transform: translateX(16px); }
 
-  .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; padding: 0 6px; }
-  .switch input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
-  .base-info { border-top: 1px solid var(--line); padding: 14px 18px 8px; display: grid; gap: 8px; }
-  .base-info[hidden] { display: none; }
-  .base-info h3, .variants h3 { font: 600 11px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 2px 2px 0; }
-  .wlist { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 15px; }
-  .wlist .w { color: var(--muted); }
-  .wlist .none { color: var(--muted); font-style: italic; }
-  .wlist small { color: var(--muted); font-size: 12px; }
-  .sim { border-left: 2px solid var(--line); padding: 2px 0 2px 10px; font-size: 14px; display: grid; gap: 2px; }
-  .sim .t { color: var(--accent); }
+  /* ---------- перевод ---------- */
+  .result { border-radius: var(--radius); background: var(--mist); overflow: hidden; }
+  .trust { display: flex; align-items: flex-start; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; line-height: 1.35; }
+  .trust:empty { display: none; }
+  .trust small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
+  .trust svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+  .trust.ok { background: var(--leaf); color: var(--green-deep); }
+  .trust.native { background: #0a6b3d; color: #fff; }
+  .trust.ai { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
+  .trust.rules { background: var(--leaf); color: var(--green-deep); border-bottom: 1px dashed color-mix(in srgb, var(--green) 45%, transparent); }
+  .output { padding: 16px 16px 10px; font-size: 24px; line-height: 1.38; font-weight: 600; color: var(--green-deep); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .output.placeholder { color: var(--stone); font-size: 16px; font-weight: 400; min-height: 84px; }
+  .output.busy { color: transparent; position: relative; min-height: 84px; }
+  .output.busy::before, .output.busy::after { content: ""; position: absolute; left: 16px; height: 14px; border-radius: 7px;
+    background: linear-gradient(90deg, var(--line) 0%, var(--leaf) 50%, var(--line) 100%); background-size: 200% 100%; animation: shimmer 1.1s linear infinite; }
+  .output.busy::before { top: 24px; right: 22%; }
+  .output.busy::after { top: 50px; right: 46%; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .unk { background: var(--amber-bg); color: var(--amber-ink); border-radius: 4px; padding: 0 2px; text-decoration: underline dotted currentColor; text-underline-offset: 4px; }
+  .status { padding: 0 16px 10px; font-size: 14px; color: var(--stone); }
+  .status:empty { display: none; }
+  .status.error { color: var(--amber-ink); }
+  .status.good { color: var(--green-deep); }
 
-  .variants { padding: 6px 12px 6px; display: grid; gap: 8px; }
-  .variants[hidden] { display: none; }
-  .variant { display: grid; grid-template-columns: 24px 1fr; gap: 2px 10px; align-items: start; width: 100%; text-align: left;
-    background: var(--surface); color: inherit; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
-    font: inherit; cursor: pointer; min-height: 44px; -webkit-tap-highlight-color: transparent; transition: border-color .15s, box-shadow .15s, transform .1s; }
-  @media (hover: hover) { .variant:hover { border-color: var(--accent); } }
-  .variant:active { transform: scale(.99); }
-  .variant:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .variant.best { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-  .variant .mark { grid-row: span 2; width: 22px; height: 22px; margin-top: 2px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    font-weight: 600; font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
-  .variant.best .mark { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 13px; }
-  .variant .vt { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; line-height: 1.35; }
-  .variant .vt small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
-  .variant .vs { font-size: 12px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .variant.best .vs b { color: var(--accent); font-weight: 600; }
-  .variant .copied { color: var(--ok-ink); font-weight: 600; }
-  .details { border-top: 1px solid var(--line); padding: 14px 18px 4px; display: grid; gap: 10px; }
-  .details[hidden], .panel[hidden] { display: none; }
+  .variants { padding: 2px 12px 10px; display: grid; gap: 8px; }
+  .variants h2, .more h2 { margin: 0 4px; font-size: 13px; font-weight: 600; color: var(--stone); }
+  .v-list { display: grid; gap: 8px; }
+  .variant { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; align-items: start; width: 100%; text-align: left; cursor: pointer;
+    background: var(--snow); border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 14px; min-height: 48px; }
+  @media (hover: hover) { .variant:hover { border-color: var(--green); } }
+  .variant .mark { grid-row: span 2; width: 24px; height: 24px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--stone); background: var(--mist); }
+  .variant.best { border-color: var(--green); }
+  .variant.best .mark { background: #0a6b3d; color: #fff; }
+  .variant .vt { font-size: 18px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+  .variant .vt small { font-size: 14px; font-weight: 400; color: var(--stone); margin-left: 6px; }
+  .variant .vs { font-size: 13px; color: var(--stone); }
+  .variant.best .vs b { color: var(--green-deep); font-weight: 650; }
+  .variant .copied { color: var(--green-deep); font-weight: 650; }
+
+  .details { padding: 2px 16px 10px; display: grid; gap: 8px; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--leaf); color: var(--green-deep); }
+  .pill.low { background: var(--amber-bg); color: var(--amber-ink); }
+  .pill.pos { background: transparent; border: 1px solid var(--line); color: var(--stone); font-weight: 400; }
   .alts { display: grid; gap: 6px; }
   .alt { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-  .alt b { font-size: 17px; font-weight: 600; }
-  .alt span { color: var(--muted); font-size: 14px; }
-  .example { border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; font-size: 15px; }
-  .example .t { color: var(--muted); }
-  .note { color: var(--muted); font-size: 14px; margin: 0; }
+  .alt b { font-size: 17px; font-weight: 650; }
+  .alt span { color: var(--stone); font-size: 14px; }
+  .example { border-left: 3px solid var(--green); padding: 2px 0 2px 10px; font-size: 15px; }
+  .example .t { color: var(--stone); }
+  .note { margin: 0; font-size: 14px; color: var(--stone); overflow-wrap: anywhere; }
 
-  .panel { border-top: 1px solid var(--line); padding: 16px 18px 18px; display: grid; gap: 10px; background: var(--surface); }
-  .panel h2 { font: 600 15px var(--font-body); margin: 0; }
-  .panel p { margin: 0; color: var(--muted); font-size: 14px; }
-  .panel textarea { border: 1px solid var(--line); border-radius: 12px; min-height: 90px; font-size: 19px; padding: 10px 12px; background: var(--surface-2); }
-  .panel textarea:focus, .panel input:focus { border-color: var(--accent); }
-  .panel input { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font: 16px var(--font-body); background: var(--surface-2); color: var(--ink); outline: none; }
-  .panel .btn { border: 1px solid var(--line); color: var(--ink); }
-  .panel .btn.primary { border-color: var(--accent); color: var(--accent-ink); }
-  .cmp { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface-2); }
-  .cmp .by { font-size: 12px; color: var(--muted); }
+  .acts { display: flex; gap: 8px; padding: 6px 12px 14px; flex-wrap: wrap; }
+  .act { border: 1.5px solid var(--line); background: var(--snow); border-radius: 12px; padding: 9px 12px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .acts .act { flex: 1 1 0; padding: 9px 6px; }
+  .acts.four { display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 400px) { .acts .act { font-size: 14px; } }
+  .act:hover { border-color: var(--green); color: var(--green-deep); }
+  .act.main { background: #0a6b3d; border-color: #0a6b3d; color: #fff; }
+  .act.main:hover { background: #07542f; color: #fff; }
+  .act:disabled { opacity: .45; cursor: default; }
+  .acts[hidden] { display: none; }
+
+  .more { border-top: 1px solid var(--line); padding: 4px 16px 6px; }
+  .more > summary { cursor: pointer; padding: 10px 0; font-size: 15px; font-weight: 600; color: var(--green-deep); list-style: none; display: flex; align-items: center; gap: 8px; }
+  .more > summary::-webkit-details-marker { display: none; }
+  .more > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+  .more[open] > summary::before { transform: rotate(45deg); }
+  .more h2 { margin: 6px 0 6px; }
+  .wlist { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 6px 14px; font-size: 15px; margin-bottom: 10px; }
+  .wlist .w { color: var(--stone); overflow-wrap: anywhere; }
+  .wlist .w small { display: block; font-size: 12px; }
+  .wlist .t { font-weight: 600; overflow-wrap: anywhere; }
+  .wlist .t small { font-weight: 400; color: var(--stone); font-size: 12px; margin-left: 6px; }
+  .wlist .none { color: var(--stone); font-style: italic; font-weight: 400; }
+  .sims { display: grid; gap: 8px; margin-bottom: 10px; }
+  .sim { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; font-size: 15px; }
+  .sim .t { color: var(--green-deep); font-weight: 600; }
+
+  .panel { border-top: 1px solid var(--line); padding: 14px 16px 16px; display: grid; gap: 10px; background: var(--snow); }
+  .panel h2 { margin: 0; font-size: 16px; }
+  .panel p { margin: 0; font-size: 14px; color: var(--stone); }
+  .panel textarea { border: 1.5px solid var(--line); border-radius: 12px; min-height: 92px; padding: 10px 12px; font-size: 19px; background: var(--mist); }
+  .panel textarea:focus, .panel input:focus { border-color: var(--green); }
+  .panel input { border: 1.5px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--mist); outline: 0; }
+  .cmp { border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 12px; display: grid; gap: 6px; background: var(--mist); }
+  .cmp .by { font-size: 12px; color: var(--stone); }
   .cmp .txt { font-size: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .cmp .err { color: var(--warn-ink); font-size: 14px; }
+  .cmp .err, p.err { color: var(--amber-ink); font-size: 14px; }
+  .meta { color: var(--stone); font-size: 13px; }
 
-  .status { font-size: 14px; color: var(--muted); padding: 0 18px 12px; }
-  .status.error { color: var(--warn-ink); }
-  .status.good { color: var(--ok-ink); }
-  .status:empty { display: none; }
-
-  .section-title { font: 600 11px var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 4px 4px -8px; }
+  /* ---------- под переводчиком ---------- */
+  .block h2 { margin: 0 0 8px; font-size: 15px; font-weight: 650; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip {
-    border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px;
-    padding: 8px 14px; font: 14px var(--font-body); cursor: pointer; transition: border-color .15s, color .15s, background .15s;
-  }
-  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chip { border: 1.5px solid var(--line); background: var(--snow); border-radius: 99px; padding: 8px 14px; font-size: 15px; cursor: pointer; text-align: left; }
+  .chip:hover { border-color: var(--green); color: var(--green-deep); background: var(--leaf); }
   .history { display: grid; gap: 8px; }
-  .h-item {
-    text-align: left; width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-    border-radius: 14px; padding: 12px 14px; cursor: pointer; font: 15px var(--font-body); display: grid; gap: 2px; transition: border-color .15s;
-  }
-  .h-item:hover { border-color: var(--accent); }
-  .h-item small { color: var(--muted); font-size: 12px; }
-  .h-item .h-out { color: var(--accent); overflow-wrap: anywhere; font-weight: 500; }
-  .about { color: var(--muted); font-size: 13px; margin: 8px 2px 0; border-top: 1px solid var(--line); padding-top: 16px; }
-  .about summary { cursor: pointer; font-weight: 500; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
-  .about summary::-webkit-details-marker { display: none; }
-  .about summary::after { content: "›"; transition: transform .15s; font-size: 16px; }
-  .about[open] summary::after { transform: rotate(90deg); }
-  .fineprint { color: var(--muted); font-size: 13px; max-width: 65ch; margin: 10px 0 0; }
-  .footer-links { display: flex; gap: 16px; margin: -12px 2px 0; font-size: 14px; }
-  .footer-links a { color: var(--accent); text-decoration: none; font-weight: 500; }
-  .footer-links a:hover { text-decoration: underline; }
+  .h-item { text-align: left; width: 100%; border: 1.5px solid var(--line); background: var(--snow); border-radius: 14px; padding: 10px 14px; cursor: pointer; display: grid; gap: 1px; font-size: 15px; }
+  .h-item:hover { border-color: var(--green); }
+  .h-item small { color: var(--stone); font-size: 12px; }
+  .h-item .h-out { color: var(--green-deep); font-weight: 600; overflow-wrap: anywhere; }
+  .about > summary { cursor: pointer; font-weight: 650; font-size: 15px; }
+  .about p { margin: 8px 0 0; max-width: 68ch; color: var(--stone); font-size: 14px; }
+  .about a { color: var(--green-deep); }
 
-  @media (min-width: 800px) {
-    .wrap { padding-top: 28px; gap: 24px; }
-    h1 { font-size: 21px; }
-    .panes { grid-template-columns: 1fr 1fr; }
-    .pane.out { border-top: 0; border-left: 1px solid var(--line); }
-    textarea, .output { min-height: 200px; font-size: 24px; }
-    .output:not(.placeholder) { min-height: 120px; }
-  }
-  /* ===== Зелёная тема: зелёный фон страницы, белая карточка переводчика на нём ===== */
-  :root {
-    --g1: #064d31; --g2: #0b6b45; --g3: #12a36a;
-    --accent: #0b7a4d; --accent-hover: #086a41; --accent-soft: #e3f5eb; --surface-2: #f0faf4; --line: #d3ebdd;
-    --on-g: #ffffff; --on-g-muted: rgba(255,255,255,.78); --on-g-line: rgba(255,255,255,.22); --on-g-fill: rgba(255,255,255,.12);
-    --best-bg: linear-gradient(135deg, #0b6b45, #12a36a); --best-ink: #ffffff;
-    --shadow: 0 2px 6px rgba(2, 40, 24, .12), 0 24px 60px rgba(2, 40, 24, .28);
-  }
-  :root[data-theme="dark"] { --g1: #020d08; --g2: #062a1b; --g3: #0b4a30; --surface-2: #10261d; --line: #1f3d30; --accent-soft: #143b2b;
-    --best-bg: linear-gradient(135deg, #0f7a4f, #18a86f); --best-ink: #ffffff; --shadow: 0 2px 6px rgba(0,0,0,.4), 0 24px 60px rgba(0,0,0,.45); --surface: #0d1e17; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --g1: #020d08; --g2: #062a1b; --g3: #0b4a30; --surface-2: #10261d; --line: #1f3d30; --accent-soft: #143b2b;
-      --best-bg: linear-gradient(135deg, #0f7a4f, #18a86f); --best-ink: #ffffff; --shadow: 0 2px 6px rgba(0,0,0,.4), 0 24px 60px rgba(0,0,0,.45); --surface: #0d1e17; }
-  }
-  html { background: var(--g1); }
-  body { min-height: 100vh; background: radial-gradient(1200px 600px at 85% -10%, rgba(255,255,255,.14), transparent 60%),
-    linear-gradient(165deg, var(--g1) 0%, var(--g2) 45%, var(--g3) 100%); }
-  header { padding: 10px 2px 4px; color: var(--on-g); }
-  .logo { background: #ffffff; color: var(--g2); box-shadow: 0 6px 18px rgba(0,0,0,.18); width: 42px; height: 42px; border-radius: 13px; font-size: 23px; }
-  h1 { color: var(--on-g); font-size: 21px; }
-  .tagline { color: var(--on-g-muted); }
+  /* ---------- нижняя полоса ---------- */
+  .bottom .band-in { padding-top: 16px; padding-bottom: calc(18px + env(safe-area-inset-bottom)); font-size: 13px; color: var(--on-green-soft); display: grid; gap: 6px; }
+  .bottom a { color: #fff; text-underline-offset: 3px; }
+  .bottom p { margin: 0; max-width: 72ch; }
 
-  .card { border: 0; box-shadow: var(--shadow); border-radius: 24px; }
-  .langbar { background: var(--accent-soft); border-bottom: 0; padding: 8px; }
-  select { color: var(--accent); font-weight: 700; }
-  select:hover, select:focus-visible { background: rgba(255,255,255,.6); }
-  .icon-btn { background: var(--best-bg); color: #fff; box-shadow: 0 4px 12px rgba(11,107,69,.35); }
-  .icon-btn:hover { background: var(--accent-hover); color: #fff; }
-  .pane.out { background: var(--surface-2); border-color: var(--line); }
-  .output { color: var(--accent); font-weight: 600; }
-  .output.placeholder { color: var(--muted); font-weight: 400; }
-  .btn.primary { color: #fff; background: var(--best-bg); box-shadow: 0 6px 16px rgba(11,107,69,.35); padding: 11px 26px; }
-  .btn.primary:hover { background: var(--accent-hover); }
-  .btn.primary:disabled { background: var(--best-bg); }
-  .btn.key { background: var(--accent); color: #fff; }
-  #copy:not(:disabled) { background: var(--accent); color: #fff; }
-
-  .variants h3 { color: var(--accent); }
-  .variant { background: var(--surface); border: 1px solid var(--line); }
-  .variant .mark { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-  .variant.best { background: var(--best-bg); border-color: transparent; box-shadow: 0 8px 20px rgba(11,107,69,.3); color: var(--best-ink); }
-  .variant.best .mark { background: #ffffff; color: var(--g2); }
-  .variant.best .vt small, .variant.best .vs { color: rgba(255,255,255,.85); }
-  .variant.best .vs b, .variant.best .copied { color: #ffffff; }
-
-  .section-title { color: var(--on-g-muted); }
-  .chip { background: var(--on-g-fill); border-color: var(--on-g-line); color: var(--on-g); backdrop-filter: blur(6px); }
-  .chip:hover { background: #ffffff; color: var(--g2); border-color: #ffffff; }
-  .h-item { background: var(--on-g-fill); border-color: var(--on-g-line); color: var(--on-g); backdrop-filter: blur(6px); }
-  .h-item:hover { border-color: #ffffff; }
-  .h-item small { color: var(--on-g-muted); }
-  .h-item .h-out { color: #c8f7de; }
-  .about { color: var(--on-g-muted); border-top-color: var(--on-g-line); }
-  .fineprint { color: var(--on-g-muted); }
-  .footer-links a { color: #ffffff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.4); }
-  .site-footer { color: var(--on-g-muted); font-size: 12px; text-align: center; padding: 8px 0 0; }
+  @media (min-width: 820px) {
+    main { padding-top: 22px; gap: 26px; }
+    .work { grid-template-columns: 1fr 1fr; align-items: start; gap: 18px; }
+    .left { display: grid; gap: 14px; }
+    #input { min-height: 190px; font-size: 23px; }
+    .output { font-size: 26px; }
+    .output.placeholder, .output.busy { min-height: 150px; }
+    .langbar { max-width: 520px; }
+  }
+  @media (max-width: 819px) { .left { display: contents; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="logo" aria-hidden="true">Ӏ</div>
+<header class="band top">
+  <div class="band-in">
+    <div class="sign" aria-hidden="true">
+      <!-- солнечный знак с флага Ингушетии -->
+      <svg viewBox="0 0 48 48" fill="none" stroke="#d3212c" stroke-width="3.6" stroke-linecap="round">
+        <circle cx="24" cy="24" r="7.6"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(120 24 24)"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(240 24 24)"/>
+      </svg>
+    </div>
     <div>
       <h1>Ингушский переводчик</h1>
-      <div class="tagline">ГӀалгӀай мотт · слова, фразы и целые тексты</div>
+      <p class="sub">ГӀалгӀай мотт: слова, фразы и целые тексты</p>
     </div>
-  </header>
+  </div>
+</header>
 
-  <main class="card">
-    <div class="langbar">
-      <select id="src" aria-label="С какого языка"></select>
-      <button class="icon-btn" id="swap" type="button" aria-label="Поменять языки" title="Поменять языки">⇄</button>
-      <select id="tgt" aria-label="На какой язык"></select>
-    </div>
-    <div class="panes">
-      <div class="pane">
-        <textarea id="input" dir="auto" maxlength="3000" placeholder="Введите текст">Доброе утро! Как у тебя дела?</textarea>
-        <div class="toolbar">
-          <button class="btn key" id="key" type="button" title="Вставить букву Ӏ">Ӏ</button>
-          <button class="btn" id="clear" type="button">Очистить</button>
-          <label class="switch" title="Отвечать только из базы: проверенные фразы, словарь и настоящие тексты"><input type="checkbox" id="noai"> Без ИИ</label>
+<main>
+  <div class="work">
+    <div class="left">
+      <div class="langbar">
+        <label class="lang"><select id="src" aria-label="С какого языка"></select></label>
+        <button class="swap" id="swap" type="button" aria-label="Поменять языки местами" title="Поменять языки местами">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+        </button>
+        <label class="lang"><select id="tgt" aria-label="На какой язык"></select></label>
+      </div>
+
+      <div class="field">
+        <textarea id="input" dir="auto" maxlength="3000" placeholder="Введите слово или текст" aria-label="Текст для перевода">Доброе утро! Как у тебя дела?</textarea>
+        <div class="tools">
+          <button class="tool key" id="key" type="button" title="Вставить букву Ӏ" aria-label="Вставить букву Ӏ (палочка)">Ӏ</button>
+          <button class="tool mic" id="mic" type="button" hidden aria-label="Сказать голосом" title="Сказать голосом">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+            <span id="mic-label">Голосом</span>
+          </button>
+          <button class="tool" id="paste" type="button" hidden>Вставить</button>
+          <button class="tool" id="clear" type="button">Очистить</button>
           <span class="grow"></span>
           <span class="count" id="count">0 / 3000</span>
-          <button class="btn primary" id="go" type="button">Перевести</button>
         </div>
       </div>
-      <div class="pane out">
-        <div class="output placeholder" id="output" dir="auto" aria-live="polite">Нажмите «Перевести»</div>
-        <div class="variants" id="variants" hidden aria-label="Варианты перевода">
-          <h3 id="v-title">Варианты</h3>
-          <div id="v-list" style="display:grid;gap:6px"></div>
-        </div>
-        <div class="details" id="details" hidden>
-          <div class="row" id="d-tags"></div>
-          <div class="alts" id="d-alts"></div>
-          <div class="example" id="d-example" hidden><div id="d-ex-s"></div><div class="t" id="d-ex-t"></div></div>
-          <p class="note" id="d-note" hidden></p>
-        </div>
-        <div class="base-info" id="base-info" hidden>
-          <h3 id="w-title">Слова по базе</h3>
-          <div class="wlist" id="w-list"></div>
-          <h3 id="s-title">Похожие фразы из базы и настоящих текстов</h3>
-          <div id="s-list" style="display:grid;gap:8px"></div>
-        </div>
-        <div class="toolbar">
-          <span class="grow meta" id="meta"></span>
-          <button class="btn small" id="compare" type="button" disabled>Сравнить ИИ</button>
-          <button class="btn small" id="fix" type="button" disabled>Исправить</button>
-          <button class="btn small" id="copy" type="button" disabled>Копировать</button>
-        </div>
-        <div class="status" id="status"></div>
 
-        <section class="panel" id="fix-panel" hidden aria-labelledby="fix-title">
-          <h2 id="fix-title">Правильный перевод</h2>
-          <p>Исправьте текст так, как сказал бы носитель языка. Эта фраза потом всегда будет переводиться так, а ИИ будет учиться на ней.</p>
-          <textarea id="fix-text" dir="auto"></textarea>
-          <div class="row" id="code-row" hidden>
-            <label for="fix-code" class="meta">Код редактора</label>
-            <input id="fix-code" type="password" autocomplete="off">
-          </div>
-          <div class="row">
-            <button class="btn primary small" id="fix-save" type="button">Сохранить</button>
-            <button class="btn small" id="fix-cancel" type="button">Отмена</button>
-          </div>
-        </section>
-
-        <section class="panel" id="cmp-panel" hidden aria-labelledby="cmp-title">
-          <h2 id="cmp-title">Как переводят разные ИИ</h2>
-          <p>Выберите лучший вариант: его можно сразу сохранить как правильный или сначала поправить. У платных моделей рядом написана примерная цена одного перевода.</p>
-          <div class="alts" id="cmp-list"></div>
-          <div class="row"><button class="btn small" id="cmp-close" type="button">Закрыть</button></div>
-        </section>
+      <div class="go-row">
+        <button class="go" id="go" type="button">Перевести</button>
+        <label class="switch" title="Отвечать без ИИ: проверенные фразы, словари, настоящие тексты и правила грамматики"><input type="checkbox" id="noai"> Без ИИ: база и правила</label>
       </div>
     </div>
-  </main>
 
-  <div class="section-title" id="ex-title">Попробуйте</div>
-  <div class="chips" id="examples"></div>
+    <section class="result" aria-label="Перевод">
+      <div class="trust" id="meta"></div>
+      <div class="output placeholder" id="output" dir="auto" aria-live="polite">Перевод появится здесь</div>
+      <div class="status" id="status"></div>
 
-  <div class="section-title" id="h-title" hidden>Недавние</div>
-  <div class="history" id="history"></div>
+      <div class="variants" id="variants" hidden>
+        <h2 id="v-title">Варианты</h2>
+        <div class="v-list" id="v-list"></div>
+      </div>
+      <div class="details" id="details" hidden>
+        <div class="row" id="d-tags"></div>
+        <div class="alts" id="d-alts"></div>
+        <div class="example" id="d-example" hidden><div id="d-ex-s"></div><div class="t" id="d-ex-t"></div></div>
+        <p class="note" id="d-note" hidden></p>
+      </div>
+
+      <div class="acts" id="acts" hidden>
+        <button class="act main" id="copy" type="button" disabled>Копировать</button>
+        <button class="act" id="fix" type="button" disabled>Исправить</button>
+        <button class="act" id="compare" type="button" disabled>Сравнить ИИ</button>
+        <button class="act" id="share" type="button" hidden disabled>Поделиться</button>
+      </div>
+
+      <details class="more" id="base-info" hidden>
+        <summary id="more-title">Разбор по словам</summary>
+        <h2 id="w-title">Что база знает про каждое слово</h2>
+        <div class="wlist" id="w-list"></div>
+        <h2 id="s-title">Похожие фразы из базы</h2>
+        <div class="sims" id="s-list"></div>
+      </details>
+
+      <section class="panel" id="fix-panel" hidden aria-labelledby="fix-title">
+        <h2 id="fix-title">Как правильно</h2>
+        <p>Напишите перевод так, как сказал бы носитель языка. Эта фраза дальше всегда будет переводиться так, а ИИ будет учиться на ней.</p>
+        <textarea id="fix-text" dir="auto"></textarea>
+        <div class="row" id="code-row" hidden>
+          <label for="fix-code" class="meta">Код редактора</label>
+          <input id="fix-code" type="password" autocomplete="off">
+        </div>
+        <div class="row">
+          <button class="act main" id="fix-save" type="button">Сохранить</button>
+          <button class="act" id="fix-key" type="button" aria-label="Вставить букву Ӏ">Ӏ</button>
+          <button class="act" id="fix-cancel" type="button">Отмена</button>
+        </div>
+      </section>
+
+      <section class="panel" id="cmp-panel" hidden aria-labelledby="cmp-title">
+        <h2 id="cmp-title">Как переводят разные ИИ</h2>
+        <p>Выберите лучший вариант: его можно сохранить как правильный или сначала поправить. У платных моделей рядом написана примерная цена одного перевода.</p>
+        <div class="alts" id="cmp-list"></div>
+        <div class="row"><button class="act" id="cmp-close" type="button">Закрыть</button></div>
+      </section>
+    </section>
+  </div>
+
+  <section class="block" id="ex-block">
+    <h2>Попробуйте</h2>
+    <div class="chips" id="examples"></div>
+  </section>
+
+  <section class="block" id="h-block" hidden>
+    <h2>Недавние переводы</h2>
+    <div class="history" id="history"></div>
+  </section>
 
   <details class="about">
     <summary>Как работает переводчик</summary>
-    <p class="fineprint">
-    Сначала переводчик ищет ответ в базе: проверенные фразы, словарь и слова из настоящих ингушских текстов. Такой ответ помечен зелёной меткой «Из базы».
-    Если в базе ответа нет, переводит ИИ (жёлтая метка «Перевод ИИ, может быть с ошибками»): он может ошибаться, поэтому важное лучше проверить у носителя языка. Галочка «Без ИИ» оставляет только базу.
-    Подчёркнутых слов нет в ингушских книгах и газетах. Метка «Проверено носителем языка» значит, что этот перевод сохранил человек.
-    Вместо Ӏ можно писать 1 или I: буква исправится сама.
-    </p>
+    <p>Сначала ответ ищется в базе: фразы, проверенные носителями языка, словари и слова из настоящих ингушских текстов. Такой перевод помечен зелёным, и рядом написано, откуда он.</p>
+    <p>Если готового ответа нет, переводчик пробует собрать предложение сам, по <a href="/rules">правилам грамматики</a>: «Это моя мать», «Где магазин?», «У меня есть машина», «Я тебя люблю». Слова берутся из словаря, грамматика — из справочника, без ИИ.</p>
+    <p>Если и правила не подходят, переводит ИИ. Такой перевод помечен жёлтым: ИИ может ошибаться, поэтому важное проверьте у носителя языка. Подчёркнутых слов нет в ингушских книгах и газетах. Переключатель «Без ИИ» оставляет только базу и правила.</p>
+    <p>Кнопка «Исправить» сохраняет правильный перевод: дальше эта фраза всегда переводится так. Вместо Ӏ можно писать 1 или I, буква исправится сама.</p>
   </details>
-  <nav class="footer-links"><a href="/review">Проверка переводов (для редакторов)</a></nav>
-  <footer class="site-footer">ГӀалгӀай мотт · ингушский переводчик</footer>
-</div>
+</main>
+
+<footer class="band bottom">
+  <div class="band-in">
+    <p>Данные: словарь <a href="https://paydadosh.ru" target="_blank" rel="noopener">PaydaDosh</a> (с разрешения владельцев), Викисловарь, PanLex, ингушская Википедия и тексты на ингушском языке.</p>
+    <p><a href="/rules">Правила перевода без ИИ</a></p>
+    <p><a href="/review">Проверка переводов для носителей языка</a></p>
+  </div>
+</footer>
 
 <script>
 const LANGS = {
-  inh: { label: "ГӀалгӀай" }, ru: { label: "Русский" }, en: { label: "English" }, ce: { label: "Нохчийн" },
+  inh: { label: "Ингушский" }, ru: { label: "Русский" }, en: { label: "English" }, ce: { label: "Нохчийн" },
   kk: { label: "Қазақша" }, tr: { label: "Türkçe" }, ar: { label: "العربية" }, de: { label: "Deutsch" }, fr: { label: "Français" }
 };
 const EXAMPLES = {
-  ru: ["Доброе утро! Как у тебя дела?", "Спасибо большое", "Я живу в Алматы, но родом из Ингушетии.", "мама", "Где находится мечеть?"],
-  en: ["Good morning! How are you?", "Thank you very much", "My family is from Ingushetia.", "mother", "Where is the mosque?"]
+  ru: ["Доброе утро! Как у тебя дела?", "Я люблю свою маму", "Это мой дом", "Где магазин?", "У меня есть машина", "маму"],
+  inh: ["Сона хьо веза", "ЦӀи фу я хьа?", "Баркал", "нана"],
+  en: ["Good morning! How are you?", "Thank you very much", "My family is from Ingushetia.", "mother"]
 };
 const MAX = 3000;
 const $ = (id) => document.getElementById(id);
@@ -394,6 +388,7 @@ function fixPalochka(s) {
   if (!s) return s;
   return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 }
+function insertAt(t, ch) { t.setRangeText(ch, t.selectionStart, t.selectionEnd, "end"); t.focus(); }
 
 /* ---------- языки ---------- */
 for (const sel of [els.src, els.tgt])
@@ -426,12 +421,23 @@ $("swap").addEventListener("click", () => {
 
 /* ---------- интерфейс ---------- */
 let lastResult = "", lastInput = "", lastPair = null;
+function grow() { // поле растёт вместе с текстом
+  els.input.style.height = "auto";
+  els.input.style.height = Math.min(els.input.scrollHeight + 2, Math.round(window.innerHeight * 0.46)) + "px";
+}
 function refresh() {
-  els.count.textContent = `${els.input.value.length} / ${MAX}`;
-  els.key.style.display = els.src.value === "inh" ? "" : "none";
+  // счётчик нужен, только когда текст подходит к пределу: на узком экране он мешает кнопкам
+  const n = els.input.value.length;
+  els.count.textContent = `${n} / ${MAX}`;
+  els.count.hidden = n < MAX * 0.8;
+  els.count.classList.toggle("near", n >= MAX * 0.95);
+  els.key.hidden = els.src.value !== "inh";
+  micVisible();
+  $("clear").hidden = !els.input.value;
+  grow();
   const ex = $("examples"); ex.innerHTML = "";
   const list = EXAMPLES[els.src.value] || [];
-  $("ex-title").hidden = !list.length;
+  $("ex-block").hidden = !list.length;
   for (const t of list) {
     const b = document.createElement("button");
     b.className = "chip"; b.type = "button"; b.textContent = t;
@@ -439,12 +445,13 @@ function refresh() {
     ex.appendChild(b);
   }
 }
-function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = !on; }
+function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = $("share").disabled = !on; $("acts").hidden = !on; }
 function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = true; }
-function resetOutput(msg = "Нажмите «Перевести»") {
+function hideExtras() { els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; }
+function resetOutput(msg = "Перевод появится здесь") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
-  els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); els.meta.textContent = ""; closePanels();
+  hideExtras(); setButtons(false); setStatus(""); setMeta(""); closePanels();
 }
 function setStatus(msg, kind = "") {
   els.status.textContent = msg;
@@ -465,28 +472,43 @@ function markInto(node, text, unknown) {
     } else if (part) node.appendChild(document.createTextNode(part));
   }
 }
-// kind: "ok" — проверено или из базы (зелёная метка), "ai" — перевёл ИИ (жёлтая), иначе просто текст
+// Полоса над переводом: откуда он и насколько ему можно верить.
+// kind: "native" — проверено носителем, "ok" — из базы, "ai" — перевёл ИИ.
+const ICON = {
+  rules: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h9M3.5 14.5h11"/></svg>',
+  ok: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg>',
+  ai: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 3.2l7.3 12.9H2.7z" stroke-linejoin="round"/><path d="M10 8.2v3.6M10 14.2v.1"/></svg>'
+};
 function setMeta(text, kind) {
-  els.meta.textContent = "";
-  if (kind === true || kind === "ok") {
-    const p = document.createElement("span"); p.className = "pill ok"; p.textContent = "✓ " + text;
-    els.meta.appendChild(p);
-  } else if (kind === "ai") {
-    const p = document.createElement("span"); p.className = "pill low"; p.textContent = "Перевод ИИ, может быть с ошибками";
-    els.meta.append(p, document.createTextNode(" " + (text || "")));
-  } else els.meta.textContent = text || "";
+  els.meta.textContent = ""; els.meta.className = "trust";
+  if (!text && !kind) return;
+  if (kind === true) kind = "ok";
+  const body = document.createElement("span");
+  if (kind === "ai") {
+    body.textContent = "Перевёл ИИ: возможны ошибки, важное проверьте у носителя языка";
+    if (text) { const s = document.createElement("small"); s.textContent = text; body.appendChild(s); }
+  } else if (kind === "rules") {
+    body.textContent = text || "Без ИИ: по правилам грамматики";
+    const s = document.createElement("small"); s.textContent = "Слова из словаря, грамматика из справочника. Проверьте у носителя языка"; body.appendChild(s);
+  } else body.textContent = text;
+  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules") {
+    els.meta.classList.add(kind);
+    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" ? "ai" : kind === "rules" ? "rules" : "ok"]);
+  }
+  els.meta.appendChild(body);
 }
-// Что база знает про слова текста и похожие предложения из настоящих текстов.
-function renderBase(words, similar, fixT) {
-  const wl = $("w-list"), sl = $("s-list");
+// Что база знает про слова текста и похожие фразы. open — раскрыть сразу (когда целого перевода нет).
+function renderBase(words, similar, fixT, open = false) {
+  const wl = $("w-list"), sl = $("s-list"), src = els.src.value;
   wl.innerHTML = ""; sl.innerHTML = "";
   for (const w of words || []) {
     const a = document.createElement("div"); a.className = "w"; a.textContent = w.word;
-    const b = document.createElement("div");
+    if (w.lemma) { const l = document.createElement("small"); l.textContent = "от «" + w.lemma + "»"; a.appendChild(l); }
+    const b = document.createElement("div"); b.className = "t";
     if (w.text) {
-      b.textContent = fixT(w.text) + " ";
+      b.textContent = src === "inh" ? w.text : fixT(w.text);
       const from = document.createElement("small"); from.textContent = w.from; b.appendChild(from);
-    } else { b.className = "none"; b.textContent = "нет в базе"; }
+    } else { b.className = "t none"; b.textContent = "нет в базе"; }
     wl.append(a, b);
   }
   for (const [from, to] of similar || []) {
@@ -495,23 +517,89 @@ function renderBase(words, similar, fixT) {
     const b = document.createElement("div"); b.className = "t"; b.textContent = to;
     d.append(a, b); sl.appendChild(d);
   }
-  $("w-title").hidden = !wl.children.length; $("s-title").hidden = !sl.children.length;
-  $("base-info").hidden = !(wl.children.length || sl.children.length);
+  const hasW = wl.children.length > 0, hasS = sl.children.length > 0;
+  $("w-title").hidden = !hasW; wl.hidden = !hasW; $("s-title").hidden = !hasS; sl.hidden = !hasS;
+  $("more-title").textContent = hasW && hasS ? "Разбор по словам и похожие фразы" : hasW ? "Разбор по словам" : "Похожие фразы из базы";
+  $("base-info").hidden = !(hasW || hasS);
+  $("base-info").open = open;
 }
 const noAi = $("noai");
 try { noAi.checked = localStorage.getItem("inh-tr-noai") === "1"; } catch (e) {}
 noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai", noAi.checked ? "1" : "0"); } catch (e) {} });
 
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
-els.key.addEventListener("click", () => {
-  els.input.setRangeText("Ӏ", els.input.selectionStart, els.input.selectionEnd, "end");
-  els.input.focus(); refresh();
-});
+els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
+$("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
 els.input.addEventListener("input", refresh);
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
+window.addEventListener("resize", grow);
+if (navigator.clipboard && navigator.clipboard.readText) {
+  $("paste").hidden = false;
+  $("paste").addEventListener("click", async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (t) { els.input.value = t.slice(0, MAX); refresh(); els.input.focus(); }
+    } catch (e) { $("paste").hidden = true; } // браузер не разрешил — убираем кнопку
+  });
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    // запасной способ для старых телефонов
+    try {
+      const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok;
+    } catch (e2) { return false; }
+  }
+}
+/* ---------- поделиться (на телефоне — WhatsApp, Telegram и т.д.) ---------- */
+if (navigator.share) {
+  $("share").hidden = false;
+  $("acts").classList.add("four");
+  $("share").addEventListener("click", async () => {
+    if (!lastResult) return;
+    try { await navigator.share({ text: `${lastInput}\n${lastResult}` }); } catch (e) {} // окно закрыли — ничего не делаем
+  });
+}
+
+/* ---------- голосовой ввод ----------
+   Распознавание речи встроено в браузер (на iPhone — то же, что диктовка). Ингушский и чеченский телефоны
+   пока не распознают, поэтому для них кнопки нет. Сказанный текст сразу переводится. */
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SPEECH_LANG = { ru: "ru-RU", en: "en-US", kk: "kk-KZ", tr: "tr-TR", ar: "ar-SA", de: "de-DE", fr: "fr-FR" };
+let rec = null;
+function micVisible() { $("mic").hidden = !SPEECH || !SPEECH_LANG[els.src.value]; }
+function stopMic() { if (rec) { try { rec.stop(); } catch (e) {} } }
+if (SPEECH) {
+  $("mic").addEventListener("click", () => {
+    if (rec) { stopMic(); return; }
+    rec = new SPEECH();
+    rec.lang = SPEECH_LANG[els.src.value] || "ru-RU";
+    rec.interimResults = true;
+    rec.continuous = false;
+    const before = els.input.value.trim();
+    let heard = "";
+    $("mic").classList.add("on"); $("mic-label").textContent = "Слушаю…";
+    rec.onresult = (e) => {
+      heard = [...e.results].map((r) => r[0].transcript).join(" ").trim();
+      els.input.value = (before ? before + " " : "") + heard;
+      refresh();
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") setStatus("Разрешите сайту доступ к микрофону в настройках браузера.", "error");
+      else if (e.error === "no-speech") setStatus("Ничего не услышал. Нажмите «Голосом» и говорите сразу.", "error");
+    };
+    rec.onend = () => {
+      rec = null;
+      $("mic").classList.remove("on"); $("mic-label").textContent = "Голосом";
+      if (heard) translate();
+    };
+    try { rec.start(); } catch (e) { rec = null; $("mic").classList.remove("on"); $("mic-label").textContent = "Голосом"; }
+  });
+}
+
 els.copy.addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(lastResult); els.copy.textContent = "Скопировано"; }
-  catch (e) { els.copy.textContent = "Не вышло"; }
+  els.copy.textContent = (await copyText(lastResult)) ? "Скопировано" : "Не вышло скопировать";
   setTimeout(() => { els.copy.textContent = "Копировать"; }, 1500);
 });
 
@@ -529,14 +617,14 @@ async function api(payload, signal) {
   return data;
 }
 function showError(e) {
-  if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и попробуйте снова." + (e.detail ? " (" + e.detail + ")" : ""), "error"); }
-  else if (e.name === "TypeError") { resetOutput("Нет связи."); setStatus("Проверьте интернет и попробуйте снова.", "error"); }
+  if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и нажмите «Перевести» ещё раз." + (e.detail ? " (" + e.detail + ")" : ""), "error"); }
+  else if (e.name === "TypeError") { resetOutput("Нет связи с сервером."); setStatus("Проверьте интернет и нажмите «Перевести» ещё раз.", "error"); }
   else if ([502, 503, 504].includes(e.status)) {
-    resetOutput("Переводчик сейчас занят.");
+    resetOutput("ИИ сейчас не отвечает.");
     // в скобках — какие ИИ не ответили и почему: это помогает понять, что чинить
-    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Попробуйте через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : ""), "error");
+    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Нажмите «Перевести» ещё раз через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : "") + " База и правила работают и без ИИ: включите «Без ИИ».", "error");
   }
-  else { resetOutput("Что-то пошло не так."); setStatus(e.message || "Попробуйте ещё раз.", "error"); }
+  else { resetOutput("Перевод не получился."); setStatus(e.message || "Нажмите «Перевести» ещё раз.", "error"); }
 }
 
 function readInput() {
@@ -553,12 +641,15 @@ async function translate() {
   if (busy) return;
   const src = els.src.value, tgt = els.tgt.value;
   const text = readInput();
-  if (!text) { resetOutput("Введите текст для перевода"); return; }
+  if (!text) { resetOutput("Сначала введите слово или текст"); els.input.focus(); return; }
 
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
-  els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; setButtons(false); setStatus(""); closePanels(); els.meta.textContent = "";
+  hideExtras(); setButtons(false); setStatus(""); closePanels(); setMeta("");
   els.output.classList.add("busy"); showText("…");
+  const my = ++reqId;
   controller = new AbortController();
+  // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
+  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("В базе и правилах этого нет, переводит ИИ. Обычно это несколько секунд."); }, 1200);
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
@@ -567,23 +658,23 @@ async function translate() {
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
     if (data.noAi) {
-      // режим «Без ИИ», а готового ответа в базе нет: показываем то, что база знает
+      // режим «только база», а готового ответа в базе нет: показываем то, что база знает
       lastResult = "";
-      resetOutput(data.supported ? "Целого перевода в базе нет." : "База есть только для пары русский ↔ ингушский.");
-      renderBase(data.words, data.similar, fixT);
+      resetOutput(data.supported ? "Целого перевода в базе пока нет." : "База есть только для пары русский ↔ ингушский.");
+      renderBase(data.words, data.similar, fixT, true);
       setStatus(data.supported
-        ? (data.words && data.words.length ? "Ниже — что база знает про отдельные слова. Чтобы получить целый перевод, снимите галочку «Без ИИ»." : "Снимите галочку «Без ИИ», чтобы перевёл ИИ.")
-        : "Для других языков снимите галочку «Без ИИ».");
+        ? (data.words && data.words.length ? "Для такого предложения правил пока нет. Ниже перевод отдельных слов и похожие фразы. Чтобы перевести текст целиком, выключите «Без ИИ»." : "Для такого предложения правил пока нет. Выключите «Без ИИ», и текст переведёт ИИ.")
+        : "Для других языков выключите «Без ИИ».");
       return;
     }
-    if (!lastResult) { showText("Перевод не пришёл. Попробуйте ещё раз."); return; }
+    if (!lastResult) { resetOutput("Перевод не пришёл."); setStatus("Нажмите «Перевести» ещё раз.", "error"); return; }
     els.output.classList.remove("placeholder");
     markInto(els.output, lastResult, data.unknown);
     const hasVariants = renderVariants(data.variants, fixT);
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
-    setMeta(data.model + (data.ai && data.fast ? " · быстрый режим" : ""), trusted ? "ok" : data.ai ? "ai" : "");
+    setMeta((data.model || "") + (data.ai && data.fast ? " · быстрый режим" : ""), data.verified ? "native" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "");
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";
@@ -596,41 +687,46 @@ async function translate() {
     }
     setStatus(note, noteKind);
 
-    // второй проход: ИИ заменяет слова, которых нет в ингушских текстах; остаётся лучший вариант
-    if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) {
-      els.go.textContent = "Проверяю…";
-      setStatus("Проверяю слова по базе и исправляю…");
-      try {
-        const r = await api({ action: "repair", text, source: src, target: tgt, draft: lastResult }, controller.signal);
-        if (r.improved && r.translation) {
-          lastResult = fixT(String(r.translation).trim());
-          markInto(els.output, lastResult, r.unknown);
-          if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
-          setStatus("Перевод исправлен: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
-        } else setStatus(note, noteKind);
-      } catch (e) {
-        if (e.name === "AbortError") throw e;
-        setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
-      }
-    }
     addHistory(src, tgt, text, lastResult);
+    // второй проход (ИИ заменяет слова, которых нет в ингушских текстах) — в фоне: перевод уже на экране,
+    // кнопка свободна; если проверка найдёт лучше, перевод тихо обновится
+    if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) repairLater(my, text, src, tgt, note, noteKind, fixT);
   } catch (e) {
     lastResult = "";
     if (e.name !== "AbortError") showError(e);
   } finally {
+    clearTimeout(slowHint);
     busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
   }
 }
+let reqId = 0;
+async function repairLater(my, text, src, tgt, note, noteKind, fixT) {
+  setStatus((note ? note + " " : "") + "Проверяю слова по базе, перевод может уточниться…", noteKind);
+  try {
+    const r = await api({ action: "repair", text, source: src, target: tgt, draft: lastResult });
+    if (my !== reqId) return; // уже переводят другой текст
+    if (r.improved && r.translation) {
+      lastResult = fixT(String(r.translation).trim());
+      markInto(els.output, lastResult, r.unknown);
+      if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
+      setStatus("Перевод уточнён: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
+      addHistory(src, tgt, text, lastResult);
+    } else setStatus(note, noteKind);
+  } catch (e) {
+    if (my === reqId) setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
+  }
+}
 els.go.addEventListener("click", translate);
 
-// Варианты перевода (до 3): у самого надёжного — зелёная галочка и причина; нажатие копирует вариант.
+// Варианты перевода (до 3): у самого надёжного — галочка и причина; нажатие копирует вариант.
+// Один вариант, который совпадает с переводом сверху, отдельно не показываем: он уже на экране.
 function renderVariants(list, fixT) {
   const box = $("variants"), wrap = $("v-list");
   wrap.innerHTML = "";
   const items = (Array.isArray(list) ? list : []).filter((v) => v && v.text).slice(0, 3);
-  if (!items.length) { box.hidden = true; return false; }
-  $("v-title").textContent = items.length > 1 ? "Варианты — нажмите, чтобы скопировать" : "Нажмите, чтобы скопировать";
+  if (!items.length || (items.length === 1 && !items[0].note && fixT(String(items[0].text)) === lastResult)) { box.hidden = true; return items.length > 0; }
+  $("v-title").textContent = items.length > 1 ? "Варианты. Нажмите, чтобы скопировать" : "Нажмите, чтобы скопировать";
   items.forEach((v, i) => {
     const best = v.best === true || (i === 0 && !items.some((x) => x.best === true));
     const text = fixT(String(v.text));
@@ -642,18 +738,12 @@ function renderVariants(list, fixT) {
     if (v.note) { const n = document.createElement("small"); n.textContent = "(" + String(v.note) + ")"; t.appendChild(n); }
     const s = document.createElement("span"); s.className = "vs";
     const lab = document.createElement(best ? "b" : "span");
-    lab.textContent = (best ? "Самый надёжный · " : "") + String(v.sourceLabel || "");
+    lab.textContent = (best ? "Самый надёжный: " : "") + String(v.sourceLabel || "");
     s.appendChild(lab);
     b.append(mark, t, s);
     b.setAttribute("aria-label", (best ? "Самый надёжный вариант: " : "Вариант: ") + text + (v.note ? " (" + v.note + ")" : "") + ". " + (v.sourceLabel || "") + ". Нажмите, чтобы скопировать.");
     b.addEventListener("click", async () => {
-      let ok = true;
-      try { await navigator.clipboard.writeText(text); }
-      catch (e) {
-        // запасной способ для старых телефонов
-        try { const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
-          document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove(); } catch (e2) { ok = false; }
-      }
+      const ok = await copyText(text);
       const old = lab.textContent;
       lab.textContent = ok ? "Скопировано" : "Не вышло скопировать"; lab.classList.add("copied");
       setTimeout(() => { lab.textContent = old; lab.classList.remove("copied"); }, 1500);
@@ -675,7 +765,7 @@ function renderDetails(v, fixS, fixT, hasVariants = false) {
   if (conf) {
     const c = document.createElement("span");
     c.className = "pill" + (conf === "low" ? " low" : "");
-    c.textContent = conf === "low" ? "Не уверен: проверьте у носителя языка" : conf === "high" ? "Уверен" : "Скорее уверен";
+    c.textContent = conf === "low" ? "ИИ не уверен: проверьте у носителя языка" : conf === "high" ? "ИИ уверен" : "ИИ скорее уверен";
     tags.appendChild(c);
   }
   const alts = $("d-alts"); alts.innerHTML = "";
@@ -691,7 +781,10 @@ function renderDetails(v, fixS, fixT, hasVariants = false) {
   $("d-ex-s").textContent = fixS(String(ex.source || ""));
   $("d-ex-t").textContent = fixT(String(ex.target || ""));
   const note = $("d-note");
-  note.hidden = !v.note; note.textContent = v.note ? String(v.note) : "";
+  // пояснение, которое только повторяет варианты («нана (й) / нани (й)»), второй раз не показываем
+  const shown = new Set([...document.querySelectorAll("#v-list .vt")].map((n) => n.textContent.replace(/\s+/g, " ").trim()));
+  const repeats = hasVariants && v.note && String(v.note).split(" / ").every((part) => shown.has(part.replace(/\s+/g, " ").trim()));
+  note.hidden = !v.note || repeats; note.textContent = v.note ? String(v.note) : "";
   els.details.hidden = !(tags.children.length || alts.children.length || !$("d-example").hidden || !note.hidden);
 }
 
@@ -699,8 +792,10 @@ function renderDetails(v, fixS, fixT, hasVariants = false) {
 function openFix(text) {
   closePanels();
   $("fix-text").value = text || lastResult;
+  $("fix-key").hidden = !(lastPair && lastPair.tgt === "inh");
   $("fix-panel").hidden = false;
   $("fix-text").focus();
+  $("fix-panel").scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 els.fix.addEventListener("click", () => openFix());
 $("fix-cancel").addEventListener("click", () => { $("fix-panel").hidden = true; });
@@ -714,13 +809,13 @@ $("fix-save").addEventListener("click", async () => {
     await api({ action: "correct", text: lastInput, translation, source: lastPair.src, target: lastPair.tgt, code: $("fix-code").value });
     lastResult = translation;
     els.output.classList.remove("placeholder"); els.output.textContent = translation;
-    setMeta("Проверено носителем языка", true);
-    els.details.hidden = true; $("fix-panel").hidden = true;
+    setMeta("Проверено носителем языка", "native");
+    hideExtras(); $("fix-panel").hidden = true;
     setStatus("Сохранено. Теперь эта фраза всегда будет переводиться так, а ИИ будет учиться на ней.", "good");
     addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
   } catch (e) {
-    if (e.status === 403) { $("code-row").hidden = false; setStatus("Нужен код редактора.", "error"); }
-    else setStatus(e.message || "Не удалось сохранить.", "error");
+    if (e.status === 403) { $("code-row").hidden = false; $("fix-code").focus(); setStatus("Чтобы сохранить, введите код редактора.", "error"); }
+    else setStatus(e.message || "Не сохранилось. Нажмите «Сохранить» ещё раз.", "error");
   } finally {
     btn.disabled = false; btn.textContent = "Сохранить";
   }
@@ -730,8 +825,9 @@ $("fix-save").addEventListener("click", async () => {
 els.compare.addEventListener("click", async () => {
   if (!lastPair || !lastInput || busy) return;
   closePanels();
-  const list = $("cmp-list"); list.innerHTML = "<p>Спрашиваю все ИИ сразу… это может занять до минуты.</p>";
+  const list = $("cmp-list"); list.innerHTML = "<p>Спрашиваю все ИИ сразу. Это может занять до минуты.</p>";
   $("cmp-panel").hidden = false;
+  $("cmp-panel").scrollIntoView({ block: "nearest", behavior: "smooth" });
   els.compare.disabled = true;
   try {
     const data = await api({ action: "compare", text: lastInput, source: lastPair.src, target: lastPair.tgt });
@@ -745,7 +841,7 @@ els.compare.addEventListener("click", async () => {
       if (r.text) {
         const t = document.createElement("div"); t.className = "txt"; markInto(t, fixT(r.text), r.unknown);
         const row = document.createElement("div"); row.className = "row";
-        const use = document.createElement("button"); use.className = "btn small"; use.type = "button"; use.textContent = "Взять за основу";
+        const use = document.createElement("button"); use.className = "act"; use.type = "button"; use.textContent = "Взять за основу";
         use.addEventListener("click", () => openFix(fixT(r.text)));
         row.appendChild(use);
         card.append(t, row);
@@ -755,6 +851,7 @@ els.compare.addEventListener("click", async () => {
       }
       list.appendChild(card);
     }
+    if (!data.results.length) list.innerHTML = "<p>Ни один ИИ не ответил. Попробуйте ещё раз через минуту.</p>";
   } catch (e) {
     list.innerHTML = "";
     const p = document.createElement("p"); p.className = "err"; p.textContent = e.message || "Не получилось сравнить.";
@@ -778,22 +875,23 @@ function addHistory(src, tgt, input, output) {
 }
 function renderHistory(h = loadHistory()) {
   const box = $("history"); box.innerHTML = "";
-  $("h-title").hidden = !h.length;
+  const SHORT = {};
   for (const x of h.slice(0, 5)) {
     if (!LANGS[x.src] || !LANGS[x.tgt]) continue;
     const b = document.createElement("button"); b.type = "button"; b.className = "h-item";
-    const meta = document.createElement("small"); meta.textContent = `${LANGS[x.src].label} → ${LANGS[x.tgt].label}`;
+    const meta = document.createElement("small"); meta.textContent = `${SHORT[x.src] || LANGS[x.src].label} → ${SHORT[x.tgt] || LANGS[x.tgt].label}`;
     const i = document.createElement("div"); i.textContent = x.input;
     const o = document.createElement("div"); o.className = "h-out"; o.textContent = x.output;
     b.append(meta, i, o);
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
       els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
-      showText(x.output); els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; closePanels(); setButtons(true); setStatus(""); els.meta.textContent = ""; refresh();
+      showText(x.output); hideExtras(); closePanels(); setButtons(true); setStatus(""); setMeta(""); refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);
   }
+  $("h-block").hidden = !box.children.length;
 }
 
 refresh();

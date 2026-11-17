@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a6b3d">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Правила перевода без ИИ — Ингушский переводчик</title>
+<style>
+  /* Та же система, что на главной: белое поле между зелёными полосами флага. */
+  :root {
+    --snow: #ffffff; --mist: #f2f6f3; --ink: #14201a; --stone: #5d6a63; --line: #dbe5df;
+    --green: #0a6b3d; --green-deep: #07542f; --leaf: #e2f3e9; --on-green-soft: rgba(255, 255, 255, .78);
+    --amber-ink: #7a4a00; --amber-bg: #fff4dc;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --snow: #111b16; --mist: #17241d; --ink: #e9f1ec; --stone: #9aaba2; --line: #26372e; --green: #49c486; --green-deep: #6ad49c; --leaf: #173426; --amber-ink: #ffc978; --amber-bg: #33270f; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--snow); -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--snow); color: var(--ink); font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  .band { background: #0a6b3d; color: #fff; }
+  @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
+  .band-in { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+  .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 12px; }
+  .sign { width: 44px; height: 44px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .sign svg { width: 34px; height: 34px; display: block; }
+  h1 { margin: 0; font-size: 20px; line-height: 1.15; }
+  .sub { margin: 2px 0 0; font-size: 13px; color: var(--on-green-soft); }
+  .band a { color: #fff; text-underline-offset: 3px; }
+  .bottom .band-in { padding-top: 14px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); font-size: 13px; color: var(--on-green-soft); }
+  .bottom p { margin: 0; }
+  main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 18px 16px 32px; display: grid; gap: 22px; align-content: start; }
+  .lead { margin: 0; color: var(--stone); max-width: 66ch; }
+  .lead b { color: var(--ink); }
+  section.rule { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 10px; }
+  section.rule h2 { margin: 0; font-size: 17px; line-height: 1.35; }
+  .ex { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 2px 14px; padding: 10px 12px; background: var(--mist); border-radius: 12px; }
+  .ex .ru { color: var(--stone); }
+  .ex .inh { font-weight: 650; color: var(--green-deep); font-size: 17px; }
+  .ex .ours { grid-column: 2; font-size: 13px; color: var(--stone); }
+  .ex .ours.diff { color: var(--amber-ink); }
+  .verbs { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 6px 16px; font-size: 15px; }
+  .verbs .r { color: var(--stone); }
+  .verbs .i { font-weight: 600; color: var(--green-deep); overflow-wrap: anywhere; }
+  h2.part { margin: 6px 0 0; font-size: 18px; }
+  .err { color: var(--amber-ink); }
+  @media (max-width: 520px) { .ex { grid-template-columns: 1fr; } .ex .ours { grid-column: 1; } }
+</style>
+</head>
+<body>
+<header class="band top">
+  <div class="band-in">
+    <div class="sign" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" stroke="#d3212c" stroke-width="3.6" stroke-linecap="round">
+        <circle cx="24" cy="24" r="7.6"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(120 24 24)"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(240 24 24)"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Правила перевода без ИИ</h1>
+      <p class="sub"><a href="/">Вернуться к переводчику</a></p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <p class="lead">Простые предложения переводчик собирает сам, без ИИ: <b>слова</b> берёт из словаря (словарик проекта и PaydaDosh), <b>грамматику</b> — из справочника, проверенного по ингушским текстам и словарям. Каждое правило написано по образцам из источников. Если для предложения правила нет или нужной формы нет в источниках, правило молчит, и переводит ИИ.</p>
+  <p class="lead">Под каждым образцом показано, как его собирают правила. Перевод по правилам совпадает с переводом носителей в разговорнике PaydaDosh примерно в 3 случаях из 4: правила пока простые, поэтому важное проверьте у носителя языка.</p>
+  <div id="rules"><p class="lead">Загружаю правила…</p></div>
+  <div id="verbs"></div>
+</main>
+
+<footer class="band bottom">
+  <div class="band-in">
+    <p>Библиотека слов — файл lib/rules/lexicon.js, библиотека правил — lib/rules/grammar.js. В них можно добавлять новые слова и правила.</p>
+  </div>
+</footer>
+
+<script>
+const norm = (s) => String(s).toLowerCase().replace(/[.,!?]/g, "").replace(/\s+/g, " ").trim();
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+(async () => {
+  const box = document.getElementById("rules");
+  try {
+    const r = await fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rules" }) });
+    if (!r.ok) throw new Error("Сервер не ответил");
+    const data = await r.json();
+    box.innerHTML = "";
+    for (const rule of data.rules) {
+      const sec = el("section", "rule");
+      sec.appendChild(el("h2", "", rule.name));
+      for (const ex of rule.examples) {
+        const d = el("div", "ex");
+        d.append(el("div", "ru", ex.ru), el("div", "inh", ex.inh));
+        const same = ex.ours && norm(ex.ours) === norm(ex.inh);
+        d.appendChild(el("div", "ours" + (same ? "" : " diff"), same ? "Правила собирают так же" : ex.ours ? "Правила собирают: " + ex.ours : "Правила пока не собирают"));
+        sec.appendChild(d);
+      }
+      box.appendChild(sec);
+    }
+    const vb = document.getElementById("verbs");
+    vb.appendChild(el("h2", "part", "Глаголы, которые знают правила"));
+    const list = el("div", "verbs");
+    for (const v of data.verbs) list.append(el("div", "r", v.ru), el("div", "i", v.inh + (v.example ? " — «" + v.example[1] + "»" : "")));
+    vb.appendChild(list);
+  } catch (e) {
+    box.innerHTML = "";
+    box.appendChild(el("p", "lead err", "Правила не загрузились. Обновите страницу."));
+  }
+})();
+</script>
+</body>
+</html>

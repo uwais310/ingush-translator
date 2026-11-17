@@ -80,12 +80,14 @@ const shape = (vs) => {
   calls.length = 0;
   r = await run({ text: "Я иду вперёд сегодня утром", source: "ru", target: "inh", mode: "text" });
   assert.strictEqual(r.code, 200, JSON.stringify(r.data));
-  const aiCalls = calls.filter((u) => u.includes("generativelanguage")).length;
-  assert.strictEqual(aiCalls, 1, "ровно один запрос к ИИ");
+  // сильная модель и параллельно быстрая (чтобы не ждать) — не больше двух запросов, и к разным моделям
+  const aiUrls = calls.filter((u) => u.includes("generativelanguage"));
+  assert.ok(aiUrls.length <= 2, `не больше двух запросов к ИИ, было ${aiUrls.length}`);
+  assert.strictEqual(new Set(aiUrls.map((u) => u.split("/models/")[1].split(":")[0])).size, aiUrls.length, "к разным моделям");
   shape(r.data.variants);
   assert.strictEqual(r.data.variants.length, 1);
   assert.deepStrictEqual([r.data.variants[0].source, r.data.variants[0].sourceLabel, r.data.variants[0].rank], ["ai", "ИИ, не уверен", 7]);
-  console.log("ok 5: ИИ (low) →", JSON.stringify(r.data.variants[0]), "· запросов к ИИ:", aiCalls);
+  console.log("ok 5: ИИ (low) →", JSON.stringify(r.data.variants[0]), "· запросов к ИИ:", aiUrls.length);
 
   // 6. сортировка и склейка дублей
   const { finishVariants, aiVariant } = T._variants;

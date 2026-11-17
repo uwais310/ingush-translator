@@ -57,7 +57,7 @@ const run = (body) => new Promise((resolve) => {
   const r = await run({ text: open.ru, source: "ru", target: "inh", mode: "text" });
   assert.strictEqual(r.code, 200, JSON.stringify(r.data));
   assert.strictEqual(r.data.base, true, "ответ из базы, без ИИ");
-  assert.strictEqual(r.data.model, `Из базы: ${open.source}`, "подписан источник");
+  assert.ok(r.data.model.startsWith("Из базы: ") && r.data.model.includes(open.source.replace(/\s*\(.*$/, "")), `подписан источник: ${r.data.model}`);
   assert.ok(r.data.translation.length > 0);
   console.log(`ok 4: «${open.ru}» без ИИ → «${r.data.translation}» [${r.data.model}]`);
   console.log("\nВсе проверки базы прошли.");
