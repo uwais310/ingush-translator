@@ -117,6 +117,7 @@
   .trust.ok { background: var(--leaf); color: var(--green-deep); }
   .trust.native { background: #0a6b3d; color: #fff; }
   .trust.ai { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
+  .trust.rules { background: var(--leaf); color: var(--green-deep); border-bottom: 1px dashed color-mix(in srgb, var(--green) 45%, transparent); }
   .output { padding: 16px 16px 10px; font-size: 24px; line-height: 1.38; font-weight: 600; color: var(--green-deep); white-space: pre-wrap; overflow-wrap: anywhere; }
   .output.placeholder { color: var(--stone); font-size: 16px; font-weight: 400; min-height: 84px; }
   .output.busy { color: transparent; position: relative; min-height: 84px; }
@@ -210,6 +211,7 @@
   .h-item .h-out { color: var(--green-deep); font-weight: 600; overflow-wrap: anywhere; }
   .about > summary { cursor: pointer; font-weight: 650; font-size: 15px; }
   .about p { margin: 8px 0 0; max-width: 68ch; color: var(--stone); font-size: 14px; }
+  .about a { color: var(--green-deep); }
 
   /* ---------- нижняя полоса ---------- */
   .bottom .band-in { padding-top: 16px; padding-bottom: calc(18px + env(safe-area-inset-bottom)); font-size: 13px; color: var(--on-green-soft); display: grid; gap: 6px; }
@@ -276,7 +278,7 @@
 
       <div class="go-row">
         <button class="go" id="go" type="button">Перевести</button>
-        <label class="switch" title="Отвечать только из базы: проверенные фразы, словари и настоящие тексты"><input type="checkbox" id="noai"> Только база, без ИИ</label>
+        <label class="switch" title="Отвечать без ИИ: проверенные фразы, словари, настоящие тексты и правила грамматики"><input type="checkbox" id="noai"> Без ИИ: база и правила</label>
       </div>
     </div>
 
@@ -348,7 +350,8 @@
   <details class="about">
     <summary>Как работает переводчик</summary>
     <p>Сначала ответ ищется в базе: фразы, проверенные носителями языка, словари и слова из настоящих ингушских текстов. Такой перевод помечен зелёным, и рядом написано, откуда он.</p>
-    <p>Если в базе ответа нет, переводит ИИ. Такой перевод помечен жёлтым: ИИ может ошибаться, поэтому важное проверьте у носителя языка. Подчёркнутых слов нет в ингушских книгах и газетах. Переключатель «Только база, без ИИ» оставляет одну базу.</p>
+    <p>Если готового ответа нет, переводчик пробует собрать предложение сам, по <a href="/rules">правилам грамматики</a>: «Это моя мать», «Где магазин?», «У меня есть машина», «Я тебя люблю». Слова берутся из словаря, грамматика — из справочника, без ИИ.</p>
+    <p>Если и правила не подходят, переводит ИИ. Такой перевод помечен жёлтым: ИИ может ошибаться, поэтому важное проверьте у носителя языка. Подчёркнутых слов нет в ингушских книгах и газетах. Переключатель «Без ИИ» оставляет только базу и правила.</p>
     <p>Кнопка «Исправить» сохраняет правильный перевод: дальше эта фраза всегда переводится так. Вместо Ӏ можно писать 1 или I, буква исправится сама.</p>
   </details>
 </main>
@@ -356,6 +359,7 @@
 <footer class="band bottom">
   <div class="band-in">
     <p>Данные: словарь <a href="https://paydadosh.ru" target="_blank" rel="noopener">PaydaDosh</a> (с разрешения владельцев), Викисловарь, PanLex, ингушская Википедия и тексты на ингушском языке.</p>
+    <p><a href="/rules">Правила перевода без ИИ</a></p>
     <p><a href="/review">Проверка переводов для носителей языка</a></p>
   </div>
 </footer>
@@ -366,7 +370,7 @@ const LANGS = {
   kk: { label: "Қазақша" }, tr: { label: "Türkçe" }, ar: { label: "العربية" }, de: { label: "Deutsch" }, fr: { label: "Français" }
 };
 const EXAMPLES = {
-  ru: ["Доброе утро! Как у тебя дела?", "Спасибо большое", "Я люблю свою маму", "маму", "Где находится мечеть?"],
+  ru: ["Доброе утро! Как у тебя дела?", "Я люблю свою маму", "Это мой дом", "Где магазин?", "У меня есть машина", "маму"],
   inh: ["Сона хьо веза", "ЦӀи фу я хьа?", "Баркал", "нана"],
   en: ["Good morning! How are you?", "Thank you very much", "My family is from Ingushetia.", "mother"]
 };
@@ -471,6 +475,7 @@ function markInto(node, text, unknown) {
 // Полоса над переводом: откуда он и насколько ему можно верить.
 // kind: "native" — проверено носителем, "ok" — из базы, "ai" — перевёл ИИ.
 const ICON = {
+  rules: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h9M3.5 14.5h11"/></svg>',
   ok: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg>',
   ai: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 3.2l7.3 12.9H2.7z" stroke-linejoin="round"/><path d="M10 8.2v3.6M10 14.2v.1"/></svg>'
 };
@@ -482,10 +487,13 @@ function setMeta(text, kind) {
   if (kind === "ai") {
     body.textContent = "Перевёл ИИ: возможны ошибки, важное проверьте у носителя языка";
     if (text) { const s = document.createElement("small"); s.textContent = text; body.appendChild(s); }
+  } else if (kind === "rules") {
+    body.textContent = text || "Без ИИ: по правилам грамматики";
+    const s = document.createElement("small"); s.textContent = "Слова из словаря, грамматика из справочника. Проверьте у носителя языка"; body.appendChild(s);
   } else body.textContent = text;
-  if (kind === "native" || kind === "ok" || kind === "ai") {
+  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules") {
     els.meta.classList.add(kind);
-    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" ? "ai" : "ok"]);
+    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" ? "ai" : kind === "rules" ? "rules" : "ok"]);
   }
   els.meta.appendChild(body);
 }
@@ -614,7 +622,7 @@ function showError(e) {
   else if ([502, 503, 504].includes(e.status)) {
     resetOutput("ИИ сейчас не отвечает.");
     // в скобках — какие ИИ не ответили и почему: это помогает понять, что чинить
-    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Нажмите «Перевести» ещё раз через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : "") + " Ответы из базы работают и без ИИ: включите «Только база, без ИИ».", "error");
+    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Нажмите «Перевести» ещё раз через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : "") + " База и правила работают и без ИИ: включите «Без ИИ».", "error");
   }
   else { resetOutput("Перевод не получился."); setStatus(e.message || "Нажмите «Перевести» ещё раз.", "error"); }
 }
@@ -652,8 +660,8 @@ async function translate() {
       resetOutput(data.supported ? "Целого перевода в базе пока нет." : "База есть только для пары русский ↔ ингушский.");
       renderBase(data.words, data.similar, fixT, true);
       setStatus(data.supported
-        ? (data.words && data.words.length ? "Ниже — перевод отдельных слов и похожие фразы. Чтобы перевести текст целиком, выключите «Только база, без ИИ»." : "Выключите «Только база, без ИИ», и текст переведёт ИИ.")
-        : "Для других языков выключите «Только база, без ИИ».");
+        ? (data.words && data.words.length ? "Для такого предложения правил пока нет. Ниже перевод отдельных слов и похожие фразы. Чтобы перевести текст целиком, выключите «Без ИИ»." : "Для такого предложения правил пока нет. Выключите «Без ИИ», и текст переведёт ИИ.")
+        : "Для других языков выключите «Без ИИ».");
       return;
     }
     if (!lastResult) { resetOutput("Перевод не пришёл."); setStatus("Нажмите «Перевести» ещё раз.", "error"); return; }
@@ -663,7 +671,7 @@ async function translate() {
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
-    setMeta((data.model || "") + (data.ai && data.fast ? " · быстрый режим" : ""), data.verified ? "native" : trusted ? "ok" : data.ai ? "ai" : "");
+    setMeta((data.model || "") + (data.ai && data.fast ? " · быстрый режим" : ""), data.verified ? "native" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "");
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";

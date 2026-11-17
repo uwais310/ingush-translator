@@ -52,7 +52,7 @@ function fileStore(name) {
 
 // ---------- страницы и файлы сайта (только из этого списка) ----------
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png", ".webmanifest": "application/manifest+json; charset=utf-8" };
-const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
+const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/rules": "rules.html", "/rules.html": "rules.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
 for (const f of fs.readdirSync(ROOT)) if (f.endsWith(".png")) PAGES["/" + f] = f;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {

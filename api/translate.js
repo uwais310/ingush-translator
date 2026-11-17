@@ -35,6 +35,8 @@ const LEX = require("../lib/corpus-lexicon.js");
 const BASE = require("../lib/base.js")(KB, LEX);
 const SEED = require("../data/phrases.json"); // база пар; verified ставит только человек на /review
 const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор слов и примеров под текст
+// перевод по правилам грамматики без ИИ: библиотека слов lib/rules/lexicon.js + библиотека правил lib/rules/grammar.js
+const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
 
 const LANGS = {
   inh: "Ingush (ГӀалгӀай мотт)",
@@ -852,6 +854,15 @@ function seedBest(text, src) {
   list.sort((a, b) => a.w.rank - b.w.rank || (a.w.prio || 0) - (b.w.prio || 0) || a.order - b.order);
   return list.length ? list[0].p : null;
 }
+// Пометки внутри ингушского текста из разговорника: «Со балха вода. (говорит мужчина)», «(к женщине)», «(й, б, д)».
+// В перевод они не идут (их копировали бы вместе с текстом) — они становятся подписью варианта.
+const NOTE_IN_TEXT = /\s*\(((?:говорит|к |о |объект|домой|мн\.|ед\.)[^()]*|[вйдби](?:\s*[,/]\s*[вйдби])*)\)\s*/gi;
+function splitNote(t) {
+  const notes = [];
+  const text = String(t).replace(NOTE_IN_TEXT, (m, n) => { notes.push(/^[вйдби](\s*[,/]\s*[вйдби])*$/i.test(n.trim()) ? `класс ${n.trim()}` : n.trim()); return " "; }).replace(/\s+([.!?,])/g, "$1").replace(/\s+/g, " ").trim();
+  return { text: text || String(t).trim(), note: notes.join("; ") };
+}
+
 // Как подписать источник пары для человека.
 function sourceTitle(p) {
   const w = RET.sourceOf(p);
@@ -866,9 +877,10 @@ function glossNote(n) {
   return /^[вйдб](\s*[-,/]\s*[вйдб])*$/.test(t) ? `класс ${t}` : t;
 }
 function seedResult(p, src, more = []) {
-  const raw = src === "ru" ? p.inh : noParens(p.ru);
-  const gloss = p.license ? glossNote(p.note) : "";
-  return { translation: noStress(raw), label: `Из базы: ${sourceTitle(p)}`, kind: "seed", seed: p, more, seedNote: gloss, note: joinNotes(p.license ? gloss : p.note || "", stressNote(raw)) };
+  const sp = src === "ru" ? splitNote(p.inh) : { text: noParens(p.ru), note: "" };
+  const raw = sp.text;
+  const gloss = joinNotes(sp.note, p.license ? glossNote(p.note) : "");
+  return { translation: noStress(raw), label: `Из базы: ${sourceTitle(p)}`, kind: "seed", seed: p, more, seedNote: gloss, note: joinNotes(gloss || (p.license ? "" : p.note || ""), stressNote(raw)) };
 }
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
@@ -907,6 +919,16 @@ function resolveExact(text, src, tgt, pool) {
   const exactItems = d && !d.lemma ? d.items : [];
   if (p && pp !== 5 && (!d || d.lemma || pp <= d.prio)) return seedResult(p, src, exactItems);
   if (d && !d.lemma) return d;
+  // предложение, которое можно собрать по правилам грамматики (русский → ингушский, от двух слов)
+  if (src === "ru" && RET.wordsOf(text).length >= 2) {
+    const rr = RULES.translate(text);
+    if (rr) {
+      return {
+        translation: rr.translation, label: "Без ИИ: по правилам грамматики", kind: "rules", rules: rr,
+        note: `Правило: ${rr.ruleName}. Слова взяты из словаря, грамматика — из справочника. Перевод собран без ИИ, но правила пока простые: проверьте у носителя языка.`,
+      };
+    }
+  }
   if (d && d.prio <= 1) return d;
   if (p) return seedResult(p, src);
   if (b) return b;
@@ -1007,7 +1029,11 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
   if (r.verified) main = { source: "native", sourceLabel: "Проверено носителем", rank: 1 };
   else if (r.kind === "seed" && r.seed) main = seedSource(r.seed);
   else if (r.kind === "texts" || r.kind === "corpus") main = { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4 };
-  else if (r.kind === "composed") main = { source: "project", sourceLabel: "Из базы, по предложениям", rank: 2 };
+  else if (r.kind === "composed") main = { source: "project", sourceLabel: r.withRules ? "База и правила, по предложениям" : "Из базы, по предложениям", rank: 2 };
+  else if (r.kind === "rules") {
+    // варианты для мужчины / женщины, «тхо / вай», «ер / из»
+    return finishVariants(r.rules.variants.map((v) => ({ text: v.text, note: v.note, source: "rules", sourceLabel: "По правилам грамматики", rank: 3 })), fixT);
+  }
   else main = { source: "project", sourceLabel: "Словарь проекта", rank: 2 };
   const line = r.kind === "glossary" || r.kind === "phrase" ? r.line || r.note : "";
   const seedNote = r.kind === "seed" ? r.seedNote || "" : "";
@@ -1034,9 +1060,10 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
     }
     for (const p of seedAll(src).get(BASE.key(input)) || []) {
       const rev = REVIEW && REVIEW[p.id];
-      const text = src === "ru" ? (rev && rev.inh) || noStress(p.inh) : noParens(p.ru);
+      const sp = src === "ru" && !(rev && rev.inh) ? splitNote(p.inh) : { text: "", note: "" };
+      const text = src === "ru" ? (rev && rev.inh) || noStress(sp.text) : noParens(p.ru);
       const where = rev ? { source: "native", sourceLabel: "Проверено носителем", rank: 1 } : seedSource(p);
-      list.push({ text, note: p.license ? glossNote(p.note) : noteFromLine(text, p.note), ...where });
+      list.push({ text, note: sp.note || (p.license ? glossNote(p.note) : noteFromLine(text, p.note)), ...where });
     }
   }
   return finishVariants(list, fixT);
@@ -1152,6 +1179,14 @@ module.exports = async (req, res) => {
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
   const { text = "", source, target, mode, action } = body || {};
   if (action === "review-next" || action === "review-save") return reviewAction(action, body || {}, res);
+  // библиотека правил для страницы /rules: какие предложения переводятся без ИИ и примеры
+  if (action === "rules") {
+    const L = require("../lib/rules/lexicon.js");
+    return res.status(200).json({
+      rules: RULES.RULES.map((r) => ({ id: r.id, name: r.name, examples: r.examples.map(([ru, inh]) => ({ ru, inh, ours: (RULES.translate(ru) || {}).translation || "" })) })),
+      verbs: L.VERBS.map((v) => ({ ru: v.id, inh: typeof v.pres === "string" ? v.pres : v.pres ? Object.values(v.pres).join(" / ") : v.part, example: v.example })),
+    });
+  }
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
@@ -1189,7 +1224,9 @@ module.exports = async (req, res) => {
       ? { translation: fixT(r.translation), model: r.label, verified: true }
       : { translation: fixT(r.translation), model: r.label, base: true, kind: r.kind };
     if (r.alternatives || r.note) result.details = { alternatives: r.alternatives || [], note: r.note || "" };
-    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed") Object.assign(result, checkIngush(result.translation));
+    if (r.kind === "rules" || r.withRules) result.rules = true;
+    // слова из словаря и собранные правилами уже проверены по источникам — подчёркивать их не нужно
+    if (target === "inh" && r.kind !== "glossary" && r.kind !== "seed" && r.kind !== "rules") Object.assign(result, checkIngush(result.translation));
     result.variants = exactVariants(r, input, source, target, pool, fixT);
     return result;
   };
@@ -1197,8 +1234,16 @@ module.exports = async (req, res) => {
     const r = resolveExact(input, source, target, pool);
     if (r) return exactResult(r);
     // каждое предложение текста есть в базе — собираем ответ из них
-    const c = BASE.compose(input, (part) => resolveExact(source === "inh" ? fixPalochka(part) : part, source, target, pool));
-    if (c) return exactResult({ translation: c.translation, verified: c.verified, label: c.verified ? "Проверено носителем языка" : "Из базы: собрано по предложениям", kind: "composed" });
+    let withRules = false;
+    const c = BASE.compose(input, (part) => {
+      const pr = resolveExact(source === "inh" ? fixPalochka(part) : part, source, target, pool);
+      if (pr && pr.kind === "rules") withRules = true;
+      return pr;
+    });
+    if (c) {
+      const label = c.verified ? "Проверено носителем языка" : withRules ? "Без ИИ: база и правила грамматики, по предложениям" : "Из базы: собрано по предложениям";
+      return exactResult({ translation: c.translation, verified: c.verified && !withRules, label, kind: "composed", withRules });
+    }
     return null;
   };
   if (action !== "compare") {
