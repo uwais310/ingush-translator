@@ -78,5 +78,14 @@ const run = (body) => new Promise((resolve) => {
   assert.ok(/люблю/.test(r.data.translation), r.data.translation);
   console.log("ok 8: готовые фразы отвечаются из базы, как раньше");
 
+  // 9. замер на фразах базы (scripts/eval-retrieval.js): подсказки для ИИ не должны стать хуже.
+  //    Пороги чуть ниже нынешних значений (рус → инг ≈ 78%, инг → рус ≈ 65%); у версии до замера было 76.5% и 62.9%.
+  process.argv.push("300");
+  const { measure } = require("../scripts/eval-retrieval.js");
+  const ru = measure("ru", true), inh = measure("inh", true);
+  assert.ok(ru.stem >= 0.76, `рус → инг: ${(ru.stem * 100).toFixed(1)}% слов перевода в подсказках`);
+  assert.ok(inh.stem >= 0.62, `инг → рус: ${(inh.stem * 100).toFixed(1)}% слов перевода в подсказках`);
+  console.log(`ok 9: замер на 300 фразах — рус → инг ${(ru.stem * 100).toFixed(1)}%, инг → рус ${(inh.stem * 100).toFixed(1)}% слов перевода есть в подсказках`);
+
   console.log("\nВсе проверки начальных форм и словаря прошли.");
 })().catch((e) => { console.error(e); process.exit(1); });
