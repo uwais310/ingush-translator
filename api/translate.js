@@ -39,7 +39,17 @@ const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор �
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
 // русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
 // перевод «по кускам» без ИИ: самые длинные известные фразы + слова из словаря (lib/rules/chunks.js)
-const CHUNKS = require("../lib/rules/chunks.js")({ RET, SEED });
+// таблица слов из пар фраз (lib/rules/align.js) строится один раз при первом переводе по кускам
+let CHUNKS_ = null;
+const chunksEngine = () => {
+  if (CHUNKS_) return CHUNKS_;
+  const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "");
+  const phrases = SEED.filter((p) => p.kind === "phrase" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES.map(([ru, inh]) => [ru, inh]));
+  const words = SEED.filter((p) => p.kind === "word" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.GLOSSARY.map(([ru, inh]) => [ru, inh]));
+  const ALIGN = require("../lib/rules/align.js")([...phrases, ...words]);
+  return (CHUNKS_ = require("../lib/rules/chunks.js")({ RET, SEED, ALIGN, EXAMPLES: phrases }));
+};
+const CHUNKS = { translate: (...a) => chunksEngine().translate(...a), inhLexicon: (...a) => chunksEngine().inhLexicon(...a) };
 // ИИ выключен, пока в настройках не задано USE_AI=1: тогда вместо ИИ переводит CHUNKS (код ИИ остаётся)
 const aiEnabled = () => process.env.USE_AI === "1";
 const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
