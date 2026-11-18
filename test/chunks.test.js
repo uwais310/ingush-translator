@@ -74,6 +74,30 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
     assert.ok(r && r.pieces.some((x) => x.how === "align-phrase"), JSON.stringify(r));
     console.log("ok 6г: таблица фраз — «я не знаю» →", ap.to, `(p=${ap.p.toFixed(2)}, n=${ap.n})`);
   }
+  // 6г. падежи существительных (lib/rules/cases.js). Формы — из справочника, раздел 6:
+  // нанега (to mother), нанна (to mother, dative), сагаца (with the man), сагах (about the man), юртара (from the village), сага (of the man)
+  const makeCases = require("../lib/rules/cases.js");
+  const CS = makeCases({ words: require("../lib/ingush-words.js") });
+  assert.strictEqual(CS.form("нана", "all"), "нанега");
+  assert.strictEqual(CS.form("нана", "dat"), "нанна");
+  assert.strictEqual(CS.form("саг", "ins"), "сагаца");
+  assert.strictEqual(CS.form("саг", "abl"), "сагах");
+  assert.strictEqual(CS.form("юрт", "from"), "юртара");
+  assert.strictEqual(CS.form("саг", "gen"), "сага");
+  assert.strictEqual(CS.form("квазиэлектрон", "dat"), null, "формы нет в текстах — null");
+  // падеж русского слова — по предлогу и окончанию
+  const ctx = (s, k, l) => CS.context(s.split(" "), k, l, () => true);
+  assert.strictEqual(ctx("к маме", 1, "мама"), "all");
+  assert.strictEqual(ctx("позвони маме", 1, "мама"), "dat");
+  assert.strictEqual(ctx("с братом", 1, "брат"), "ins");
+  assert.strictEqual(ctx("о матери", 1, "мать"), "abl");
+  assert.strictEqual(ctx("из села", 1, "село"), "from");
+  assert.strictEqual(ctx("дом человека", 1, "человек"), "gen");
+  // в предложении: «Я иду к маме» — направительный, «дом человека» — родительный перед существительным
+  assert.ok(/нанега/.test(tr("Я иду к маме")), tr("Я иду к маме"));
+  assert.ok(/^Сага цӀа/.test(tr("Дом человека")), tr("Дом человека"));
+  assert.ok(/сагаца/.test(tr("Я говорю с человеком")), tr("Я говорю с человеком"));
+  console.log("ok 6г: падежи —", tr("Я иду к маме"), "|", tr("Дом человека"), "|", tr("Я говорю с человеком"));
 
   // 7. сервер: без USE_AI=1 ИИ не вызывается, отвечает перевод по кускам
   let aiCalls = 0;
