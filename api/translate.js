@@ -39,7 +39,7 @@ const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор �
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
 // русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
 // перевод «по кускам» без ИИ: самые длинные известные фразы + слова из словаря (lib/rules/chunks.js)
-const CHUNKS = require("../lib/rules/chunks.js")({ RET });
+const CHUNKS = require("../lib/rules/chunks.js")({ RET, SEED });
 // ИИ выключен, пока в настройках не задано USE_AI=1: тогда вместо ИИ переводит CHUNKS (код ИИ остаётся)
 const aiEnabled = () => process.env.USE_AI === "1";
 const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
@@ -973,6 +973,11 @@ function resolveExact(text, src, tgt, pool) {
   const b = BASE.lookup(text, src, tgt);
   if (b && b.kind !== "texts") return b;
   if (!isRuInh(src, tgt)) return b || null;
+  // ингушская форма глагола или местоимение из библиотеки слов: «вода» — «идёт», а не «бегущий» из словаря
+  if (src === "inh") {
+    const lx = CHUNKS.inhLexicon(text);
+    if (lx) return { translation: lx.translation, label: "Без ИИ: библиотека слов (справочник)", kind: "rules", note: lx.note, rules: { variants: [{ text: lx.translation, note: "" }] } };
+  }
   const p = seedBest(text, src); // пара базы с точно таким текстом
   const pp = p ? RET.sourceOf(p).prio : 99;
   const d = fromDictionary(text, src, tgt);

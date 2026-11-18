@@ -7,7 +7,7 @@ const KB = require("../lib/ingush-guide.js");
 const LEX = require("../lib/corpus-lexicon.js");
 const SEED = require("../data/phrases.json");
 const RET = require("../lib/retrieval.js")({ KB, SEED, LEX });
-const C = require("../lib/rules/chunks.js")({ RET });
+const C = require("../lib/rules/chunks.js")({ RET, SEED });
 const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
 
 (async () => {
@@ -39,6 +39,22 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   assert.strictEqual(C.translate("Квазиэлектрон фрактализуется", "ru"), null);
   console.log("ok 6: неизвестные слова в скобках, бессмыслица — без ответа");
 
+  // 6б. связка, если глагола нет (справочник, раздел 4): «Из дика саг ва»; с «не» — вац; в вопросе — за вопросительным словом
+  assert.strictEqual(tr("Он мой брат"), "Из са воша ва");
+  assert.strictEqual(tr("Мой брат не дома"), "Са воша цӀагӀа вац");
+  assert.strictEqual(tr("Где мой брат?"), "Мичахьа ва са воша?");
+  assert.ok(!/ (ва|да)$/.test(tr("Старый друг вернулся")), "«старый друг» — не «друг старый»: связки нет");
+  console.log("ok 6б: связка —", tr("Он мой брат"), "|", tr("Мой брат не дома"), "|", tr("Где мой брат?"));
+
+  // 6в. шаблоны разговорника с «…» (PaydaDosh: «Меня зовут … — Со … яхаш ва» / «Са цӀи … я»); имя остаётся как есть
+  assert.ok(/Ахмед/.test(tr("Меня зовут Ахмед")) && /(яхаш|цӀи)/.test(tr("Меня зовут Ахмед")), tr("Меня зовут Ахмед"));
+  assert.strictEqual(tr("Са цӀи Ахмед я", "inh"), "Меня зовут Ахмед");
+  // повелительное наклонение не угадываем: остаётся в скобках
+  assert.ok(/\[приходи\]/.test(tr("Приходи завтра")), tr("Приходи завтра"));
+  // «Мишта ва хьо?» — связка перед местоимением в русском не нужна
+  assert.strictEqual(tr("Мишта ва хьо?", "inh"), "Как ты?");
+  console.log("ok 6в: шаблоны и осторожность —", tr("Меня зовут Ахмед"), "|", tr("Приходи завтра"), "|", tr("Мишта ва хьо?", "inh"));
+
   // 7. сервер: без USE_AI=1 ИИ не вызывается, отвечает перевод по кускам
   let aiCalls = 0;
   global.fetch = async () => { aiCalls++; throw new Error("no network"); };
@@ -53,6 +69,9 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   assert.ok(!s.data.ai, "не ИИ");
   assert.ok(/ вода$/.test(s.data.translation), s.data.translation);
   assert.strictEqual(aiCalls, 0, "к ИИ не обращались");
+  // одно ингушское слово — форма глагола из библиотеки слов, а не «бегущий» из словаря
+  const v = await call({ text: "вода", source: "inh", target: "ru", mode: "word" });
+  assert.ok(/^ид[её]т$/.test(v.data.translation), v.data.translation);
   console.log(`ok 7: сервер без ИИ → «${s.data.translation}» [${s.data.model}]`);
 
   console.log("\nВсе проверки перевода по кускам прошли.");

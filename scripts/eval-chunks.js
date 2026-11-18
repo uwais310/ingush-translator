@@ -14,7 +14,7 @@ const KB = require("../lib/ingush-guide.js");
 const LEX = require("../lib/corpus-lexicon.js");
 const SEED = require("../data/phrases.json");
 const RET = require("../lib/retrieval.js")({ KB, SEED, LEX });
-const CHUNKS = require("../lib/rules/chunks.js")({ RET });
+const CHUNKS = require("../lib/rules/chunks.js")({ RET, SEED });
 
 const INH = process.argv.includes("--inh");
 const SHOW = process.argv.includes("--diff");
