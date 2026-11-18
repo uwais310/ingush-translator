@@ -649,7 +649,7 @@ async function translate() {
   const my = ++reqId;
   controller = new AbortController();
   // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
-  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("В базе и правилах этого нет, переводит ИИ. Обычно это несколько секунд."); }, 1200);
+  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("Ищу перевод в базе и словарях…"); }, 1200);
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
@@ -662,7 +662,9 @@ async function translate() {
       lastResult = "";
       resetOutput(data.supported ? "Целого перевода в базе пока нет." : "База есть только для пары русский ↔ ингушский.");
       renderBase(data.words, data.similar, fixT, true);
-      setStatus(data.supported
+      setStatus(data.aiOff
+        ? (data.supported ? "Большинства слов этого текста пока нет в словаре. Ниже то, что известно: отдельные слова и похожие фразы." : "Без ИИ переводчик знает только русский ↔ ингушский.")
+        : data.supported
         ? (data.words && data.words.length ? "Для такого предложения правил пока нет. Ниже перевод отдельных слов и похожие фразы. Чтобы перевести текст целиком, выключите «Без ИИ»." : "Для такого предложения правил пока нет. Выключите «Без ИИ», и текст переведёт ИИ.")
         : "Для других языков выключите «Без ИИ».");
       return;

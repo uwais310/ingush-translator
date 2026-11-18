@@ -2,6 +2,7 @@
 //   node test/mock-translate.test.js
 // Проверяет: какой ИИ вызывается первым, что уходит в запрос (system/user, temperature, схема JSON,
 // думание Gemini), что ответ JSON разбирается, что [неизвестные] слова не идут на второй проход.
+process.env.USE_AI = "1"; // эти проверки про ИИ: он выключен по умолчанию
 const assert = require("assert");
 
 const calls = [];

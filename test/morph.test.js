@@ -69,7 +69,9 @@ const run = (body) => new Promise((resolve) => {
   // 7. без ИИ и без целого перевода: разбор по словам знает начальные формы, есть похожие фразы
   // («Я люблю свою маму» уже собирают правила, поэтому здесь предложение, для которого правила нет)
   r = await run({ text: "Я очень люблю свою маму", source: "ru", target: "inh", mode: "text", noAi: true });
-  assert.strictEqual(r.data.noAi, true);
+  // теперь вместо пустого ответа — перевод по словам (lib/rules/chunks.js), разбор по словам остаётся
+  assert.strictEqual(r.data.chunks, true);
+  assert.ok(/^Сона .*нана еза$/.test(r.data.translation), r.data.translation);
   const byWord = Object.fromEntries(r.data.words.map((w) => [w.word, w]));
   assert.strictEqual(byWord["люблю"].lemma, "любить");
   assert.ok(/деза/.test(byWord["люблю"].text), byWord["люблю"].text);

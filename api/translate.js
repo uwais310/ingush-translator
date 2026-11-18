@@ -38,6 +38,10 @@ const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор �
 // перевод по правилам грамматики без ИИ: библиотека слов lib/rules/lexicon.js + библиотека правил lib/rules/grammar.js
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
 // русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
+// перевод «по кускам» без ИИ: самые длинные известные фразы + слова из словаря (lib/rules/chunks.js)
+const CHUNKS = require("../lib/rules/chunks.js")({ RET });
+// ИИ выключен, пока в настройках не задано USE_AI=1: тогда вместо ИИ переводит CHUNKS (код ИИ остаётся)
+const aiEnabled = () => process.env.USE_AI === "1";
 const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
 
 const LANGS = {
@@ -1272,7 +1276,7 @@ module.exports = async (req, res) => {
   await loadReview();
   const pool = VERIFIED.length ? [...VERIFIED, ...phrases] : phrases; // исправления с сайта важнее: они в конце
   const ruInh = isRuInh(source, target);
-  const noAi = body.noAi === true;
+  const noAi = body.noAi === true || !aiEnabled();
   const saved = exactMatch(pool, input, source, target);
 
   // --- готовый ответ без ИИ: проверено носителем → база (фразы, словарь, настоящие тексты) ---
@@ -1327,7 +1331,7 @@ module.exports = async (req, res) => {
   let corpus = [];
   if (hasIngush(source, target) && (source === "ru" || source === "inh")) {
     const t0 = Date.now();
-    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 300)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15).filter(([inh, ru]) => !test || (same(ru) !== same(input) && same(inh) !== same(input)));
+    if (await CORPUS.ready(budget >= LONG_BUDGET_MS && !noAi ? 4000 : 300)) // без ИИ корпус нужен только для подсказок — не ждём corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15).filter(([inh, ru]) => !test || (same(ru) !== same(input) && same(inh) !== same(input)));
     budget -= Date.now() - t0;
   }
   // корпус мог только что загрузиться: ещё раз ищем готовый ответ (целый текст или по предложениям)
@@ -1348,7 +1352,19 @@ module.exports = async (req, res) => {
   ].slice(0, 6);
 
   if (noAi && action !== "compare") {
-    return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh });
+    // запасной шаг без ИИ: перевод по кускам и словам. Грубый, поэтому не «из базы», а с пометкой
+    const ch = ruInh ? CHUNKS.translate(input, source) : null;
+    if (ch) {
+      const result = {
+        translation: fixT(ch.translation), model: "Без ИИ: по словам из словаря", rules: true, chunks: true,
+        known: ch.known, total: ch.total, words, similar,
+        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." },
+      };
+      if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
+      result.variants = finishVariants([{ text: result.translation, note: "", source: "chunks", sourceLabel: "по словам из словаря", rank: 4 }], fixT);
+      return res.status(200).json(result);
+    }
+    return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh, aiOff: !aiEnabled() });
   }
 
   if (!attempts().length) {

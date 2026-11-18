@@ -72,7 +72,7 @@ const shape = (vs) => {
   store._m.all = []; T._setStore(store);
 
   // 5. ИИ: один вызов, один вариант с меткой уверенности; лишних запросов ради 3 вариантов нет
-  process.env.GEMINI_API_KEY = "test";
+  process.env.GEMINI_API_KEY = "test"; process.env.USE_AI = "1"; // ИИ выключен по умолчанию
   T._resetBroke();
   reply = (url) => url.includes("generativelanguage")
     ? { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ translation: "Со хьалха вода", confidence: "low", unknown_words: [] }) }] } }] } }

@@ -1,5 +1,6 @@
 // Запасные ИИ: мёртвая модель (404) пропускается, GPT-OSS на Groq думает мало, понятное сообщение, когда ИИ нет.
 //   node test/fallback.test.js
+process.env.USE_AI = "1"; // эти проверки про ИИ: он выключен по умолчанию
 const assert = require("assert");
 const calls = [];
 let reply = () => ({ status: 500, body: {} });
