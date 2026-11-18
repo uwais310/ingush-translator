@@ -955,7 +955,7 @@ function seedResult(p, src, more = []) {
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
 function fromDictionary(text, src, tgt) {
-  const lw = RET.lookupWord(text, src);
+  const lw = RET.lookupWord(text, src, 6, true);
   if (!lw) return null;
   const lemmaNote = !lw.lemma ? ""
     : src === "ru"
