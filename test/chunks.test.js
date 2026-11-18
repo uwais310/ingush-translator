@@ -55,6 +55,26 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   assert.strictEqual(tr("Мишта ва хьо?", "inh"), "Как ты?");
   console.log("ok 6в: шаблоны и осторожность —", tr("Меня зовут Ахмед"), "|", tr("Приходи завтра"), "|", tr("Мишта ва хьо?", "inh"));
 
+  // 6г. таблица фраз из пар разговорника (lib/rules/align.js): «я не знаю» — «сона хац» (PaydaDosh / справочник);
+  // каждое слово куска взято из ингушской стороны настоящих пар; редкий кусок (одна пара) не используется
+  {
+    const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "");
+    const pairs = SEED.filter((p) => (p.kind === "phrase" || p.kind === "word") && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES, KB.GLOSSARY);
+    const A = require("../lib/rules/align.js")(pairs);
+    const toks = require("../lib/rules/align.js").toks;
+    const ap = A.phrase(["я", "не", "знаю"], "ru");
+    assert.ok(ap && ap.to === "сона хац" && ap.n >= 2 && ap.p >= 0.3, JSON.stringify(ap));
+    const inhWords = new Set(pairs.flatMap(([, i]) => toks(i)));
+    assert.ok(ap.to.split(" ").every((w) => inhWords.has(w)));
+    assert.strictEqual(A.phrase(["квази", "электрон"], "ru"), null);
+    assert.strictEqual(A.phrase(["я", "не", "знаю"], "ru", { minN: 1000 }), null);
+    // хук в chunks.js: кусок, которого нет в словаре, берётся из таблицы фраз
+    const C2 = require("../lib/rules/chunks.js")({ RET, SEED, ALIGN: { best: () => null, prob: () => 0, phrase: (ws) => (ws.join(" ") === "квази электрон" ? { to: "сона хац", p: 1, n: 9 } : null) } });
+    const r = C2.translate("Квази электрон", "ru");
+    assert.ok(r && r.pieces.some((x) => x.how === "align-phrase"), JSON.stringify(r));
+    console.log("ok 6г: таблица фраз — «я не знаю» →", ap.to, `(p=${ap.p.toFixed(2)}, n=${ap.n})`);
+  }
+
   // 7. сервер: без USE_AI=1 ИИ не вызывается, отвечает перевод по кускам
   let aiCalls = 0;
   global.fetch = async () => { aiCalls++; throw new Error("no network"); };
