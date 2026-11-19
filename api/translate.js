@@ -43,7 +43,7 @@ const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW
 let CHUNKS_ = null;
 const chunksEngine = () => {
   if (CHUNKS_) return CHUNKS_;
-  const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "");
+  const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "") && !p.rare; // rare — форм нет в текстах: в таблицу слов не берём
   const phrases = SEED.filter((p) => p.kind === "phrase" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES.map(([ru, inh]) => [ru, inh]));
   const words = SEED.filter((p) => p.kind === "word" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.GLOSSARY.map(([ru, inh]) => [ru, inh]));
   const ALIGN = require("../lib/rules/align.js")([...phrases, ...words]);

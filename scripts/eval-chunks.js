@@ -30,9 +30,9 @@ const norm = (s) => String(s).replace(/\([^()]*\)/g, " ").replace(/\[[^\]]*\]/g,
   .replace(/[1lI|Ӏ]/g, "ӏ").replace(/[.,!?;:«»"—–…-]/g, " ").replace(/\s+/g, " ").trim();
 
 // пары для обучения таблицы слов: фразы разговорника и словарные записи (без самой проверяемой фразы)
-const phrasePairs = () => SEED.filter((p) => p.kind === "phrase" && /^(PaydaDosh|Справочник)/.test(p.source)).map((p) => [p.ru, p.inh]);
+const phrasePairs = () => SEED.filter((p) => p.kind === "phrase" && /^(PaydaDosh|Справочник)/.test(p.source) && !p.rare).map((p) => [p.ru, p.inh]);
 const wordPairs = () => [
-  ...SEED.filter((p) => p.kind === "word" && /^(PaydaDosh|Справочник)/.test(p.source)).map((p) => [p.ru, p.inh]),
+  ...SEED.filter((p) => p.kind === "word" && /^(PaydaDosh|Справочник)/.test(p.source) && !p.rare).map((p) => [p.ru, p.inh]),
   ...KB.GLOSSARY.map(([ru, inh]) => [ru, inh]),
 ];
 
@@ -43,7 +43,7 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
   const refs = new Map();
   const add = (from, to) => { const k = norm(from); if (!k || k.split(" ").length < 2) return; if (!refs.has(k)) refs.set(k, { from, to: [] }); refs.get(k).to.push(to); };
   for (const p of SEED) {
-    if (p.kind !== "phrase" || !/^(PaydaDosh|Справочник)/.test(p.source)) continue;
+    if (p.kind !== "phrase" || !/^(PaydaDosh|Справочник)/.test(p.source) && !p.rare) continue;
     inh ? add(p.inh, p.ru) : add(p.ru, p.inh);
   }
   for (const [ru, i] of KB.EXAMPLES) inh ? add(i, ru) : add(ru, i);
