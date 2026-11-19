@@ -75,7 +75,8 @@ function readBody(req, limit = 200_000) {
 
 function createServer() {
   const handler = require("./api/translate.js");
-  handler._setStore(fileStore("phrases"));
+  // На хостинге (Railway и т.п.) с ключами Supabase исправления хранятся в Supabase, иначе в local-data/.
+  if (!require("./lib/supabase-store.js").supabaseStore()) handler._setStore(fileStore("phrases"));
   require("./lib/corpus.js")._set({ store: fileStore("corpus") });
 
   return http.createServer(async (req, res) => {
