@@ -946,11 +946,20 @@ function glossNote(n) {
   return String(n || "").split(" · ").map((x) => x.trim()).filter((x) => x && !/^PaydaDosh,/.test(x))
     .map((x) => (/^[вйдб](\s*[-,/]\s*[вйдб])*$/.test(x) ? `класс ${x}` : x)).join(" · ");
 }
+// Запись, где ингушское слово совпадает с русским («Таджик = Таджик»), — возможно, заимствование, а возможно,
+// пропуск в словаре: так и подписываем.
+const SAME_AS_RU = "Как в русском (заимствование?), проверьте у носителя";
+const sameAsRu = (p) => !!p && p.rare && BASE.key(p.ru) === BASE.key(p.inh);
+// «нийлха // нилха», «нух//нухь»: « // » в записи — разделитель вариантов, как « / »
+const splitAlt = (s) => String(s || "").split(/\s*\/\/\s*/).map((x) => x.trim()).filter(Boolean);
 function seedResult(p, src, more = []) {
   const sp = src === "ru" ? splitNote(p.inh) : { text: noParens(p.ru), note: "" };
-  const raw = sp.text;
+  const [raw, ...alt] = splitAlt(sp.text);
   const gloss = joinNotes(sp.note, p.license ? glossNote(p.note) : "");
-  return { translation: noStress(raw), label: `Из базы: ${sourceTitle(p)}`, kind: "seed", seed: p, more, seedNote: gloss, note: joinNotes(gloss || (p.license ? "" : p.note || ""), stressNote(raw)) };
+  const r = { translation: noStress(raw || sp.text), label: `Из базы: ${sourceTitle(p)}`, kind: "seed", seed: p, more, seedNote: gloss, note: joinNotes(gloss || (p.license ? "" : p.note || ""), stressNote(raw || sp.text)) };
+  if (alt.length) r.alternatives = alt.map((text) => ({ text: noStress(text), meaning: "" }));
+  if (sameAsRu(p)) { r.label = SAME_AS_RU; r.note = joinNotes(SAME_AS_RU + ".", r.note); }
+  return r;
 }
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
@@ -1005,6 +1014,9 @@ function resolveExact0(text, src, tgt, pool) {
   const d = fromDictionary(text, src, tgt);
   const exactItems = d && !d.lemma ? d.items : [];
   if (p && pp !== 5 && (!d || d.lemma || pp <= d.prio)) return seedResult(p, src, exactItems);
+  // корпус надёжнее редких записей (rare) и translatewiki: «того» — «цул», а не «того» (народ Того);
+  // записи словаря остаются в вариантах
+  if (p && pp === 5 && d && !d.lemma && d.prio >= 6) return seedResult(p, src, d.items || []);
   if (d && !d.lemma) return d;
   // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
   if (RET.wordsOf(text).length >= 2) {
@@ -1047,6 +1059,7 @@ function aiVariant(text, confidence, note = "") {
 // такая запись идёт после всех остальных записей базы с тем же текстом (и после статистики корпуса), но до ИИ.
 function oneSource(name, p) {
   const n = String(name || "");
+  if (sameAsRu(p)) return { source: "open", sourceLabel: SAME_AS_RU, rank: 4, prio: 3 };
   if (p.rare && /^(PaydaDosh|Викислов)/.test(n)) return { source: /^PaydaDosh/.test(n) ? "paydadosh" : "open", sourceLabel: /^PaydaDosh/.test(n) ? "Словарь PaydaDosh" : `Открытый словарь: ${shortSource(n)}`, rank: 4, prio: 2 };
   if (/^PaydaDosh/.test(n)) return { source: "paydadosh", sourceLabel: "Словарь PaydaDosh", rank: 3, prio: 0 };
   if (/^Корпус/.test(n)) return { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4, prio: 0 };
@@ -1068,7 +1081,7 @@ function seedSource(p) {
 // Пометка к варианту из строки словаря: «Фу деш ва хьо? (мужчине) / Фу деш я хьо? (женщине)» → «мужчине».
 function noteFromLine(text, line) {
   const k = BASE.key(text);
-  for (const part of String(line || "").split(" / ")) {
+  for (const part of String(line || "").split(/ \/ |\s*\/\/\s*/)) {
     const m = /^(.*?)\s*\(([^()]*)\)\s*[.!?]*\s*$/.exec(part.trim());
     if (m && BASE.key(m[1]) === k) return m[2];
   }
@@ -1151,9 +1164,9 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
     for (const p of seedAll(src).get(BASE.key(input)) || []) {
       const rev = REVIEW && REVIEW[p.id];
       const sp = src === "ru" && !(rev && rev.inh) ? splitNote(p.inh) : { text: "", note: "" };
-      const text = src === "ru" ? (rev && rev.inh) || noStress(sp.text) : noParens(p.ru);
+      const texts = src === "ru" ? ((rev && rev.inh) ? [rev.inh] : splitAlt(sp.text).map(noStress)) : [noParens(p.ru)];
       const where = rev ? { source: "native", sourceLabel: "Проверено носителем", rank: 1 } : seedSource(p);
-      list.push({ text, note: sp.note || (p.license ? glossNote(p.note) : noteFromLine(text, p.note)), ...where });
+      for (const text of texts) list.push({ text, note: sp.note || (p.license ? glossNote(p.note) : noteFromLine(text, p.note)), ...where });
     }
   }
   return finishVariants(list, fixT);
