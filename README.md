@@ -20,7 +20,7 @@ So this project goes the other way around. It trusts real sources first, says wh
 ## What it does
 
 - Translates between **Ingush and Russian** in both directions. English, Chechen, Kazakh, Turkish, Arabic, German and French are in the menu too, but those go through AI only.
-- Answers from a database of 42,061 Russian–Ingush entries (32,183 words, 8,188 phrases, 1,690 names). If the exact form isn't there, it looks for the base form: «маму» finds «мама», «люблю» finds «любить».
+- Answers from a database of 62,786 Russian–Ingush entries (51,603 words, 9,495 phrases, 1,688 names). If the exact form isn't there, it looks for the base form: «маму» finds «мама», «люблю» finds «любить».
 - Builds simple sentences from grammar rules, without AI, both ways: «У меня есть…», «Где…?», «Мне нужен…», «Я тебя люблю», «Я (не) понимаю», «Это мой дом» and others. If the Russian doesn't show whether a man or a woman is speaking, it gives both versions.
 - Labels every answer with where it came from: checked by a native speaker, from the database, built by the rules, or AI (with a warning that it may be wrong).
 - Checks AI output against about 155,000 word forms from Ingush books and newspapers. Unknown words are underlined, known Chechen forms are swapped for Ingush ones, and the AI gets a second try at the doubtful words.
