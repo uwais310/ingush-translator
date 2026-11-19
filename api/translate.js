@@ -977,7 +977,19 @@ function fromDictionary(text, src, tgt) {
 // Готовый ответ без ИИ для текста или одного предложения: { translation, verified?, label, kind?, alternatives?, note? } или null.
 // Порядок: проверено носителем → фразы и словарик проекта → словари (PaydaDosh, открытые) → начальная форма
 // слова по надёжному словарю → слова из настоящих текстов → начальная форма по остальным словарям.
+// Утверждение, на которое в базе есть только вопрос («Это далеко» — в разговорнике «Это далеко? — Гаьна дий
+// из?»): знак вопроса при поиске в базе не учитывается. Такой ответ не берём — дальше переведут правила.
+// Кроме фраз с вопросительным словом или «ли» («Как дела», «Где ты» пишут и без знака).
 function resolveExact(text, src, tgt, pool) {
+  const r = resolveExact0(text, src, tgt, pool);
+  if (r && !r.verified && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
+    const ws = RET.wordsOf(String(text).toLowerCase());
+    const L = require("../lib/rules/lexicon.js");
+    if (ws.length >= 2 && !L.QUESTION_WORDS[ws[0]] && !ws.includes("ли")) return null;
+  }
+  return r;
+}
+function resolveExact0(text, src, tgt, pool) {
   const saved = exactMatch(pool, text, src, tgt);
   if (saved) return { translation: saved, verified: true, label: "Проверено носителем языка" };
   const b = BASE.lookup(text, src, tgt);
