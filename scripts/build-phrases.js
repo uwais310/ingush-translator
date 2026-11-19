@@ -103,8 +103,28 @@ function salvageRu(ru, inh) {
 }
 
 // Возвращает исправленные { ru, inh, extra } или причину, по которой пара не идёт в базу.
+// Латинские гласные со знаком ударения или долготы вместо русских: «Вá везаш ва из», «вāр» → «Ва́», «ва̄р».
+const LATIN_MARKED = { "á": "а\u0301", "é": "е\u0301", "ó": "о\u0301", "ý": "у\u0301", "Á": "А\u0301", "É": "Е\u0301", "Ó": "О\u0301", "ā": "а\u0304" };
+const fixLatinMarked = (s) => s.replace(/[áéóýÁÉÓā]/g, (ch) => LATIN_MARKED[ch]);
+// «понуд. ф. от ваха 2», «уменьш. ф. от бедар» — ссылка на исходное ингушское слово, а не перевод
+const FORM_REF = /^(?:понуд|уменьш)\.\s*ф\.\s*от\s+\S+(?:\s+\d+)?$/i;
+// «субъект во мн. ч. однократн. действ. пересесть» — грамматическая помета перед переводом: уходит в пояснение
+const VERB_NOTE = /^((?:субъект|объект)\s+во?\s+(?:ед|мн)\.?\s*ч\.?\s*(?:одно|много)кратн\.\s*действ\.)\s*/i;
+
 function tidy(kind, ru, inh, extra) {
-  ru = fixLookalikes(ru); inh = fixPal(fixLookalikes(inh));
+  ru = fixLatinMarked(fixLookalikes(ru)); inh = fixPal(fixLatinMarked(fixLookalikes(inh)));
+  if (FORM_REF.test(ru)) return "ссылка на другое слово вместо перевода";
+  const vn = VERB_NOTE.exec(ru);
+  if (vn && ru.length > vn[0].length) { extra = { ...extra, note: [extra.note, vn[1].replace(/\s+/g, " ")].filter(Boolean).join("; ") }; ru = ru.slice(vn[0].length); }
+  // «~ шерра баккха.», «цӀена ~.» — пример из словаря, где тильда заменяет заглавное слово: ингушская строка неполная
+  if (/~/.test(inh)) return "тильда вместо слова";
+  // «дикий; ~ циск. Дикий кот; 2) перен» — после первого значения идёт пример с тильдой: оставляем первое значение
+  if (/~/.test(ru)) {
+    const head = ru.split(/;/)[0].trim();
+    const hw = head.toLowerCase().match(/[а-яё]+/g) || [];
+    if (kind !== "word" || /~/.test(head) || !hw.length || hw.some((w) => !isRu(w))) return "тильда вместо слова";
+    ru = head;
+  }
   // «c) Я приехал…», «5. Давнопрошедшее время» — номер пункта из учебника
   const num = /^(?:[a-cабвс]\)|\d{1,2}[.)])\s+/i;
   if (num.test(ru) && !num.test(inh)) ru = ru.replace(num, "");
@@ -114,6 +134,12 @@ function tidy(kind, ru, inh, extra) {
   // «от ала ^3 → алийта» — ссылка словаря на исходное ингушское слово, а не перевод
   const ref = /^от\s+([^\s]+)(?:\s+\^?\d)?$/.exec(ru);
   if (ref && !isRu(noMarks(ref[1]).toLowerCase())) return "ссылка на другое слово вместо перевода";
+  // «от ваха = вахийта», «от балла5 = баллийта»: после «от» — ингушское слово, от которого образовано ингушское
+  // (то же начало). «от нас = вайгара», «от себя = сайгара» — настоящие переводы, у них начало другое.
+  if (ref) {
+    const base = wkey(ref[1].replace(/\d+$/, ""));
+    if (base.length >= 2 && !SHORT_RU.has(base) && wkey(inh).startsWith(base.slice(0, Math.min(3, base.length)))) return "ссылка на другое слово вместо перевода";
+  }
   ru = ru.replace(/\s*\^\d+/g, ""); // «^1», «^2» — номер омонима в словаре
   // «ЙоӀ 17 3», «Ма эхь да из! 49 )» — номера страниц из книги
   if (/\d/.test(inh) && !/\d/.test(ru)) inh = inh.replace(/\s+\d[\d\s)(.,„"“”'’°=]*$/, "").trim();
@@ -185,7 +211,9 @@ function add(kind, ru, inh, source, extra = {}, strict = true, later = null) {
   if (!ru || !inh) return;
   // ключ до чистки (как его считала прежняя сборка) — чтобы исправленная запись сохранила прежний id
   const old = kind === "phrase" ? cleanPair(ru, inh, extra.note) : { ru, inh };
-  const origKey = `${dkey(old.ru)}|${dkey(old.inh)}`;
+  // второй проход (пункт 5) получает уже очищенный текст: ключ до чистки он передаёт в extra._orig
+  const origKey = extra._orig || `${dkey(old.ru)}|${dkey(old.inh)}`;
+  if (extra._orig) { extra = { ...extra }; delete extra._orig; }
   if (source !== S_GUIDE) { // справочник проекта писали вручную — его строки с пояснениями не трогаем
     const t = tidy(kind, ru, inh, extra);
     if (typeof t === "string") return why(`${source}: ${t}`, ru, inh);
@@ -199,7 +227,7 @@ function add(kind, ru, inh, source, extra = {}, strict = true, later = null) {
   if (ws.some((w) => CHECHEN.has(w) || CHECHEN_SPELL.test(w))) return why(`${source}: чеченская форма`, ru, inh);
   const miss = strict ? ws.filter((w) => w.length > 1 && !WORDS.has(w)) : [];
   if (miss.length) {
-    if (later) return void later.push({ kind, ru, inh, source, extra, miss });
+    if (later) return void later.push({ kind, ru, inh, source, extra, miss, origKey });
     return bump(dropped, `${source}: слова нет в ингушских текстах`);
   }
   const key = `${dkey(ru)}|${dkey(inh)}`;
@@ -292,7 +320,7 @@ const elsewhere = (w, source) => [...(DICT_WORDS.get(w) || [])].some((s) => s !=
 for (const c of LATER) {
   const backed = c.miss.every((w) => elsewhere(w, c.source) || related(w));
   if (!backed && c.kind !== "word") { why(`${c.source}: слова нет в ингушских текстах`, c.ru, `${c.inh}  [${c.miss}]`); continue; }
-  add(c.kind, c.ru, c.inh, c.source, { ...c.extra, rare: true }, false);
+  add(c.kind, c.ru, c.inh, c.source, { ...c.extra, rare: true, _orig: c.origKey }, false);
 }
 
 // Прежние записи — в прежнем порядке, новые — после них: при равной надёжности сайт берёт первую
