@@ -14,6 +14,7 @@
 //   node scripts/eval-retrieval.js            — 600 случайных фраз, оба направления
 //   node scripts/eval-retrieval.js 2000 ru    — 2000 фраз, только русский → ингушский
 //   node scripts/eval-retrieval.js 600 ru --misses — показать слова, которые чаще всего не находятся
+//   node scripts/eval-retrieval.js --save-holdout   — заново записать отложенный набор (data/eval-holdout.json)
 
 const KB = require("../lib/ingush-guide.js");
 const LEX = require("../lib/corpus-lexicon.js");
@@ -36,11 +37,26 @@ let seed = 20261117;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 const pool = SEED.filter((p) => p.kind === "phrase" && !p.rare && /^(PaydaDosh|Справочник)/.test(p.source) && !/Букв\./.test(p.ru))
   .filter((p) => { const n = RET.wordsOf(p.ru).length; return n >= 2 && n <= 12; });
-const sample = [];
-const taken = new Set();
-while (sample.length < Math.min(N, pool.length)) {
-  const i = Math.floor(rnd() * pool.length);
-  if (!taken.has(i)) { taken.add(i); sample.push(pool[i]); }
+// Отложенный набор фраз хранится по id (data/eval-holdout.json): при пересборке базы выборка не меняется,
+// и цифры разных сборок можно сравнивать. --save-holdout — записать текущую случайную выборку в файл.
+const path = require("path"), fs = require("fs");
+const HOLD = path.join(__dirname, "..", "data", "eval-holdout.json");
+let sample = [];
+const byId = new Map(SEED.map((p) => [p.id, p]));
+if (fs.existsSync(HOLD) && !args.includes("--save-holdout") && !args.includes("--random")) {
+  const ids = JSON.parse(fs.readFileSync(HOLD, "utf8")).ids || [];
+  sample = ids.map((id) => byId.get(id)).filter(Boolean).slice(0, N);
+  if (sample.length < ids.length) console.log(`(из отложенного набора нет в базе: ${ids.length - sample.length} id)`);
+} else {
+  const taken = new Set();
+  while (sample.length < Math.min(N, pool.length)) {
+    const i = Math.floor(rnd() * pool.length);
+    if (!taken.has(i)) { taken.add(i); sample.push(pool[i]); }
+  }
+  if (args.includes("--save-holdout")) {
+    fs.writeFileSync(HOLD, JSON.stringify({ note: "Отложенный набор для scripts/eval-retrieval.js: id фраз базы", ids: sample.map((p) => p.id) }, null, 0) + "\n");
+    console.log(`Записано ${sample.length} id в data/eval-holdout.json`);
+  }
 }
 
 function measure(dir, quiet = false) {
