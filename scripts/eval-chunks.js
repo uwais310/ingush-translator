@@ -24,6 +24,8 @@ const INH = process.argv.includes("--inh");
 const SHOW = process.argv.includes("--diff");
 const NO_ALIGN = process.argv.includes("--no-align");
 const FOLDS = 5;
+// --dump файл.json — сохранить все переводы (для сравнения версий)
+const DUMP = process.argv.includes("--dump") ? process.argv[process.argv.indexOf("--dump") + 1] : null;
 const norm = (s) => String(s).replace(/\([^()]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").toLowerCase().replace(/ё/g, "е")
   .replace(/[1lI|Ӏ]/g, "ӏ").replace(/[.,!?;:«»"—–…-]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -62,6 +64,7 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
   }
 
   let done = 0, same = 0, hitW = 0, allW = 0, shown = 0;
+  const dump = [];
   for (const { from, to } of items) {
     const r = chunksFor[foldOf(from)].translate(from, src, { noWhole: true });
     if (!r) continue;
@@ -71,9 +74,12 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
     const good = ours.filter((w) => refWords.has(w)).length;
     hitW += good; allW += ours.length;
     const bag = (s) => norm(s).split(" ").sort().join(" ");
-    if (to.some((t) => bag(t) === bag(r.translation))) same++;
+    const ok = to.some((t) => bag(t) === bag(r.translation));
+    if (ok) same++;
+    if (DUMP) dump.push({ from, ours: r.translation, ref: to[0], same: ok, good, n: ours.length });
     if (SHOW && shown < 40 && done % 7 === 0) { shown++; log(`${from}\n  наш:     ${r.translation}\n  носитель: ${to[0]}`); }
   }
+  if (DUMP && !quiet) require("fs").writeFileSync(DUMP, JSON.stringify(dump, null, 1));
   const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : "0.0") + "%";
   log(`Фраз (от 2 слов): ${refs.size}. Переведено по кускам: ${done} (${pct(done, refs.size)}).`);
   log(`  слова на месте (есть в переводе носителя): ${pct(hitW, allW)}`);
