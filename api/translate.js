@@ -279,8 +279,8 @@ const tokens = (s) => normKey(s).split(" ").filter((w) => w.length >= 2);
 
 // ---------------- проверка по словарю ----------------
 
-let WORDS = null;
-const words = () => (WORDS || (WORDS = new Set(WORDS_RAW.split("\n"))));
+// тот же Set словоформ, что у правил (lib/rules/verbs.js): строится один раз на процесс
+const words = () => require("../lib/rules/verbs.js").wordSet();
 const wordKey = (w) =>
   fixPalochka(w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC")).toLowerCase().replace(/Ӏ/g, "ӏ");
 
