@@ -1,0 +1,17 @@
+# Проверка кода: при каждом пуше и пулл-реквесте запускаются все тесты (test/*.test.js).
+# Ключи ИИ не нужны: тесты работают без сети и без ключей.
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Все тесты
+        run: for f in test/*.test.js; do echo "== $f"; node "$f" || exit 1; done
