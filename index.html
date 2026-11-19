@@ -245,10 +245,72 @@
     .langbar { max-width: 520px; }
   }
   @media (max-width: 819px) { .left { display: contents; } }
+  /* ---------- горы за переводчиком ----------
+     Слои гор лежат под страницей и чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью).
+     Дальние слои двигаются меньше ближних — так получается объём. Башни — силуэты ингушских боевых башен. */
+  :root { --sky-top: #8ec4ea; --sky-low: #e4f2f8; --sunlight: #fff6cf;
+    --m-far: #b3cadb; --m-snow: #ffffff; --m-mid: #86ab9f; --m-ridge: #4d8669; --m-near: #2f6a4b; --m-win: #d9ebf1;
+    --card: rgba(255, 255, 255, .86); --card-line: rgba(255, 255, 255, .7); }
+  @media (prefers-color-scheme: dark) {
+    :root { --sky-top: #07111b; --sky-low: #1a3140; --sunlight: #e9eedf;
+      --m-far: #2a4152; --m-snow: #8fa6b4; --m-mid: #1f3a35; --m-ridge: #16302a; --m-near: #0d211b; --m-win: #e8c76a;
+      --card: rgba(17, 27, 22, .84); --card-line: rgba(255, 255, 255, .07); }
+  }
+  html { background: var(--sky-low); }
+  body { background: transparent; }
+  .scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 62%); }
+  .scene .layer { position: absolute; left: -6%; width: 112%; bottom: -36px; height: 100vh; height: 100lvh; display: block; will-change: transform; }
+  .scene .sky { position: absolute; inset: -30px; will-change: transform; }
+  .scene .sunball { position: absolute; right: max(16%, 130px); top: 12vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
+    box-shadow: 0 0 60px 26px color-mix(in srgb, var(--sunlight) 55%, transparent); }
+  .scene .stars { position: absolute; inset: 0; opacity: 0; }
+  @media (prefers-color-scheme: dark) {
+    .scene .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
+    .scene .stars { opacity: 1; background-image:
+      radial-gradient(1.4px 1.4px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 27% 8%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 41% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 58% 12%, #dfe9ff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 69% 27%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 88% 9%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 6% 33%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 31%, #fff 50%, transparent 51%),
+      radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
+  }
+  .f-far { fill: var(--m-far); } .f-snow { fill: var(--m-snow); } .f-mid { fill: var(--m-mid); }
+  .f-ridge { fill: var(--m-ridge); } .f-near { fill: var(--m-near); } .f-win { fill: var(--m-win); }
+  .band, main { position: relative; z-index: 1; }
+  main { padding-top: clamp(26px, 11vh, 120px); }
+  .work, .block, .about { background: var(--card); border: 1px solid var(--card-line); border-radius: 22px; padding: 14px;
+    box-shadow: 0 10px 30px rgba(10, 40, 30, .14); -webkit-backdrop-filter: blur(10px) saturate(1.15); backdrop-filter: blur(10px) saturate(1.15); }
+  .about { padding: 14px 16px; }
+  .tilt { position: absolute; top: 12px; right: 16px; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px;
+    border: 0; border-radius: 99px; background: var(--card); color: var(--green-deep); font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(10, 40, 30, .16); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .tilt svg { width: 20px; height: 20px; }
+  .tilt:hover { background: var(--leaf); }
+  @media (min-width: 820px) { .work { padding: 18px; } }
+  @media (prefers-reduced-motion: reduce) { .scene .layer, .scene .sky { will-change: auto; } .tilt { display: none; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
+<div class="scene" id="scene" aria-hidden="true">
+  <div class="sky" data-depth="0.12"><div class="stars"></div><div class="sunball"></div></div>
+  <svg class="layer" data-depth="0.3" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
+    <g transform="translate(0 -70)">
+      <path class="f-far" d="M0 670L0 330L90 280L160 300L250 210L320 260L380 240L470 140L540 220L600 200L680 250L760 170L830 230L900 200L980 120L1060 210L1120 190L1200 240L1200 670Z"/>
+      <path class="f-snow" d="M220 240L250 210L292 240L278 235L266 246L252 236L236 244ZM432 182L470 140L506 182L492 176L480 190L466 178L452 188ZM730 200L760 170L795 200L782 195L770 206L756 196L742 204ZM935 165L980 120L1020 165L1004 158L992 172L978 160L962 170L948 160Z"/>
+    </g>
+  </svg>
+  <svg class="layer" data-depth="0.55" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
+    <path class="f-mid" transform="translate(0 -40)" d="M0 640L0 380L70 350L150 368L230 308L300 342L370 300L450 338L540 288L620 328L700 300L790 344L870 304L950 334L1030 290L1110 328L1200 310L1200 640Z"/>
+  </svg>
+  <svg class="layer" data-depth="0.8" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
+    <path class="f-ridge" d="M0 600L0 430Q150 386 300 410T600 400T900 378T1200 410L1200 600Z"/>
+    <g transform="translate(318 412) scale(1)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(372 408) scale(0.62)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(842 384) scale(0.9)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(1060 392) scale(0.55)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g>
+  </svg>
+  <svg class="layer" data-depth="1" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
+    <path class="f-near" d="M0 600L0 500Q200 456 400 488T800 476T1200 466L1200 600Z"/>
+  </svg>
+</div>
 <header class="band top">
   <div class="band-in">
     <div class="sign" aria-hidden="true">
@@ -268,6 +330,9 @@
 </header>
 
 <main>
+  <button class="tilt" id="tilt" type="button" hidden aria-label="Включить 3D: горы двигаются, когда наклоняете телефон" title="Горы двигаются, когда наклоняете телефон">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M2 20l7-11 4 6 3-4 6 9z"/></svg>3D
+    </button>
   <div class="work">
     <div class="left">
       <div class="langbar">
@@ -1022,6 +1087,52 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
 }
+</script>
+<script>
+// Горы: слои сдвигаются от наклона телефона, а на компьютере — от мыши. При «уменьшить движение» всё стоит на месте.
+(() => {
+  const scene = document.getElementById("scene"), btn = document.getElementById("tilt");
+  if (!scene || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
+  const MAX_X = 34, MAX_Y = 18;               // сдвиг ближнего слоя в пикселях
+  let tx = 0, ty = 0, x = 0, y = 0, raf = 0, base = null;
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  function tick() {
+    x += (tx - x) * 0.09; y += (ty - y) * 0.09;
+    for (const { el, d } of layers) el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y).toFixed(2)}px, 0)`;
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.002 ? requestAnimationFrame(tick) : 0;
+  }
+  function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); if (!raf && !document.hidden) raf = requestAnimationFrame(tick); }
+
+  addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") aim(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); }, { passive: true });
+
+  function onTilt(e) {
+    if (e.beta == null || e.gamma == null) return;
+    btn.hidden = true;                                 // наклон уже работает — кнопка не нужна
+    const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let h = e.gamma, v = e.beta;                       // h — влево/вправо, v — к себе/от себя
+    if (angle === 90) { h = e.beta; v = -e.gamma; } else if (angle === -90 || angle === 270) { h = -e.beta; v = e.gamma; }
+    if (!base) base = { h, v };
+    base.h += (h - base.h) * 0.01; base.v += (v - base.v) * 0.01;   // как телефон держат — та позиция и «ровная»
+    aim((h - base.h) / 18, (v - base.v) / 18);
+  }
+  function listen() { addEventListener("deviceorientation", onTilt); }
+
+  const DOE = window.DeviceOrientationEvent;
+  if (!DOE || !matchMedia("(pointer: coarse)").matches) return;   // компьютер: только мышь
+  listen();                                                       // Android: наклон работает сразу
+  if (typeof DOE.requestPermission === "function") {
+    // iPhone даёт наклон только после нажатия на кнопку «3D».
+    let saved = false; try { saved = localStorage.getItem("tilt3d") === "1"; } catch {}
+    const ask = () => DOE.requestPermission().then((s) => {
+      if (s === "granted") { btn.hidden = true; try { localStorage.setItem("tilt3d", "1"); } catch {} }
+    }).catch(() => {});
+    btn.hidden = false;
+    btn.addEventListener("click", ask);
+    if (saved) addEventListener("touchend", ask, { once: true, passive: true });   // уже разрешали: включится от первого касания
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
+})();
 </script>
 </body>
 </html>
