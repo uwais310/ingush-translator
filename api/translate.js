@@ -1264,6 +1264,8 @@ module.exports = async (req, res) => {
     });
   }
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
+  // страница спрашивает, включён ли ИИ на сервере: если нет — прячет кнопки «Сравнить ИИ» и «Без ИИ»
+  if (action === "config") return res.status(200).json({ ai: aiEnabled() });
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
@@ -1373,6 +1375,8 @@ module.exports = async (req, res) => {
       const result = {
         translation: fixT(ch.translation), model: "Без ИИ: по словам из словаря", rules: true, chunks: true,
         known: ch.known, total: ch.total, words, similar,
+        // откуда каждое слово перевода: страница показывает это по нажатию на слово
+        pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
         details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." },
       };
       if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
