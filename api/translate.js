@@ -1043,8 +1043,11 @@ function aiVariant(text, confidence, note = "") {
 // Порядок надёжности: словарь проекта > PaydaDosh > Викисловарь > Википедия/Викиданные > PanLex > корпус > translatewiki.
 // rank — для сайта (1 носитель … 7 ИИ), prio — порядок внутри одного rank. Если ту же пару дал и другой
 // источник (поле also), берём самый надёжный из них.
+// rare: true — в паре есть форма, которой нет в собранных ингушских текстах (scripts/build-phrases.js, пункт 5):
+// такая запись идёт после всех остальных записей базы с тем же текстом (и после статистики корпуса), но до ИИ.
 function oneSource(name, p) {
   const n = String(name || "");
+  if (p.rare && /^(PaydaDosh|Викислов)/.test(n)) return { source: /^PaydaDosh/.test(n) ? "paydadosh" : "open", sourceLabel: /^PaydaDosh/.test(n) ? "Словарь PaydaDosh" : `Открытый словарь: ${shortSource(n)}`, rank: 4, prio: 2 };
   if (/^PaydaDosh/.test(n)) return { source: "paydadosh", sourceLabel: "Словарь PaydaDosh", rank: 3, prio: 0 };
   if (/^Корпус/.test(n)) return { source: "corpus", sourceLabel: "Из настоящих текстов", rank: 4, prio: 0 };
   if (/^translatewiki/i.test(n)) return { source: "open", sourceLabel: `Открытый словарь: ${shortSource(n)}`, rank: 4, prio: 1 };
