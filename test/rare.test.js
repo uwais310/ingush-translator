@@ -41,6 +41,17 @@ const SEED = require("../data/phrases.json");
   assert.ok(lw && !lw.items.some((it) => it.seed && /мужск|женск/.test(String(it.seed.note) + it.inh)), JSON.stringify(lw && lw.items.map((i) => i.inh)));
   console.log("ok 4: «имя» →", lw.items.map((i) => i.inh).slice(0, 3).join(", "));
 
+  // 5. имена: не «нет в словаре», а как есть (записи «имя = …» PaydaDosh, большая буква в середине предложения)
+  r = await call({ text: "Ахмед", source: "ru", target: "inh", mode: "word" });
+  assert.strictEqual(r.translation, "Ахмед"); assert.ok(/Имя/.test(r.model), r.model);
+  r = await call({ text: "Мурад и Амина пьют чай", source: "ru", target: "inh", mode: "text" });
+  assert.ok(/Мурад а Амина а/.test(r.translation), r.translation);
+  r = await call({ text: "Ахьмад цӀа вахар", source: "inh", target: "ru", mode: "text" });
+  assert.ok(/^Ахьмад /.test(r.translation), r.translation);
+  r = await call({ text: "Брат работает в Москве", source: "ru", target: "inh", mode: "text" });
+  assert.ok(/Моске/.test(r.translation), "город — не имя: " + r.translation);
+  console.log("ok 5: имена —", r.translation);
+
   console.log("\nВсе проверки редких записей прошли.");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -1401,7 +1401,7 @@ module.exports = async (req, res) => {
     const ch = ruInh ? CHUNKS.translate(input, source) : null;
     if (ch) {
       const result = {
-        translation: fixT(ch.translation), model: "Без ИИ: по словам из словаря", rules: true, chunks: true,
+        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : "Без ИИ: по словам из словаря", rules: true, chunks: true,
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
         pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
