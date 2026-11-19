@@ -341,6 +341,9 @@ function suspects(translation, sourceText) {
 let storeOverride = null; // для тестов
 function phraseStore() {
   if (storeOverride) return storeOverride;
+  // Если на хостинге заданы ключи Supabase, исправления хранятся там; иначе в Netlify Blobs.
+  const sb = require("../lib/supabase-store.js").supabaseStore();
+  if (sb) return sb;
   try {
     const { getStore } = require("@netlify/blobs");
     return getStore("phrases");
