@@ -45,11 +45,11 @@ Open the site, pick the languages and type. To install it on a phone: Safari →
 To run it on your own computer you need Node.js 18 or newer, and nothing else to install:
 
 ```sh
-cp .env.example .env    # optional: add a free GEMINI_API_KEY for the AI step
+cp .env.example .env    # optional: GEMINI_API_KEY + USE_AI=1 to turn the AI step back on
 node server.js          # then open http://localhost:3000
 ```
 
-The database and grammar rules work without any key. Tests: `for f in test/*.test.js; do node "$f"; done`
+AI is off by default: the database, grammar rules and the word-by-word translator (`lib/rules/chunks.js`) work without any key. Set `USE_AI=1` to turn the AI fallback back on. Tests: `for f in test/*.test.js; do node "$f"; done`
 
 ## Contributing
 

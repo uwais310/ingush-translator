@@ -38,6 +38,20 @@ const RET = require("../lib/retrieval.js")({ KB, SEED, LEX }); // подбор �
 // перевод по правилам грамматики без ИИ: библиотека слов lib/rules/lexicon.js + библиотека правил lib/rules/grammar.js
 const RULES = require("../lib/rules/index.js")({ RET, KB, SEED, WORDS: WORDS_RAW });
 // русские слова, оставленные ИИ в ингушском переводе (список словоформ их не ловит: тексты двуязычные)
+// перевод «по кускам» без ИИ: самые длинные известные фразы + слова из словаря (lib/rules/chunks.js)
+// таблица слов из пар фраз (lib/rules/align.js) строится один раз при первом переводе по кускам
+let CHUNKS_ = null;
+const chunksEngine = () => {
+  if (CHUNKS_) return CHUNKS_;
+  const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "") && !p.rare; // rare — форм нет в текстах: в таблицу слов не берём
+  const phrases = SEED.filter((p) => p.kind === "phrase" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES.map(([ru, inh]) => [ru, inh]));
+  const words = SEED.filter((p) => p.kind === "word" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.GLOSSARY.map(([ru, inh]) => [ru, inh]));
+  const ALIGN = require("../lib/rules/align.js")([...phrases, ...words]);
+  return (CHUNKS_ = require("../lib/rules/chunks.js")({ RET, SEED, ALIGN, EXAMPLES: phrases }));
+};
+const CHUNKS = { translate: (...a) => chunksEngine().translate(...a), inhLexicon: (...a) => chunksEngine().inhLexicon(...a) };
+// ИИ выключен, пока в настройках не задано USE_AI=1: тогда вместо ИИ переводит CHUNKS (код ИИ остаётся)
+const aiEnabled = () => process.env.USE_AI === "1";
 const POST = require("../lib/postcheck.js")({ SEED, KB, L: require("../lib/rules/lexicon.js") });
 
 const LANGS = {
@@ -265,8 +279,8 @@ const tokens = (s) => normKey(s).split(" ").filter((w) => w.length >= 2);
 
 // ---------------- проверка по словарю ----------------
 
-let WORDS = null;
-const words = () => (WORDS || (WORDS = new Set(WORDS_RAW.split("\n"))));
+// тот же Set словоформ, что у правил (lib/rules/verbs.js): строится один раз на процесс
+const words = () => require("../lib/rules/verbs.js").wordSet();
 const wordKey = (w) =>
   fixPalochka(w.normalize("NFD").replace(/\p{Mn}/gu, "").normalize("NFC")).toLowerCase().replace(/Ӏ/g, "ӏ");
 
@@ -950,7 +964,7 @@ function seedResult(p, src, more = []) {
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
 function fromDictionary(text, src, tgt) {
-  const lw = RET.lookupWord(text, src);
+  const lw = RET.lookupWord(text, src, 6, true);
   if (!lw) return null;
   const lemmaNote = !lw.lemma ? ""
     : src === "ru"
@@ -972,12 +986,29 @@ function fromDictionary(text, src, tgt) {
 // Готовый ответ без ИИ для текста или одного предложения: { translation, verified?, label, kind?, alternatives?, note? } или null.
 // Порядок: проверено носителем → фразы и словарик проекта → словари (PaydaDosh, открытые) → начальная форма
 // слова по надёжному словарю → слова из настоящих текстов → начальная форма по остальным словарям.
+// Утверждение, на которое в базе есть только вопрос («Это далеко» — в разговорнике «Это далеко? — Гаьна дий
+// из?»): знак вопроса при поиске в базе не учитывается. Такой ответ не берём — дальше переведут правила.
+// Кроме фраз с вопросительным словом или «ли» («Как дела», «Где ты» пишут и без знака).
 function resolveExact(text, src, tgt, pool) {
+  const r = resolveExact0(text, src, tgt, pool);
+  if (r && !r.verified && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
+    const ws = RET.wordsOf(String(text).toLowerCase());
+    const L = require("../lib/rules/lexicon.js");
+    if (ws.length >= 2 && !L.QUESTION_WORDS[ws[0]] && !ws.includes("ли")) return null;
+  }
+  return r;
+}
+function resolveExact0(text, src, tgt, pool) {
   const saved = exactMatch(pool, text, src, tgt);
   if (saved) return { translation: saved, verified: true, label: "Проверено носителем языка" };
   const b = BASE.lookup(text, src, tgt);
   if (b && b.kind !== "texts") return b;
   if (!isRuInh(src, tgt)) return b || null;
+  // ингушская форма глагола или местоимение из библиотеки слов: «вода» — «идёт», а не «бегущий» из словаря
+  if (src === "inh") {
+    const lx = CHUNKS.inhLexicon(text);
+    if (lx) return { translation: lx.translation, label: "Без ИИ: библиотека слов (справочник)", kind: "rules", note: lx.note, rules: { variants: [{ text: lx.translation, note: "" }] } };
+  }
   const p = seedBest(text, src); // пара базы с точно таким текстом
   const pp = p ? RET.sourceOf(p).prio : 99;
   const d = fromDictionary(text, src, tgt);
@@ -1261,6 +1292,8 @@ module.exports = async (req, res) => {
     });
   }
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
+  // страница спрашивает, включён ли ИИ на сервере: если нет — прячет кнопки «Сравнить ИИ» и «Без ИИ»
+  if (action === "config") return res.status(200).json({ ai: aiEnabled() });
   if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
@@ -1288,7 +1321,7 @@ module.exports = async (req, res) => {
   await loadReview();
   const pool = VERIFIED.length ? [...VERIFIED, ...phrases] : phrases; // исправления с сайта важнее: они в конце
   const ruInh = isRuInh(source, target);
-  const noAi = body.noAi === true;
+  const noAi = body.noAi === true || !aiEnabled();
   const saved = exactMatch(pool, input, source, target);
 
   // --- готовый ответ без ИИ: проверено носителем → база (фразы, словарь, настоящие тексты) ---
@@ -1343,7 +1376,7 @@ module.exports = async (req, res) => {
   let corpus = [];
   if (hasIngush(source, target) && (source === "ru" || source === "inh")) {
     const t0 = Date.now();
-    if (await CORPUS.ready(budget >= LONG_BUDGET_MS ? 4000 : 300)) corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15).filter(([inh, ru]) => !test || (same(ru) !== same(input) && same(inh) !== same(input)));
+    if (await CORPUS.ready(budget >= LONG_BUDGET_MS && !noAi ? 4000 : 300)) // без ИИ корпус нужен только для подсказок — не ждём corpus = CORPUS.search(input, source === "inh" ? "inh" : "ru", 15).filter(([inh, ru]) => !test || (same(ru) !== same(input) && same(inh) !== same(input)));
     budget -= Date.now() - t0;
   }
   // корпус мог только что загрузиться: ещё раз ищем готовый ответ (целый текст или по предложениям)
@@ -1364,7 +1397,21 @@ module.exports = async (req, res) => {
   ].slice(0, 6);
 
   if (noAi && action !== "compare") {
-    return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh });
+    // запасной шаг без ИИ: перевод по кускам и словам. Грубый, поэтому не «из базы», а с пометкой
+    const ch = ruInh ? CHUNKS.translate(input, source) : null;
+    if (ch) {
+      const result = {
+        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : "Без ИИ: по словам из словаря", rules: true, chunks: true,
+        known: ch.known, total: ch.total, words, similar,
+        // откуда каждое слово перевода: страница показывает это по нажатию на слово
+        pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
+        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
+      };
+      if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
+      result.variants = finishVariants([{ text: result.translation, note: "", source: "chunks", sourceLabel: "по словам из словаря", rank: 4 }], fixT);
+      return res.status(200).json(result);
+    }
+    return res.status(200).json({ translation: "", noAi: true, base: true, words, similar, supported: ruInh, aiOff: !aiEnabled() });
   }
 
   if (!attempts().length) {

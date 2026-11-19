@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a6b3d" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0c1a13" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Ингушский переводчик: слова, фразы и целые тексты. Сначала проверенная база и словари, потом ИИ.">
+<meta name="description" content="Ингушский переводчик: слова, фразы и целые тексты. Проверенные фразы, словари и правила грамматики ингушского языка.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -127,6 +127,22 @@
   .output.busy::after { top: 50px; right: 46%; }
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   .unk { background: var(--amber-bg); color: var(--amber-ink); border-radius: 4px; padding: 0 2px; text-decoration: underline dotted currentColor; text-underline-offset: 4px; }
+  /* перевод по словам: каждое слово можно нажать и узнать, откуда оно */
+  .pc { font: inherit; color: inherit; background: none; border: 0; padding: 0 1px; margin: 0; cursor: pointer; border-radius: 6px;
+    text-decoration: underline dotted color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 6px; text-decoration-thickness: 2px; }
+  .pc:hover, .pc.on { background: var(--leaf); }
+  .pc.on { outline: 2px solid color-mix(in srgb, var(--green) 50%, transparent); }
+  .pc.miss, .miss { color: var(--amber-ink); background: var(--amber-bg); text-decoration: underline dashed currentColor; text-underline-offset: 6px; text-decoration-thickness: 2px; border-radius: 6px; }
+  .pinfo { margin: 0 12px 10px; padding: 10px 12px; border-radius: 12px; background: var(--snow); border: 1.5px solid var(--line); font-size: 15px; line-height: 1.4; display: grid; gap: 4px; }
+  .pinfo .pw { font-size: 17px; overflow-wrap: anywhere; }
+  .pinfo .pw b { color: var(--green-deep); }
+  .pinfo .pf { color: var(--stone); font-size: 14px; }
+  .pinfo.miss-info { border-color: var(--amber-line); background: var(--amber-bg); color: var(--amber-ink); }
+  .pinfo.miss-info .pf { color: inherit; }
+  .phint { padding: 0 16px 8px; font-size: 13px; color: var(--stone); }
+  .fixcall { margin: 0 12px 12px; padding: 12px; border-radius: 14px; background: var(--amber-bg); border: 1.5px solid var(--amber-line); color: var(--amber-ink); display: grid; gap: 10px; font-size: 14px; line-height: 1.4; }
+  .fixcall b { font-size: 15px; }
+  .fixcall .act { width: 100%; min-height: 50px; font-size: 16px; }
   .status { padding: 0 16px 10px; font-size: 14px; color: var(--stone); }
   .status:empty { display: none; }
   .status.error { color: var(--amber-ink); }
@@ -164,6 +180,7 @@
   .act { border: 1.5px solid var(--line); background: var(--snow); border-radius: 12px; padding: 9px 12px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .acts .act { flex: 1 1 0; padding: 9px 6px; }
   .acts.four { display: grid; grid-template-columns: 1fr 1fr; }
+  .acts.three { display: grid; grid-template-columns: 1fr 1fr 1fr; }
   @media (max-width: 400px) { .acts .act { font-size: 14px; } }
   .act:hover { border-color: var(--green); color: var(--green-deep); }
   .act.main { background: #0a6b3d; border-color: #0a6b3d; color: #fff; }
@@ -278,14 +295,20 @@
 
       <div class="go-row">
         <button class="go" id="go" type="button">Перевести</button>
-        <label class="switch" title="Отвечать без ИИ: проверенные фразы, словари, настоящие тексты и правила грамматики"><input type="checkbox" id="noai"> Без ИИ: база и правила</label>
+        <label class="switch" id="noai-wrap" hidden title="Отвечать без ИИ: проверенные фразы, словари, настоящие тексты и правила грамматики"><input type="checkbox" id="noai"> Без ИИ: база и правила</label>
       </div>
     </div>
 
     <section class="result" aria-label="Перевод">
       <div class="trust" id="meta"></div>
       <div class="output placeholder" id="output" dir="auto" aria-live="polite">Перевод появится здесь</div>
+      <div class="phint" id="p-hint" hidden>Нажмите на слово перевода — покажу, откуда оно.</div>
+      <div class="pinfo" id="p-info" hidden aria-live="polite"></div>
       <div class="status" id="status"></div>
+      <div class="fixcall" id="fix-call" hidden>
+        <div><b>Перевод собран по словам — он может быть неточным.</b><br><span id="fix-call-note">Окончания и формы глаголов могут быть неверными. Если вы знаете ингушский, поправьте перевод: дальше эта фраза всегда будет переводиться так.</span></div>
+        <button class="act main" id="fix-call-btn" type="button">Сообщить об ошибке / Исправить</button>
+      </div>
 
       <div class="variants" id="variants" hidden>
         <h2 id="v-title">Варианты</h2>
@@ -301,7 +324,7 @@
       <div class="acts" id="acts" hidden>
         <button class="act main" id="copy" type="button" disabled>Копировать</button>
         <button class="act" id="fix" type="button" disabled>Исправить</button>
-        <button class="act" id="compare" type="button" disabled>Сравнить ИИ</button>
+        <button class="act" id="compare" type="button" hidden disabled>Сравнить ИИ</button>
         <button class="act" id="share" type="button" hidden disabled>Поделиться</button>
       </div>
 
@@ -315,7 +338,7 @@
 
       <section class="panel" id="fix-panel" hidden aria-labelledby="fix-title">
         <h2 id="fix-title">Как правильно</h2>
-        <p>Напишите перевод так, как сказал бы носитель языка. Эта фраза дальше всегда будет переводиться так, а ИИ будет учиться на ней.</p>
+        <p>Напишите перевод так, как сказал бы носитель языка. Эта фраза дальше всегда будет переводиться так<span class="ai-only" hidden>, а ИИ будет учиться на ней</span>.</p>
         <textarea id="fix-text" dir="auto"></textarea>
         <div class="row" id="code-row" hidden>
           <label for="fix-code" class="meta">Код редактора</label>
@@ -349,9 +372,12 @@
 
   <details class="about">
     <summary>Как работает переводчик</summary>
-    <p>Сначала ответ ищется в базе: фразы, проверенные носителями языка, словари и слова из настоящих ингушских текстов. Такой перевод помечен зелёным, и рядом написано, откуда он.</p>
-    <p>Если готового ответа нет, переводчик пробует собрать предложение сам, по <a href="/rules">правилам грамматики</a>: «Это моя мать», «Где магазин?», «У меня есть машина», «Я тебя люблю». Слова берутся из словаря, грамматика — из справочника, без ИИ.</p>
-    <p>Если и правила не подходят, переводит ИИ. Такой перевод помечен жёлтым: ИИ может ошибаться, поэтому важное проверьте у носителя языка. Подчёркнутых слов нет в ингушских книгах и газетах. Переключатель «Без ИИ» оставляет только базу и правила.</p>
+    <p>Переводчик работает без ИИ и ищет ответ по шагам:</p>
+    <p><b>1. Проверенные фразы.</b> Переводы, которые исправили или проверили носители языка. Помечены «Проверено носителем языка».</p>
+    <p><b>2. Словари.</b> Словарь проекта, разговорник и словарь PaydaDosh, Викисловарь и другие открытые словари. Такой перевод помечен зелёным, и рядом написано, из какого словаря он.</p>
+    <p><b>3. Правила грамматики.</b> Если готового ответа нет, переводчик собирает предложение по <a href="/rules">правилам</a>: «Это моя мать», «Где магазин?», «У меня есть машина», «Я тебя люблю».</p>
+    <p><b>4. Перевод по кускам.</b> Если и правила не подходят, предложение переводится по словам и готовым кускам из словаря. Такой перевод грубый: окончания и формы глаголов могут быть неточными. Нажмите на слово перевода, чтобы увидеть, откуда оно. Слова в [скобках] не найдены в словаре.</p>
+    <p class="ai-only" hidden>Если база и правила не знают ответа, переводит ИИ. Такой перевод помечен жёлтым: ИИ может ошибаться, поэтому важное проверьте у носителя языка. Переключатель «Без ИИ» оставляет только базу и правила.</p>
     <p>Кнопка «Исправить» сохраняет правильный перевод: дальше эта фраза всегда переводится так. Вместо Ӏ можно писать 1 или I, буква исправится сама.</p>
   </details>
 </main>
@@ -359,7 +385,7 @@
 <footer class="band bottom">
   <div class="band-in">
     <p>Данные: словарь <a href="https://paydadosh.ru" target="_blank" rel="noopener">PaydaDosh</a> (с разрешения владельцев), Викисловарь, PanLex, ингушская Википедия и тексты на ингушском языке.</p>
-    <p><a href="/rules">Правила перевода без ИИ</a></p>
+    <p><a href="/rules">Правила грамматики переводчика</a></p>
     <p><a href="/review">Проверка переводов для носителей языка</a></p>
   </div>
 </footer>
@@ -446,8 +472,28 @@ function refresh() {
   }
 }
 function setButtons(on) { els.copy.disabled = els.fix.disabled = els.compare.disabled = $("share").disabled = !on; $("acts").hidden = !on; }
+// кнопки в ряд: 2 или 4 — сеткой 2×2, 3 — в одну строку
+function layoutActs() {
+  const n = [...$("acts").children].filter((b) => !b.hidden).length;
+  $("acts").classList.toggle("four", n === 4);
+  $("acts").classList.toggle("three", n === 3);
+}
+/* ---------- ИИ на сервере включён? ----------
+   По умолчанию ИИ выключен (USE_AI не задан): переводят база, правила и словарь. Тогда кнопки «Сравнить ИИ»
+   и «Без ИИ» не нужны. Если сервер скажет, что ИИ есть, — показываем их. */
+let AI_ON = false;
+function applyAi(on) {
+  AI_ON = !!on;
+  $("noai-wrap").hidden = !AI_ON;
+  els.compare.hidden = !AI_ON;
+  document.querySelectorAll(".ai-only").forEach((n) => { n.hidden = !AI_ON; });
+  layoutActs();
+}
 function closePanels() { $("fix-panel").hidden = true; $("cmp-panel").hidden = true; }
-function hideExtras() { els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true; }
+function hideExtras() {
+  els.details.hidden = true; $("variants").hidden = true; $("base-info").hidden = true;
+  $("p-hint").hidden = true; $("p-info").hidden = true; $("fix-call").hidden = true;
+}
 function resetOutput(msg = "Перевод появится здесь") {
   lastResult = "";
   els.output.textContent = msg; els.output.classList.add("placeholder");
@@ -471,6 +517,69 @@ function markInto(node, text, unknown) {
       node.appendChild(u);
     } else if (part) node.appendChild(document.createTextNode(part));
   }
+}
+// Перевод по словам: каждое слово — кнопка; нажатие показывает, из какого слова оно и откуда.
+const SRC_NAME = { "PaydaDosh": "словарь PaydaDosh", "словарь проекта": "словарь проекта", "Викисловарь": "Викисловарь", "настоящие тексты": "настоящие тексты" };
+function pieceWhere(p) {
+  const dict = p.src ? (SRC_NAME[p.src] || "словарь: " + p.src) : "словарь";
+  switch (p.how) {
+    case "unknown": return "нет в словаре — слово оставлено как есть";
+    case "name": return "имя — не переводится";
+    case "phrase": return "готовая фраза, " + dict;
+    case "word": return dict;
+    case "lemma": return dict + " (по начальной форме слова)";
+    case "template": case "analog": return "разговорник: похожая фраза";
+    case "align": return "настоящие тексты (параллельные переводы)";
+    case "lexicon": return "таблица слов (местоимения, глаголы, числа)";
+    default: return "правило грамматики";
+  }
+}
+function markPieces(node, text, pieces) {
+  node.textContent = "";
+  const low = text.toLowerCase();
+  let at = 0;
+  const addText = (t) => { // остальное: слова в [скобках] тоже отмечаем
+    for (const part of t.split(/(\[[^\]]+\])/)) {
+      if (!part) continue;
+      if (/^\[.+\]$/.test(part)) { const m = document.createElement("span"); m.className = "miss"; m.title = "нет в словаре"; m.textContent = part; node.appendChild(m); }
+      else node.appendChild(document.createTextNode(part));
+    }
+  };
+  let made = 0;
+  pieces.forEach((p) => {
+    const to = String(p.to || "").trim();
+    if (!to) return;
+    const i = low.indexOf(to.toLowerCase(), at);
+    if (i < 0) return;
+    addText(text.slice(at, i));
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "pc" + (p.how === "unknown" ? " miss" : "");
+    b.textContent = text.slice(i, i + to.length);
+    if (p.how === "unknown") b.title = "нет в словаре";
+    b.setAttribute("aria-label", b.textContent + ": откуда это слово");
+    b.addEventListener("click", () => showPiece(b, p));
+    node.appendChild(b); made++;
+    at = i + to.length;
+  });
+  addText(text.slice(at));
+  return made;
+}
+function showPiece(btn, p) {
+  const box = $("p-info");
+  const was = btn.classList.contains("on");
+  els.output.querySelectorAll(".pc.on").forEach((n) => n.classList.remove("on"));
+  if (was) { box.hidden = true; return; }
+  btn.classList.add("on");
+  box.textContent = ""; box.className = "pinfo" + (p.how === "unknown" ? " miss-info" : "");
+  const w = document.createElement("div"); w.className = "pw";
+  const b = document.createElement("b"); b.textContent = String(p.to).replace(/^\[|\]$/g, "");
+  if (p.from && p.how !== "unknown") w.append(b, document.createTextNode(" ← «" + p.from + "»"));
+  else if (p.how === "unknown") w.append(document.createTextNode("«" + (p.from || b.textContent) + "»"));
+  else w.append(b, document.createTextNode(" — добавлено правилом грамматики"));
+  const f = document.createElement("div"); f.className = "pf";
+  f.textContent = p.from ? "Откуда: " + pieceWhere(p) : "В ингушском здесь нужно это слово";
+  if (p.how === "unknown") f.textContent = "Нет в словаре. Если знаете перевод — нажмите «Сообщить об ошибке / Исправить».";
+  box.append(w, f); box.hidden = false;
 }
 // Полоса над переводом: откуда он и насколько ему можно верить.
 // kind: "native" — проверено носителем, "ok" — из базы, "ai" — перевёл ИИ.
@@ -524,6 +633,9 @@ function renderBase(words, similar, fixT, open = false) {
   $("base-info").open = open;
 }
 const noAi = $("noai");
+els.compare.hidden = true;
+api({ action: "config" }).then((c) => applyAi(c && c.ai === true)).catch(() => applyAi(false));
+$("fix-call-btn").addEventListener("click", () => openFix());
 try { noAi.checked = localStorage.getItem("inh-tr-noai") === "1"; } catch (e) {}
 noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai", noAi.checked ? "1" : "0"); } catch (e) {} });
 
@@ -555,7 +667,7 @@ async function copyText(text) {
 /* ---------- поделиться (на телефоне — WhatsApp, Telegram и т.д.) ---------- */
 if (navigator.share) {
   $("share").hidden = false;
-  $("acts").classList.add("four");
+  layoutActs();
   $("share").addEventListener("click", async () => {
     if (!lastResult) return;
     try { await navigator.share({ text: `${lastInput}\n${lastResult}` }); } catch (e) {} // окно закрыли — ничего не делаем
@@ -620,9 +732,9 @@ function showError(e) {
   if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и нажмите «Перевести» ещё раз." + (e.detail ? " (" + e.detail + ")" : ""), "error"); }
   else if (e.name === "TypeError") { resetOutput("Нет связи с сервером."); setStatus("Проверьте интернет и нажмите «Перевести» ещё раз.", "error"); }
   else if ([502, 503, 504].includes(e.status)) {
-    resetOutput("ИИ сейчас не отвечает.");
+    resetOutput(AI_ON ? "ИИ сейчас не отвечает." : "Сервер сейчас не отвечает.");
     // в скобках — какие ИИ не ответили и почему: это помогает понять, что чинить
-    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Нажмите «Перевести» ещё раз через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : "") + " База и правила работают и без ИИ: включите «Без ИИ».", "error");
+    setStatus((e.message && e.message !== "Ошибка сервера" ? e.message : "Нажмите «Перевести» ещё раз через несколько секунд.") + (e.detail ? " (" + e.detail + ")" : "") + (AI_ON ? " База и правила работают и без ИИ: включите «Без ИИ»." : ""), "error");
   }
   else { resetOutput("Перевод не получился."); setStatus(e.message || "Нажмите «Перевести» ещё раз.", "error"); }
 }
@@ -649,12 +761,12 @@ async function translate() {
   const my = ++reqId;
   controller = new AbortController();
   // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
-  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("В базе и правилах этого нет, переводит ИИ. Обычно это несколько секунд."); }, 1200);
+  const slowHint = setTimeout(() => { if (my === reqId && busy) setStatus("Ищу перевод в базе и словарях…"); }, 1200);
   const fixT = (s) => (tgt === "inh" ? fixPalochka(s) : s);
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
   try {
-    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: noAi.checked }, controller.signal);
+    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: AI_ON ? noAi.checked : true }, controller.signal);
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
     if (data.noAi) {
@@ -662,14 +774,21 @@ async function translate() {
       lastResult = "";
       resetOutput(data.supported ? "Целого перевода в базе пока нет." : "База есть только для пары русский ↔ ингушский.");
       renderBase(data.words, data.similar, fixT, true);
-      setStatus(data.supported
+      setStatus(data.aiOff
+        ? (data.supported ? "Большинства слов этого текста пока нет в словаре. Ниже то, что известно: отдельные слова и похожие фразы." : "Переводчик пока знает только русский ↔ ингушский.")
+        : data.supported
         ? (data.words && data.words.length ? "Для такого предложения правил пока нет. Ниже перевод отдельных слов и похожие фразы. Чтобы перевести текст целиком, выключите «Без ИИ»." : "Для такого предложения правил пока нет. Выключите «Без ИИ», и текст переведёт ИИ.")
         : "Для других языков выключите «Без ИИ».");
       return;
     }
     if (!lastResult) { resetOutput("Перевод не пришёл."); setStatus("Нажмите «Перевести» ещё раз.", "error"); return; }
     els.output.classList.remove("placeholder");
-    markInto(els.output, lastResult, data.unknown);
+    const pieces = data.chunks && Array.isArray(data.pieces) ? data.pieces.map((p) => ({ ...p, to: fixT(String(p.to || "")) })) : null;
+    if (!(pieces && markPieces(els.output, lastResult, pieces))) markInto(els.output, lastResult, data.unknown);
+    $("p-hint").hidden = !pieces;
+    // перевод по словам грубый: просим носителя языка поправить — кнопка крупная и сразу под переводом
+    $("fix-call").hidden = !data.chunks;
+    if (data.chunks && data.details) data.details.note = ""; // то же сказано в жёлтой плашке
     const hasVariants = renderVariants(data.variants, fixT);
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
@@ -811,7 +930,7 @@ $("fix-save").addEventListener("click", async () => {
     els.output.classList.remove("placeholder"); els.output.textContent = translation;
     setMeta("Проверено носителем языка", "native");
     hideExtras(); $("fix-panel").hidden = true;
-    setStatus("Сохранено. Теперь эта фраза всегда будет переводиться так, а ИИ будет учиться на ней.", "good");
+    setStatus("Сохранено. Спасибо! Теперь эта фраза всегда будет переводиться так" + (AI_ON ? ", а ИИ будет учиться на ней." : "."), "good");
     addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
   } catch (e) {
     if (e.status === 403) { $("code-row").hidden = false; $("fix-code").focus(); setStatus("Чтобы сохранить, введите код редактора.", "error"); }
