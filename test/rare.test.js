@@ -51,6 +51,10 @@ const SEED = require("../data/phrases.json");
   r = await call({ text: "Брат работает в Москве", source: "ru", target: "inh", mode: "text" });
   assert.ok(/Моске/.test(r.translation), "город — не имя: " + r.translation);
   console.log("ok 5: имена —", r.translation);
+  // 6. имя с маленькой буквы перед глаголом и новое заимствование: не «нет в базе», а предложение
+  r = await call({ text: "увейс кушает бургер", source: "ru", target: "inh", mode: "text" });
+  assert.ok(/^Увейс бургер /.test(r.translation), r.translation);
+  console.log("ok 6: «увейс кушает бургер» →", r.translation);
 
   console.log("\nВсе проверки редких записей прошли.");
   process.exit(0);

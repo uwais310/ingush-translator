@@ -1405,7 +1405,7 @@ module.exports = async (req, res) => {
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
         pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
-        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." },
+        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
       };
       if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
       result.variants = finishVariants([{ text: result.translation, note: "", source: "chunks", sourceLabel: "по словам из словаря", rank: 4 }], fixT);
