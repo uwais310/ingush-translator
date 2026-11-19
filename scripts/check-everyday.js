@@ -521,7 +521,9 @@ function flagsFor(r) {
     const verbIdx = ps.map((p, k) => (p.verb ? k : -1)).filter((k) => k >= 0);
     if (verbIdx.length) {
       const tail = ps.length - verbIdx.length;
-      if (verbIdx.some((k) => k < tail) && ps.slice(tail).some((p) => !p.verb && p.how !== "cop")) f.push("verb-order");
+      // «Мича вода хьо?» — в вопросе глагол сразу за вопросительным словом (справочник, раздел 7): не ошибка
+      const qOrder = ps.length === 3 && Object.values(L.QUESTION_WORDS).includes(ps[0].to) && ps[1].verb && Object.values(L.PRONOUNS).some((P) => P.nom === ps[2].to || P.erg === ps[2].to);
+      if (!qOrder && verbIdx.some((k) => k < tail) && ps.slice(tail).some((p) => !p.verb && p.how !== "cop")) f.push("verb-order");
     }
     // глагол во входе: слово, у которого начальная форма — глагол, и которое не существительное в словаре
     const ruVerbs = (norm(r.input).match(/[а-я]+/g) || []).filter((w) => !["есть", "нет", "был", "была", "было", "были", "надо", "можно"].includes(w) && (isVerbLemma(w) || RET.lemmas(w, "ru").some(isVerbLemma)) && !(RET.lookupWord(w, "ru", 1) && !RET.lookupWord(w, "ru", 1).lemma && !isVerbLemma(w)));
