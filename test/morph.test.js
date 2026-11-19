@@ -19,6 +19,9 @@ const run = (body) => new Promise((resolve) => {
   assert.ok(lemma("поедем").includes("поехать"));
   assert.ok(lemma("хочу").includes("хотеть"));
   assert.ok(lemma("говорил").includes("говорить"));
+  // возвратное повелительное: «бойся» → «бояться», «волнуйся» → «волноваться»
+  assert.ok(lemma("бойся").includes("бояться"), lemma("бойся"));
+  assert.ok(lemma("волнуйся").includes("волноваться"), lemma("волнуйся"));
   assert.deepStrictEqual(lemma("братом"), ["брат"], "«братом» — это «брат», а не «брать»");
   assert.ok(lemma("веза", "inh").includes("деза"), "показатель класса: веза → деза");
   assert.deepStrictEqual(lemma("абвгдежз"), [], "выдуманное слово ничего не находит");
