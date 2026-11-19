@@ -34,7 +34,8 @@ const wordPairs = () => [
   ...KB.GLOSSARY.map(([ru, inh]) => [ru, inh]),
 ];
 
-function run(quiet = false, inh = INH, tune = {}) {
+// extra — дополнительные пары [ru, inh] только для обучения таблицы слов (например, корпус; scripts/eval-align-corpus.js)
+function run(quiet = false, inh = INH, tune = {}, extra = []) {
   const log = quiet ? () => {} : console.log;
   const src = inh ? "inh" : "ru";
   const refs = new Map();
@@ -55,7 +56,7 @@ function run(quiet = false, inh = INH, tune = {}) {
     if (!NO_ALIGN) {
       train = allPhrases.filter(([ru, i]) => foldOf(inh ? i : ru) !== f);
       for (const [ru, i] of KB.EXAMPLES) if (foldOf(inh ? i : ru) !== f) train.push([ru, i]);
-      ALIGN = makeAlign([...train, ...words]);
+      ALIGN = makeAlign([...train, ...words, ...extra]);
     }
     chunksFor.push(makeChunks({ RET, SEED, ALIGN, EXAMPLES: train, tune }));
   }
