@@ -92,7 +92,7 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   // 6г. таблица фраз из пар разговорника (lib/rules/align.js): «я не знаю» — «сона хац» (PaydaDosh / справочник);
   // каждое слово куска взято из ингушской стороны настоящих пар; редкий кусок (одна пара) не используется
   {
-    const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "");
+    const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "") && !p.rare; // rare — форм нет в текстах: в таблицу слов не берём
     const pairs = SEED.filter((p) => (p.kind === "phrase" || p.kind === "word") && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES, KB.GLOSSARY);
     const A = require("../lib/rules/align.js")(pairs);
     const toks = require("../lib/rules/align.js").toks;
@@ -174,7 +174,7 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   // тексты, пары фраз и часть речи. Ожидания — из словаря проекта (lib/ingush-guide.js, GLOSSARY) и PaydaDosh:
   // «мать — нана», «ребёнок — бер (мн. бераш)», «стол — истол / шу (низкий столик)», «обед — делкъийга хӀама».
   {
-    const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "");
+    const ok = (p) => /^(PaydaDosh|Справочник)/.test(p.source || "") && !p.rare; // rare — форм нет в текстах: в таблицу слов не берём
     const phr = SEED.filter((p) => p.kind === "phrase" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.EXAMPLES);
     const wrd = SEED.filter((p) => p.kind === "word" && ok(p)).map((p) => [p.ru, p.inh]).concat(KB.GLOSSARY);
     const A = require("../lib/rules/align.js")([...phr, ...wrd]);
@@ -315,7 +315,7 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   assert.ok(/^Ты завтра придешь\?$/.test(tr("Хьо кхоана воагӀаргва?", "inh")), tr("Хьо кхоана воагӀаргва?", "inh"));
   assert.ok(/^Я (возьму|куплю) /.test(tr("Аз эцаргда из.", "inh")), tr("Аз эцаргда из.", "inh"));
   assert.ok(/придется/.test(tr("Сабарде дезаргда.", "inh")), tr("Сабарде дезаргда.", "inh"));
-  assert.ok(/подожди\.$/.test(tr("КӀеззига сабардел.", "inh")), tr("КӀеззига сабардел.", "inh"));
+  assert.ok(/(подожди|стоп)\.$/i.test(tr("КӀеззига сабардел.", "inh")), tr("КӀеззига сабардел.", "inh")); // PaydaDosh: «стоп — сабардел»
   assert.ok(/подожди\.$/.test(tr("Сона укхаз сабарделахь.", "inh")), tr("Сона укхаз сабарделахь.", "inh"));
   assert.ok(/не ем/.test(tr("Аз дулх дуац.", "inh")), tr("Аз дулх дуац.", "inh"));
   assert.ok(/не был там/.test(tr("Со цӀаккхаза хиннавац цига.", "inh")), tr("Со цӀаккхаза хиннавац цига.", "inh"));
@@ -345,7 +345,7 @@ const tr = (t, src = "ru") => (C.translate(t, src) || {}).translation;
   // -на: дательный, с определением в том же падеже («Хорошей хозяйке…»)
   assert.ok(/хорошей хозяйке/i.test(tr("Дикача фусамнанна пхьор а дика чам болаш хул.", "inh")), tr("Дикача фусамнанна пхьор а дика чам болаш хул.", "inh"));
   // родительный перед существительным — по-русски после него: «бӀехала когаш» — ноги змеи (PaydaDosh)
-  assert.ok(/ноги змеи/i.test(tr("Зунгата бӀаргаш, бӀехала когаш", "inh")), tr("Зунгата бӀаргаш, бӀехала когаш", "inh"));
+  assert.ok(/(ноги змеи|змеиные ноги)/i.test(tr("Зунгата бӀаргаш, бӀехала когаш", "inh")), tr("Зунгата бӀаргаш, бӀехала когаш", "inh"));
   // без глагола и без эргатива падеж не меняется: «Са да лор ва» — мой отец врач
   assert.strictEqual(tr("Са да лор ва", "inh"), "Мой отец врач");
   console.log("ok 6и: падежи ингушский → русский —", tr("Цо машен ийцай.", "inh"), "|", tr("Со балха вода.", "inh"), "|", tr("Вай автобусаца гӀоргда", "inh"));

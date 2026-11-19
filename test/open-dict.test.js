@@ -38,7 +38,7 @@ console.log("ok 2: записи проекта не изменились и ид
 
 // 4. слова открытых словарей находятся подбором словаря
 const open = OPEN.find((p) => p.kind === "word" && p.source === "PanLex" && /^[а-я]{5,}$/.test(p.ru) && p.inh !== p.ru &&
-  !SEED.some((q) => q.source !== "PanLex" && q.ru.toLowerCase() === p.ru)); // слово, которое есть только в PanLex
+  !SEED.some((q) => q.source !== "PanLex" && q.ru.toLowerCase().split(/\s*[,;]\s*/).includes(p.ru))); // слово, которое есть только в PanLex (и не среди значений «насквозь, сквозь» других словарей)
 const hits = RET.pickDictionary(`Я вижу ${open.ru}`, "ru", 40);
 assert.ok(hits.some((h) => h.from === "open" && h.ru === open.ru), `не нашлось «${open.ru}»`);
 assert.ok(!RET.missingWords(`Я вижу ${open.ru}`, "ru", hits, []).includes(open.ru), "слово с записью не считается неизвестным");
