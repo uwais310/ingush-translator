@@ -1,13 +1,13 @@
 # Ingush Translator
 
-A free, open-source translator for the Ingush language (ГӀалгӀай мотт). It looks things up in dictionaries and applies grammar rules first, and asks an AI model only when those don't have the answer.
+A free, open-source translator for the Ingush language (ГӀалгӀай мотт). It works **without AI**: dictionaries, a phrasebook, grammar rules and a statistical word/phrase table learned from real sentence pairs. An AI fallback still exists in the code but is off unless `USE_AI=1`.
 
 **Try it:** https://stalwart-paletas-57ff72.netlify.app
 
 <!-- Screenshot: save one as docs/screenshot.png and replace this comment with
 ![Ingush Translator on a phone](docs/screenshot.png) -->
 
-> **По-русски.** Это бесплатный переводчик с ингушского на русский и обратно. Сначала он ищет ответ в словаре и разговорнике и собирает предложение по правилам грамматики, а ИИ подключается, только если база ответа не знает. Нашли ошибку или знаете слово, которого нет? Напишите в [Issues](https://github.com/uwais310/ingush-translator/issues/new/choose), можно по-русски: каждое исправление носителя языка делает перевод лучше для всех. Баркал!
+> **По-русски.** Это бесплатный переводчик с ингушского на русский и обратно. Он работает без ИИ: ищет ответ в словаре и разговорнике, собирает предложение по правилам грамматики и по таблице слов и фраз, выученной из настоящих пар предложений. ИИ выключен (включается только настройкой `USE_AI=1`). Нашли ошибку или знаете слово, которого нет? Напишите в [Issues](https://github.com/uwais310/ingush-translator/issues/new/choose), можно по-русски: каждое исправление носителя языка делает перевод лучше для всех. Баркал!
 
 ## Why this exists
 
@@ -34,7 +34,12 @@ So this project goes the other way around. It trusts real sources first, says wh
 2. **The database**: the project's own phrasebook and glossary, then PaydaDosh, then open dictionaries, then the base form of the word.
 3. **Grammar rules** (`lib/rules/`). Every word a rule produces must exist in a dictionary or in the word list. If a form isn't attested, the rule stays silent rather than guess.
 4. **Sentence by sentence**: a longer text where every sentence is already known is put together from those sentences.
-5. **AI as the last step**, through whichever services have an API key: Claude Haiku via OpenRouter when that account has credit, then Google Gemini and xAI Grok, with free models on Groq and OpenRouter as backups. The prompt includes a short Ingush grammar guide (`lib/ingush-guide.js`), the dictionary entries for the words in the text and up to 16 similar example pairs (`lib/retrieval.js`). The answer is then checked as described above.
+5. **No-AI sentence translation** (`lib/rules/chunks.js`): phrasebook templates («Меня зовут … — Са цӀи … я»), one-word analogies of known phrases, then the longest known chunks and word by word, with:
+   a word and phrase table learned from ~8,000 phrase pairs (`align.js`, IBM Model 1 + phrase extraction), word-sense choice
+   (`sense.js`, `sense-inh.js`), Ingush cases (`cases.js`), verb tenses and class agreement (`verbs.js`), Ingush verb forms
+   (`inh-verbs.js`), Russian conjugation and declension (`ru-conj.js`, `ru-decl.js`), names and new loanwords kept as is.
+   Unknown words stay in [brackets]; the full list of rules is in [docs/translation-rules.md](docs/translation-rules.md).
+6. **AI as an optional last step** (only with `USE_AI=1`), through whichever services have an API key: Claude Haiku via OpenRouter when that account has credit, then Google Gemini and xAI Grok, with free models on Groq and OpenRouter as backups. The prompt includes a short Ingush grammar guide (`lib/ingush-guide.js`), the dictionary entries for the words in the text and up to 16 similar example pairs (`lib/retrieval.js`). The answer is then checked as described above.
 
 Steps 2–4 cover Russian ↔ Ingush only. The server side lives in `api/translate.js`. The pages are plain HTML (`index.html`, `review.html`, `rules.html`) with no build step.
 
@@ -49,7 +54,19 @@ cp .env.example .env    # optional: GEMINI_API_KEY + USE_AI=1 to turn the AI ste
 node server.js          # then open http://localhost:3000
 ```
 
-AI is off by default: the database, grammar rules and the word-by-word translator (`lib/rules/chunks.js`) work without any key. Set `USE_AI=1` to turn the AI fallback back on. Tests: `for f in test/*.test.js; do node "$f"; done`
+AI is off by default: the database, grammar rules and the word-by-word translator (`lib/rules/chunks.js`) work without any key. Set `USE_AI=1` to turn the AI fallback back on.
+
+Tests and measurements:
+
+```sh
+for f in test/*.test.js; do node "$f" || exit 1; done   # also run by GitHub Actions on every push and PR
+node scripts/eval-chunks.js            # Russian → Ingush vs native speakers (5-fold, the sentence never sees itself)
+node scripts/eval-chunks.js --inh      # Ingush → Russian
+node scripts/check-everyday.js --bad   # 466 everyday sentences, automatic error flags
+node scripts/eval-rules.js             # grammar rules vs the phrasebook
+```
+
+Deploy: Netlify runs `api/translate.js` as a function (`netlify.toml`); native speakers' corrections can be stored in Supabase (`supabase/schema.sql`). Environment variable names are listed in [HANDOFF.md](HANDOFF.md); secrets live only in the hosting settings or `.env`.
 
 ## Contributing
 
@@ -67,6 +84,7 @@ Every entry in `data/phrases.json` records its source, and open-source entries a
 
 ## Roadmap
 
+- Sentence-level translation: construction templates learned from the phrasebook and the parallel corpus (native speaker feedback: «translate the meaning, not the words»).
 - More grammar rules, including forms we're still checking with native speakers (for example «пришёл», «мы идём») and Ingush → Russian sentences with adverbs and names.
 - Flag Russian words that the AI leaves untranslated in Ingush output (in review).
 - More checked translations through `/review`, and a separate, openly licensed set of sentence pairs checked by native speakers.
