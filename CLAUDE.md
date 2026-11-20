@@ -1,6 +1,6 @@
 # Ingush Translator — notes for Claude Code
 
-A free, open-source translator for the Ingush language (ГӀалгӀай мотт) ↔ Russian. Dictionary and grammar rules first, AI only when those don't know the answer. Live site on Netlify, code on GitHub: uwais310/ingush-translator.
+A free, open-source translator for the Ingush language (ГӀалгӀай мотт) ↔ Russian. Works without AI (dictionaries, rules, a word/phrase table learned from real pairs); AI only with `USE_AI=1`. Current state and next steps: HANDOFF.md. Live site on Netlify, code on GitHub: uwais310/ingush-translator.
 
 The owner is Uwais. He writes in Russian or English, casually; answer in the language he uses. He is on a phone a lot: keep replies short and lead with the result.
 
@@ -48,7 +48,7 @@ Pages: `index.html` (translator), `review.html` (`/review`, native-speaker check
 
 Grok (another AI agent) also works in this repo. Agreed split:
 - Grok: Netlify (deploys, env vars, credits), AI model list and prompts, data (`data/phrases.json`, `/review`), interface (`index.html`, `review.html`), the `/learn` section (PR #19 `learn-mvp`).
-- Claude: `lib/rules/*`, `lib/morph.js`, `lib/retrieval.js`, `lib/postcheck.js`, `scripts/eval-*.js` and their tests.
+- Claude: `lib/rules/*` (incl. chunks, align, cases, verbs, sense, inh-verbs, ru-conj, ru-decl), `lib/morph.js`, `lib/retrieval.js`, `lib/postcheck.js`, `scripts/eval-*.js`, `scripts/check-everyday.js` and their tests.
 - `api/translate.js` is shared: Grok owns prompts/models, Claude owns `resolveExact` and the rules/post-check hooks.
 
 ## Data and licenses
