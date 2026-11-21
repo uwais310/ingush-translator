@@ -246,71 +246,63 @@
   }
   @media (max-width: 819px) { .left { display: contents; } }
   /* ---------- горы за переводчиком ----------
-     Слои гор лежат под страницей и чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью).
-     Дальние слои двигаются меньше ближних — так получается объём. Башни — силуэты ингушских боевых башен. */
-  :root { --sky-top: #8ec4ea; --sky-low: #e4f2f8; --sunlight: #fff6cf;
-    --m-far: #b3cadb; --m-snow: #ffffff; --m-mid: #86ab9f; --m-ridge: #4d8669; --m-near: #2f6a4b; --m-win: #d9ebf1;
-    --card: rgba(255, 255, 255, .86); --card-line: rgba(255, 255, 255, .7); }
+     Кавказский хребет в несколько слоёв: дальние — светлее и голубее (воздушная дымка), ближние — темнее и зеленее.
+     Хребты рисует скрипт внизу страницы (фрактальный шум), на ближнем хребте — ингушские боевые башни.
+     Слои чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью): дальние меньше, ближние больше. */
+  :root { --sky-top: #9fc6e4; --sky-low: #edf4f5; --glow: rgba(255, 244, 214, .9);
+    --m1: #a3b9cd; --m1h: #e2ebf0; --snow: #fbfdff; --snow-sh: #d3deea; --sh1: #6f8aa3;
+    --m2: #8ea7bb; --m2h: #d5e2e8; --sh2: #5f7b92;
+    --m3: #7f9c9a; --m3h: #c6d8d4;
+    --m4: #618471; --m4h: #9db8a8; --tw: #587464; --twl: #82998b; --win: #34493d;
+    --m5: #4a735d; --m5h: #5a8169;
+    --card: rgba(255, 255, 255, .93); --card-line: rgba(255, 255, 255, .85); }
   @media (prefers-color-scheme: dark) {
-    :root { --sky-top: #07111b; --sky-low: #1a3140; --sunlight: #e9eedf;
-      --m-far: #2a4152; --m-snow: #8fa6b4; --m-mid: #1f3a35; --m-ridge: #16302a; --m-near: #0d211b; --m-win: #e8c76a;
-      --card: rgba(17, 27, 22, .84); --card-line: rgba(255, 255, 255, .07); }
+    :root { --sky-top: #07111a; --sky-low: #182937; --glow: rgba(214, 226, 236, .22);
+      --m1: #2c4053; --m1h: #1c2d3a; --snow: #9fb2c2; --snow-sh: #6b8195; --sh1: #0b1621;
+      --m2: #23364a; --m2h: #192a37; --sh2: #0a141e;
+      --m3: #1c2f33; --m3h: #17282d;
+      --m4: #142621; --m4h: #12221e; --tw: #12221d; --twl: #20352e; --win: #060d0a;
+      --m5: #0d1a15; --m5h: #0d1a15;
+      --card: rgba(17, 27, 22, .9); --card-line: rgba(255, 255, 255, .07); }
   }
   html { background: var(--sky-low); }
   body { background: transparent; }
-  .scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 62%); }
-  .scene .layer { position: absolute; left: -6%; width: 112%; bottom: -36px; height: 100vh; height: 100lvh; display: block; will-change: transform; }
-  .scene .sky { position: absolute; inset: -30px; will-change: transform; }
-  .scene .sunball { position: absolute; right: max(16%, 130px); top: 12vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
-    box-shadow: 0 0 60px 26px color-mix(in srgb, var(--sunlight) 55%, transparent); }
-  .scene .stars { position: absolute; inset: 0; opacity: 0; }
+  .scene { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: 0; overflow: hidden; pointer-events: none;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 64%); }
+  .scene .sky { position: absolute; inset: -24px; background: radial-gradient(circle at 76% 22%, var(--glow) 0, transparent 38%); }
+  .scene .moon { display: none; }
+  .scene .layer { position: absolute; left: -44px; bottom: -30px; display: block; }
+  .scene.move .layer, .scene.move .sky { will-change: transform; }
+  .scene .layer stop { stop-color: var(--c); }
   @media (prefers-color-scheme: dark) {
-    .scene .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
-    .scene .stars { opacity: 1; background-image:
-      radial-gradient(1.4px 1.4px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 27% 8%, #fff 50%, transparent 51%),
-      radial-gradient(1.2px 1.2px at 41% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 58% 12%, #dfe9ff 50%, transparent 51%),
-      radial-gradient(1.5px 1.5px at 69% 27%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 88% 9%, #fff 50%, transparent 51%),
-      radial-gradient(1.2px 1.2px at 6% 33%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 31%, #fff 50%, transparent 51%),
-      radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
+    .scene .moon { display: block; position: absolute; right: 22%; top: 15vh; width: 30px; height: 30px; border-radius: 50%;
+      background: #dfe6e8; box-shadow: 0 0 34px 8px rgba(214, 226, 236, .16); }
+    .scene .sky::before { content: ""; position: absolute; inset: 0; background-image:
+      radial-gradient(1.3px 1.3px at 12% 16%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 27% 9%, #fff 50%, transparent 51%),
+      radial-gradient(1.1px 1.1px at 41% 21%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 58% 11%, #fff 50%, transparent 51%),
+      radial-gradient(1.4px 1.4px at 66% 26%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 88% 8%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 6% 30%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 30%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 93% 28%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%);
+      opacity: .75; }
   }
-  .f-far { fill: var(--m-far); } .f-snow { fill: var(--m-snow); } .f-mid { fill: var(--m-mid); }
-  .f-ridge { fill: var(--m-ridge); } .f-near { fill: var(--m-near); } .f-win { fill: var(--m-win); }
   .band, main { position: relative; z-index: 1; }
-  main { padding-top: clamp(26px, 11vh, 120px); }
+  main { padding-top: clamp(22px, 9vh, 110px); }
   .work, .block, .about { background: var(--card); border: 1px solid var(--card-line); border-radius: 22px; padding: 14px;
-    box-shadow: 0 10px 30px rgba(10, 40, 30, .14); -webkit-backdrop-filter: blur(10px) saturate(1.15); backdrop-filter: blur(10px) saturate(1.15); }
+    box-shadow: 0 10px 30px rgba(10, 40, 30, .12); }
   .about { padding: 14px 16px; }
-  .tilt { position: absolute; top: 12px; right: 16px; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px;
-    border: 0; border-radius: 99px; background: var(--card); color: var(--green-deep); font-size: 14px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(10, 40, 30, .16); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  .tilt svg { width: 20px; height: 20px; }
-  .tilt:hover { background: var(--leaf); }
+  .tilt { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 4px 12px;
+    border: 1px solid rgba(255, 255, 255, .28); border-radius: 99px; background: rgba(255, 255, 255, .12); color: #fff;
+    font-size: 13px; font-weight: 700; cursor: pointer; }
+  .tilt svg { width: 18px; height: 18px; }
+  .tilt:hover { background: rgba(255, 255, 255, .22); }
   @media (min-width: 820px) { .work { padding: 18px; } }
-  @media (prefers-reduced-motion: reduce) { .scene .layer, .scene .sky { will-change: auto; } .tilt { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .tilt { display: none; } }
+  .scene .t-body { fill: var(--tb); } .scene .t-lit { fill: var(--tl); } .scene .t-win { fill: var(--win); opacity: .4; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="scene" id="scene" aria-hidden="true">
-  <div class="sky" data-depth="0.12"><div class="stars"></div><div class="sunball"></div></div>
-  <svg class="layer" data-depth="0.3" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <g transform="translate(0 -70)">
-      <path class="f-far" d="M0 670L0 330L90 280L160 300L250 210L320 260L380 240L470 140L540 220L600 200L680 250L760 170L830 230L900 200L980 120L1060 210L1120 190L1200 240L1200 670Z"/>
-      <path class="f-snow" d="M220 240L250 210L292 240L278 235L266 246L252 236L236 244ZM432 182L470 140L506 182L492 176L480 190L466 178L452 188ZM730 200L760 170L795 200L782 195L770 206L756 196L742 204ZM935 165L980 120L1020 165L1004 158L992 172L978 160L962 170L948 160Z"/>
-    </g>
-  </svg>
-  <svg class="layer" data-depth="0.55" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-mid" transform="translate(0 -40)" d="M0 640L0 380L70 350L150 368L230 308L300 342L370 300L450 338L540 288L620 328L700 300L790 344L870 304L950 334L1030 290L1110 328L1200 310L1200 640Z"/>
-  </svg>
-  <svg class="layer" data-depth="0.8" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-ridge" d="M0 600L0 430Q150 386 300 410T600 400T900 378T1200 410L1200 600Z"/>
-    <g transform="translate(318 412) scale(1)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(372 408) scale(0.62)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(842 384) scale(0.9)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(1060 392) scale(0.55)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g>
-  </svg>
-  <svg class="layer" data-depth="1" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-near" d="M0 600L0 500Q200 456 400 488T800 476T1200 466L1200 600Z"/>
-  </svg>
-</div>
+<div class="scene" id="scene" aria-hidden="true"><div class="sky" data-depth="0.06"><div class="moon"></div></div></div>
 <header class="band top">
   <div class="band-in">
     <div class="sign" aria-hidden="true">
@@ -326,13 +318,13 @@
       <h1>Ингушский переводчик</h1>
       <p class="sub">ГӀалгӀай мотт: слова, фразы и целые тексты</p>
     </div>
+    <button class="tilt" id="tilt" type="button" hidden aria-label="Включить 3D: горы двигаются, когда наклоняете телефон" title="Горы двигаются, когда наклоняете телефон">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M2 20l7-11 4 6 3-4 6 9z"/></svg>3D
+    </button>
   </div>
 </header>
 
 <main>
-  <button class="tilt" id="tilt" type="button" hidden aria-label="Включить 3D: горы двигаются, когда наклоняете телефон" title="Горы двигаются, когда наклоняете телефон">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M2 20l7-11 4 6 3-4 6 9z"/></svg>3D
-    </button>
   <div class="work">
     <div class="left">
       <div class="langbar">
@@ -1089,49 +1081,181 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 <script>
-// Горы: слои сдвигаются от наклона телефона, а на компьютере — от мыши. При «уменьшить движение» всё стоит на месте.
+// Горы. Хребты рисуются при загрузке фрактальным шумом (одинаково при каждом заходе: шум с постоянным зерном).
+// Слои сдвигаются от наклона телефона (iPhone спрашивает разрешение после касания), на компьютере — от мыши.
+// При «уменьшить движение» всё стоит на месте; в фоновой вкладке анимация не идёт.
 (() => {
   const scene = document.getElementById("scene"), btn = document.getElementById("tilt");
-  if (!scene || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
-  const MAX_X = 34, MAX_Y = 18;               // сдвиг ближнего слоя в пикселях
-  let tx = 0, ty = 0, x = 0, y = 0, raf = 0, base = null;
-  const clamp = (v) => Math.max(-1, Math.min(1, v));
-  function tick() {
-    x += (tx - x) * 0.09; y += (ty - y) * 0.09;
-    for (const { el, d } of layers) el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y).toFixed(2)}px, 0)`;
-    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.002 ? requestAnimationFrame(tick) : 0;
-  }
-  function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); if (!raf && !document.hidden) raf = requestAnimationFrame(tick); }
+  if (!scene) return;
+  const PAD = 44, UNDER = 30, STEP = 3;
+  // depth — сдвиг при наклоне; base/amp — высота хребта (доля экрана); size — ширина вершин, px;
+  // ridged — острота пиков; snow — где начинается снег (0…1 от высоты хребта); shade — тень на склонах
+  const LAYERS = [
+    { k: 1, depth: .14, base: .43, amp: .14, size: 330, ridged: 1, oct: 7, gain: .54, snow: .4, shade: .28, seed: 11 },
+    { k: 2, depth: .28, base: .335, amp: .085, size: 230, ridged: .8, oct: 6, gain: .5, snow: .72, shade: .22, seed: 23 },
+    { k: 3, depth: .5, base: .245, amp: .055, size: 180, ridged: .45, oct: 6, towers: [[.64, .34, 1]], seed: 37 },
+    { k: 4, depth: .75, base: .155, amp: .04, size: 260, ridged: .2, oct: 5, towers: [[.15, 1, 0], [.84, .78, 1]], seed: 41 },
+    { k: 5, depth: 1, base: .06, amp: .022, size: 360, ridged: 0, oct: 4, seed: 53 },
+  ];
+  const rng = (s) => () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const noise = (r) => { const T = Float32Array.from({ length: 512 }, r);
+    return (x) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return T[i & 511] + (T[(i + 1) & 511] - T[i & 511]) * u; }; };
+  const f1 = (v) => v.toFixed(1);
 
+  // Полоса под хребтом там, где ok(i): сверху — сам хребет, снизу — точки bot(i).
+  function band(P, ok, bot) {
+    let d = "";
+    for (let i = 0; i < P.length; i++) {
+      if (!ok(i)) continue;
+      let j = i; while (j + 1 < P.length && ok(j + 1)) j++;
+      if (j > i) {
+        d += "M" + f1(P[i][0]) + " " + f1(P[i][1]);
+        for (let m = i + 1; m <= j; m++) d += "L" + f1(P[m][0]) + " " + f1(P[m][1]);
+        for (let m = j; m >= i; m--) { const b = bot(m); d += "L" + f1(b[0]) + " " + f1(b[1]); }
+        d += "Z";
+      }
+      i = j;
+    }
+    return d;
+  }
+
+  // Ингушская боевая башня (вӀов): высокая, сужается кверху, машикули под крышей, ступенчатая пирамидальная крыша с конусным камнем.
+  // Жилая башня (гӀала): ниже, шире, с плоской крышей. Левая грань в тени, правая освещена.
+  function tower(cx, gy, h, battle) {
+    let L;
+    if (battle) {
+      const w = h * .23, tw = w * .78, bodyH = h * .72, roofH = h * .23, m = w * .1, steps = 7;
+      L = [[-w / 2, 10], [-tw / 2, -bodyH + h * .07], [-tw / 2 - m, -bodyH + h * .07], [-tw / 2 - m, -bodyH]];
+      for (let s = 0; s < steps; s++) {
+        const hw = (tw / 2 + m * .4) * (1 - s / steps) + w * .05 * (s / steps), y = -bodyH - roofH * s / steps;
+        L.push([-hw, y], [-hw, y - roofH / steps]);
+      }
+      L.push([0, -h]);
+    } else {
+      const w = h * .62, tw = w * .9;
+      L = [[-w / 2, 10], [-tw / 2, -h], [-tw / 2 + h * .06, -h], [-tw / 2 + h * .06, -h * .95], [0, -h * .95]];
+    }
+    const pt = (p, sx) => f1(cx + p[0] * sx) + " " + f1(gy + p[1]);
+    const left = L.map((p) => pt(p, 1)), right = L.slice().reverse().map((p) => pt(p, -1));
+    let s = `<path class="t-body" d="M${left.join("L")}L${right.join("L")}Z"/>`;
+    s += `<path class="t-lit" d="M${f1(cx)} ${f1(gy + 10)}L${right.join("L")}Z"/>`;
+    // бойницы и вход на втором ярусе
+    const ww = Math.max(1, h * .022), wh = h * .05;
+    if (h < 34) return s;                                      // у далёкой маленькой башни окон не видно
+    const holes = battle ?[[-.22, .2], [-.22, .4], [.18, .55], [-.22, .62], [.18, .3]] : [[-.25, .45], [.2, .62]];
+    s += holes.map(([x, y]) => `<rect class="t-win" x="${f1(cx + x * h * (battle ? .23 : .62) - ww / 2)}" y="${f1(gy - h * y)}" width="${f1(ww)}" height="${f1(wh)}"/>`).join("");
+    if (battle) s += `<rect class="t-win" x="${f1(cx - h * .045)}" y="${f1(gy - h * .2 - h * .03)}" width="${f1(h * .06)}" height="${f1(h * .075)}" rx="${f1(h * .02)}"/>`;
+    return s;
+  }
+
+  function layerSvg(Lr, W, H) {
+    const S = Math.min(H, W * .9 + 300), LW = W + 2 * PAD, n = noise(rng(Lr.seed)), n2 = noise(rng(Lr.seed + 5));
+    const fq = 1 / Lr.size, raw = [];
+    for (let x = 0; x <= LW + STEP; x += STEP) {
+      let s = 0, a = 1, f = fq, norm = 0;
+      for (let o = 0; o < Lr.oct; o++) {
+        const v = n(x * f + o * 41.3), r = 1 - Math.abs(2 * v - 1);
+        s += a * (Lr.ridged * (o ? r : r * r) + (1 - Lr.ridged) * v); norm += a; a *= Lr.gain || .47; f *= 2.07;
+      }
+      raw.push(s / norm);
+    }
+    const lo = Math.min(...raw), hi = Math.max(...raw);
+    const E = raw.map((v) => H * Lr.base + Lr.amp * S * (2 * (v - lo) / (hi - lo) - 1));
+    let top = Math.max(...E);
+    const sites = (Lr.towers || []).map(([p, sc, alt]) => {    // башни встают на местную вершину рядом с точкой p
+      let best = Math.round(p * LW / STEP), r = Math.round(.05 * LW / STEP);
+      for (let i = Math.max(0, best - r); i < Math.min(E.length, best + r); i++) if (E[i] > E[best]) best = i;
+      const h = Math.max(22, Math.min(110, .12 * S)) * sc;
+      top = Math.max(top, E[best] + h);
+      return { i: best, h, alt };
+    });
+    const Lh = Math.ceil(top + UNDER + 4), P = E.map((e, i) => [i * STEP, Lh - UNDER - e]);
+    const k = Lr.k, g = (id, stops) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
+      stops.map(([o, c, op]) => `<stop offset="${o}" style="--c:var(${c})"${op != null ? ` stop-opacity="${op}"` : ""}/>`).join("") + "</linearGradient>";
+    let defs = g(`b${k}`, [[0, `--m${k}`], [.45, `--m${k}`], [1, `--m${k}h`]]), body = "";
+    body += `<path fill="url(#b${k})" d="M0 ${Lh}L${P.map((p) => f1(p[0]) + " " + f1(p[1])).join("L")}L${f1(P[P.length - 1][0])} ${Lh}Z"/>`;
+    // склон, отвёрнутый от солнца (солнце справа), чуть темнее; край тени уходит вниз наискосок
+    const sr = Math.max(3, Math.round(Lr.size / STEP / 10)), sl = (i) => E[Math.min(E.length - 1, i + sr)] - E[Math.max(0, i - sr)];
+    if (Lr.shade) {
+      const minE = Math.min(...E);
+      defs += g(`s${k}`, [[0, `--sh${k}`, Lr.shade], [1, `--sh${k}`, 0]]);
+      body += `<path fill="url(#s${k})" d="${band(P, (i) => sl(i) > 2, (i) => { const d = (E[i] - minE) * .7 + 8; return [P[i][0] - d * .45, P[i][1] + d]; })}"/>`;
+    }
+    // снег: тем глубже, чем выше вершина, нижний край рваный (кулуары), книзу тает
+    if (Lr.snow != null) {
+      const sE = H * Lr.base + Lr.amp * S * (2 * Lr.snow - 1);
+      const dep = E.map((e, i) => Math.max(0, (e - sE) * 1.15 * (.45 + n2(i * STEP / 19) * .7 + n2(i * STEP / 5.3) * .35)));
+      const ok = (i) => dep[i] > .3, bot = (i) => [P[i][0] - dep[i] * .25, P[i][1] + dep[i]];
+      defs += g(`w${k}`, [[0, "--snow", 1], [.55, "--snow", .9], [1, "--snow", .25]]) + g(`v${k}`, [[0, "--snow-sh", 1], [1, "--snow-sh", .35]]);
+      body += `<path fill="url(#w${k})" d="${band(P, ok, bot)}"/><path fill="url(#v${k})" d="${band(P, (i) => ok(i) && sl(i) > 0, bot)}"/>`;
+    }
+    for (const t of sites) {
+      const x0 = P[t.i][0], gy = (i) => P[Math.max(0, Math.min(P.length - 1, i))][1];
+      const lowest = (i, half) => { let y = -1e9; for (let m = Math.floor(i - half / STEP); m <= i + half / STEP; m++) y = Math.max(y, gy(m)); return y; };
+      const w = t.h * .23, parts = t.h > 40 ? [[0, 1, 1], [w * 2.6, .78, 1], [-w * 1.9, .42, 0], [w * 4.4, .36, 0]] : [[0, 1, 1], [w * 2.4, .5, 0]];
+      body += `<g class="tw">${(t.alt ? parts.slice(0, 3).map(([dx, s, b]) => [-dx, s, b]) : parts)
+        .map(([dx, s, b]) => { const i = t.i + Math.round(dx / STEP); return tower(x0 + dx, lowest(i, w * .6), t.h * s, b); }).join("")}</g>`;
+    }
+    return `<svg class="layer" data-depth="${Lr.depth}" width="${LW}" height="${Lh}" viewBox="0 0 ${LW} ${Lh}" style="--tb:var(${k === 4 ? "--tw" : `--m${k}`});--tl:var(${k === 4 ? "--twl" : `--m${k}`})">` +
+      `<defs>${defs}</defs>${body}</svg>`;
+  }
+
+  let W = 0, H = 0, layers = [];
+  function draw() {
+    const w = scene.clientWidth, h = scene.clientHeight;
+    if (w === W && Math.abs(h - H) < 120) return;            // полоса адреса в Safari меняет высоту — не перерисовываем
+    W = w; H = h;
+    scene.querySelectorAll(".layer").forEach((el) => el.remove());
+    scene.insertAdjacentHTML("beforeend", LAYERS.map((L) => layerSvg(L, W, H)).join(""));
+    layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
+    place();
+  }
+  let rt = 0;
+  addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 200); });
+  draw();
+
+  // ---- параллакс ----
+  const MAX_X = 30, MAX_Y = 14;                              // сдвиг ближнего слоя, px
+  let tx = 0, ty = 0, x = 0, y = 0, raf = 0;
+  function place() { for (const { el, d } of layers) el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px,${(-y * d * MAX_Y).toFixed(2)}px,0)`; }
+  function tick() {
+    x += (tx - x) * .08; y += (ty - y) * .08; place();
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > .002 ? requestAnimationFrame(tick) : 0;
+  }
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); if (!raf && !document.hidden) raf = requestAnimationFrame(tick); }
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  scene.classList.add("move");
+  document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
   addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") aim(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); }, { passive: true });
 
-  function onTilt(e) {
-    if (e.beta == null || e.gamma == null) return;
-    btn.hidden = true;                                 // наклон уже работает — кнопка не нужна
-    const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-    let h = e.gamma, v = e.beta;                       // h — влево/вправо, v — к себе/от себя
-    if (angle === 90) { h = e.beta; v = -e.gamma; } else if (angle === -90 || angle === 270) { h = -e.beta; v = e.gamma; }
-    if (!base) base = { h, v };
-    base.h += (h - base.h) * 0.01; base.v += (v - base.v) * 0.01;   // как телефон держат — та позиция и «ровная»
-    aim((h - base.h) / 18, (v - base.v) / 18);
-  }
-  function listen() { addEventListener("deviceorientation", onTilt); }
-
   const DOE = window.DeviceOrientationEvent;
-  if (!DOE || !matchMedia("(pointer: coarse)").matches) return;   // компьютер: только мышь
-  listen();                                                       // Android: наклон работает сразу
-  if (typeof DOE.requestPermission === "function") {
-    // iPhone даёт наклон только после нажатия на кнопку «3D».
-    let saved = false; try { saved = localStorage.getItem("tilt3d") === "1"; } catch {}
-    const ask = () => DOE.requestPermission().then((s) => {
-      if (s === "granted") { btn.hidden = true; try { localStorage.setItem("tilt3d", "1"); } catch {} }
-    }).catch(() => {});
-    btn.hidden = false;
-    btn.addEventListener("click", ask);
-    if (saved) addEventListener("touchend", ask, { once: true, passive: true });   // уже разрешали: включится от первого касания
-  }
-  document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
+  if (!DOE || !matchMedia("(pointer: coarse)").matches) return;
+  let base = null;
+  addEventListener("deviceorientation", (e) => {
+    if (e.beta == null || e.gamma == null || document.hidden) return;
+    if (btn) btn.hidden = true;                                // наклон уже приходит — кнопка не нужна
+    const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let hh = e.gamma, vv = e.beta;                             // hh — влево/вправо, vv — к себе/от себя
+    if (ang === 90) { hh = e.beta; vv = -e.gamma; } else if (ang === -90 || ang === 270) { hh = -e.beta; vv = e.gamma; }
+    if (!base) base = { h: hh, v: vv };
+    base.h += (hh - base.h) * .004; base.v += (vv - base.v) * .004;   // как держат телефон, то и «ровно»; подстраивается за несколько секунд
+    aim((hh - base.h) / 15, (vv - base.v) / 15);
+  });
+  if (typeof DOE.requestPermission !== "function") return;   // Android: наклон работает сразу
+  // iPhone даёт наклон только после разрешения, а спросить можно только по касанию:
+  // кнопка «3D» в шапке или первое касание фона/шапки (касание поля ввода не трогаем, чтобы окно не мешало печатать).
+  let saved = false, asking = false; try { saved = localStorage.getItem("tilt3d") === "1"; } catch {}
+  const ask = () => {
+    if (asking) return; asking = true;
+    DOE.requestPermission().then((s) => {
+      if (btn) btn.hidden = true; removeEventListener("touchend", first);
+      try { localStorage.setItem("tilt3d", s === "granted" ? "1" : "0"); } catch {}
+    }).catch(() => { asking = false; });
+  };
+  const first = (e) => { if (saved || !e.target.closest("textarea,input,select,button,a,label,summary,[contenteditable]")) ask(); };
+  if (btn) { btn.hidden = false; btn.addEventListener("click", ask); }
+  addEventListener("touchend", first, { passive: true });
 })();
 </script>
 </body>
