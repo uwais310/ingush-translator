@@ -250,7 +250,7 @@
      Хребты рисует скрипт внизу страницы (фрактальный шум), на ближнем хребте — ингушские боевые башни.
      Слои чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью): дальние меньше, ближние больше. */
   :root { --sky-top: #9fc6e4; --sky-low: #edf4f5; --glow: rgba(255, 244, 214, .9);
-    --m1: #a3b9cd; --m1h: #e2ebf0; --snow: #fbfdff; --snow-sh: #d3deea; --sh1: #6f8aa3;
+    --m1: #a3b9cd; --m1h: #e2ebf0; --ms: #fbfdff; --ms-sh: #d3deea; --sh1: #6f8aa3;
     --m2: #8ea7bb; --m2h: #d5e2e8; --sh2: #5f7b92;
     --m3: #7f9c9a; --m3h: #c6d8d4;
     --m4: #618471; --m4h: #9db8a8; --tw: #587464; --twl: #82998b; --win: #34493d;
@@ -258,7 +258,7 @@
     --card: rgba(255, 255, 255, .93); --card-line: rgba(255, 255, 255, .85); }
   @media (prefers-color-scheme: dark) {
     :root { --sky-top: #07111a; --sky-low: #182937; --glow: rgba(214, 226, 236, .22);
-      --m1: #2c4053; --m1h: #1c2d3a; --snow: #9fb2c2; --snow-sh: #6b8195; --sh1: #0b1621;
+      --m1: #2c4053; --m1h: #1c2d3a; --ms: #8b9eaf; --ms-sh: #627789; --sh1: #0b1621;
       --m2: #23364a; --m2h: #192a37; --sh2: #0a141e;
       --m3: #1c2f33; --m3h: #17282d;
       --m4: #142621; --m4h: #12221e; --tw: #12221d; --twl: #20352e; --win: #060d0a;
@@ -269,7 +269,7 @@
   body { background: transparent; }
   .scene { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: 0; overflow: hidden; pointer-events: none;
     background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 64%); }
-  .scene .sky { position: absolute; inset: -24px; background: radial-gradient(circle at 76% 22%, var(--glow) 0, transparent 38%); }
+  .scene .sky { position: absolute; inset: -24px; background: radial-gradient(circle at 77% 18%, var(--glow) 0, transparent 38%); }
   .scene .moon { display: none; }
   .scene .layer { position: absolute; left: -44px; bottom: -30px; display: block; }
   .scene.move .layer, .scene.move .sky { will-change: transform; }
@@ -1186,7 +1186,7 @@ if ("serviceWorker" in navigator) {
       const sE = H * Lr.base + Lr.amp * S * (2 * Lr.snow - 1);
       const dep = E.map((e, i) => Math.max(0, (e - sE) * 1.15 * (.45 + n2(i * STEP / 19) * .7 + n2(i * STEP / 5.3) * .35)));
       const ok = (i) => dep[i] > .3, bot = (i) => [P[i][0] - dep[i] * .25, P[i][1] + dep[i]];
-      defs += g(`w${k}`, [[0, "--snow", 1], [.55, "--snow", .9], [1, "--snow", .25]]) + g(`v${k}`, [[0, "--snow-sh", 1], [1, "--snow-sh", .35]]);
+      defs += g(`w${k}`, [[0, "--ms", 1], [.55, "--ms", .9], [1, "--ms", .25]]) + g(`v${k}`, [[0, "--ms-sh", 1], [1, "--ms-sh", .35]]);
       body += `<path fill="url(#w${k})" d="${band(P, ok, bot)}"/><path fill="url(#v${k})" d="${band(P, (i) => ok(i) && sl(i) > 0, bot)}"/>`;
     }
     for (const t of sites) {
@@ -1200,7 +1200,8 @@ if ("serviceWorker" in navigator) {
       `<defs>${defs}</defs>${body}</svg>`;
   }
 
-  let W = 0, H = 0, layers = [];
+  const MAX_X = 30, MAX_Y = 14;                              // сдвиг ближнего слоя при наклоне, px
+  let W = 0, H = 0, layers = [], tx = 0, ty = 0, x = 0, y = 0, raf = 0;
   function draw() {
     const w = scene.clientWidth, h = scene.clientHeight;
     if (w === W && Math.abs(h - H) < 120) return;            // полоса адреса в Safari меняет высоту — не перерисовываем
@@ -1215,12 +1216,12 @@ if ("serviceWorker" in navigator) {
   draw();
 
   // ---- параллакс ----
-  const MAX_X = 30, MAX_Y = 14;                              // сдвиг ближнего слоя, px
-  let tx = 0, ty = 0, x = 0, y = 0, raf = 0;
   function place() { for (const { el, d } of layers) el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px,${(-y * d * MAX_Y).toFixed(2)}px,0)`; }
-  function tick() {
-    x += (tx - x) * .08; y += (ty - y) * .08; place();
-    raf = Math.abs(tx - x) + Math.abs(ty - y) > .002 ? requestAnimationFrame(tick) : 0;
+  let last = 0;
+  function tick(t) {
+    const k = 1 - Math.pow(.92, Math.min(100, last ? t - last : 16.7) / 16.7);   // плавно и одинаково при 60 и 120 Гц
+    last = t; x += (tx - x) * k; y += (ty - y) * k; place();
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > .002 ? requestAnimationFrame(tick) : (last = 0);
   }
   const clamp = (v) => Math.max(-1, Math.min(1, v));
   function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); if (!raf && !document.hidden) raf = requestAnimationFrame(tick); }
