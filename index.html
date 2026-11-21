@@ -249,20 +249,19 @@
      Слои гор лежат под страницей и чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью).
      Дальние слои двигаются меньше ближних — так получается объём. Башни — силуэты ингушских боевых башен. */
   :root { --sky-top: #8ec4ea; --sky-low: #e4f2f8; --sunlight: #fff6cf;
-    --m-far: #b3cadb; --m-snow: #ffffff; --m-mid: #86ab9f; --m-ridge: #4d8669; --m-near: #2f6a4b; --m-win: #d9ebf1;
     --card: rgba(255, 255, 255, .86); --card-line: rgba(255, 255, 255, .7); }
   @media (prefers-color-scheme: dark) {
     :root { --sky-top: #07111b; --sky-low: #1a3140; --sunlight: #e9eedf;
-      --m-far: #2a4152; --m-snow: #8fa6b4; --m-mid: #1f3a35; --m-ridge: #16302a; --m-near: #0d211b; --m-win: #e8c76a;
       --card: rgba(17, 27, 22, .84); --card-line: rgba(255, 255, 255, .07); }
   }
   html { background: var(--sky-low); }
   body { background: transparent; }
   .scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
     background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 62%); }
-  .scene .layer { position: absolute; left: -6%; width: 112%; bottom: -36px; height: 100vh; height: 100lvh; display: block; will-change: transform; }
+  .scene .layer { position: absolute; left: -64px; width: calc(100% + 128px); bottom: -48px; height: 100vh; height: 100lvh; display: block; will-change: transform; opacity: 0; transition: opacity .8s ease; }
+  .scene .layer.ready { opacity: 1; }
   .scene .sky { position: absolute; inset: -30px; will-change: transform; }
-  .scene .sunball { position: absolute; right: max(16%, 130px); top: 12vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
+  .scene .sunball { position: absolute; right: max(16%, 130px); top: 9vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
     box-shadow: 0 0 60px 26px color-mix(in srgb, var(--sunlight) 55%, transparent); }
   .scene .stars { position: absolute; inset: 0; opacity: 0; }
   @media (prefers-color-scheme: dark) {
@@ -274,8 +273,6 @@
       radial-gradient(1.2px 1.2px at 6% 33%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 31%, #fff 50%, transparent 51%),
       radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
   }
-  .f-far { fill: var(--m-far); } .f-snow { fill: var(--m-snow); } .f-mid { fill: var(--m-mid); }
-  .f-ridge { fill: var(--m-ridge); } .f-near { fill: var(--m-near); } .f-win { fill: var(--m-win); }
   .band, main { position: relative; z-index: 1; }
   main { padding-top: clamp(26px, 11vh, 120px); }
   .work, .block, .about { background: var(--card); border: 1px solid var(--card-line); border-radius: 22px; padding: 14px;
@@ -294,22 +291,10 @@
 <body>
 <div class="scene" id="scene" aria-hidden="true">
   <div class="sky" data-depth="0.12"><div class="stars"></div><div class="sunball"></div></div>
-  <svg class="layer" data-depth="0.3" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <g transform="translate(0 -70)">
-      <path class="f-far" d="M0 670L0 330L90 280L160 300L250 210L320 260L380 240L470 140L540 220L600 200L680 250L760 170L830 230L900 200L980 120L1060 210L1120 190L1200 240L1200 670Z"/>
-      <path class="f-snow" d="M220 240L250 210L292 240L278 235L266 246L252 236L236 244ZM432 182L470 140L506 182L492 176L480 190L466 178L452 188ZM730 200L760 170L795 200L782 195L770 206L756 196L742 204ZM935 165L980 120L1020 165L1004 158L992 172L978 160L962 170L948 160Z"/>
-    </g>
-  </svg>
-  <svg class="layer" data-depth="0.55" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-mid" transform="translate(0 -40)" d="M0 640L0 380L70 350L150 368L230 308L300 342L370 300L450 338L540 288L620 328L700 300L790 344L870 304L950 334L1030 290L1110 328L1200 310L1200 640Z"/>
-  </svg>
-  <svg class="layer" data-depth="0.8" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-ridge" d="M0 600L0 430Q150 386 300 410T600 400T900 378T1200 410L1200 600Z"/>
-    <g transform="translate(318 412) scale(1)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(372 408) scale(0.62)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(842 384) scale(0.9)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g><g transform="translate(1060 392) scale(0.55)"><g class="f-ridge"><polygon points="-14,24 -10,-96 -12,-96 -12,-100 0,-126 12,-100 12,-96 10,-96 14,24"/><polygon points="15,24 17,-44 45,-44 47,24"/></g><g class="f-win" opacity=".75"><rect x="-2" y="-84" width="4" height="9" rx="1"/><rect x="-2" y="-56" width="4" height="8" rx="1"/><rect x="28" y="-32" width="5" height="7" rx="1"/></g></g>
-  </svg>
-  <svg class="layer" data-depth="1" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
-    <path class="f-near" d="M0 600L0 500Q200 456 400 488T800 476T1200 466L1200 600Z"/>
-  </svg>
+  <canvas class="layer" data-depth="0.25"></canvas>
+  <canvas class="layer" data-depth="0.5"></canvas>
+  <canvas class="layer" data-depth="0.75"></canvas>
+  <canvas class="layer" data-depth="1"></canvas>
 </div>
 <header class="band top">
   <div class="band-in">
@@ -1088,13 +1073,178 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
 }
 </script>
+<script id="terrain-src">
+// Горы рисуются один раз: настоящий рельеф (карта высот из фрактального шума) смотрится «с камеры»,
+// с освещением склонов, снегом, лесом и дымкой. Рельеф режется по удалённости на слои —
+// потом эти слои сдвигаются от наклона телефона, и получается объём.
+function mountainTerrain(sizes, dark) {
+  const out = { bufs: [], towers: [] };
+  // ---------- шум ----------
+  const N = 256, P = new Uint16Array(N * 2);
+  { let s = 1119; const p = [...Array(N).keys()];
+    for (let i = N - 1; i > 0; i--) { s = (s * 1664525 + 1013904223) >>> 0; const j = s % (i + 1); const t = p[i]; p[i] = p[j]; p[j] = t; }
+    for (let i = 0; i < N * 2; i++) P[i] = p[i % N]; }
+  const GX = new Float32Array(N), GY = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const a = P[i] / N * Math.PI * 2; GX[i] = Math.cos(a); GY[i] = Math.sin(a); }
+  function perlin(x, y, per) {        // градиентный шум, повторяется с периодом per
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const x0 = ((xi % per) + per) % per, y0 = ((yi % per) + per) % per, x1 = (x0 + 1) % per, y1 = (y0 + 1) % per;
+    const g = (ix, iy, dx, dy) => { const h = P[P[ix] + iy]; return GX[h] * dx + GY[h] * dy; };
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10), v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const a = g(x0, y0, xf, yf), b = g(x1, y0, xf - 1, yf), c = g(x0, y1, xf, yf - 1), d = g(x1, y1, xf - 1, yf - 1);
+    return a + (b - a) * u + (c - a + (a - b + d - c) * u) * v;
+  }
+  // ---------- карта высот (S×S, бесшовная) ----------
+  const S = 512, HM = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let h = 0, amp = 1, f = 4, w = 1, norm = 0;
+    for (let o = 0; o < 7; o++) {
+      let n = 1 - Math.abs(perlin(x / S * f, y / S * f, f));   // «ридж»: острые гребни
+      n *= n; n *= w; w = Math.min(1, n * 1.6);                   // гребни поверх гребней
+      h += n * amp; norm += amp; amp *= 0.5; f *= 2;
+    }
+    HM[y * S + x] = h / norm;
+  }
+  const hs = (x, z) => {                                         // высота с билинейной интерполяцией
+    x = ((x % S) + S) % S; z = ((z % S) + S) % S;
+    const xi = x | 0, zi = z | 0, xf = x - xi, zf = z - zi, x1 = (xi + 1) % S, z1 = (zi + 1) % S;
+    const a = HM[zi * S + xi], b = HM[zi * S + x1], c = HM[z1 * S + xi], d = HM[z1 * S + x1];
+    return a + (b - a) * xf + (c - a + (a - b + d - c) * xf) * zf;
+  };
+  const smooth = (a, b, t) => { t = Math.max(0, Math.min(1, (t - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const ampAt = (z) => 70 + 170 * smooth(150, 520, z);          // вблизи холмы, вдали большие горы
+  const height = (x, z, dz) => hs(x, z) * ampAt(dz);
+
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const C = dark ? {
+    grass: hex("#1d3a2a"), forest: hex("#12291d"), rock: hex("#3a4550"), snow: hex("#b9c8d6"), haze: hex("#1b3245"), sun: [0.55, 0.6, 0.75], amb: 0.35, tower: hex("#0e1a16"), stone: hex("#25302e")
+  } : {
+    grass: hex("#6b9a5b"), forest: hex("#2f5d3a"), rock: hex("#8a8580"), snow: hex("#ffffff"), haze: hex("#c9dfeb"), sun: [1.05, 1.0, 0.92], amb: 0.42, tower: hex("#6e6a62"), stone: hex("#c9c1b2")
+  };
+  const LX = -0.55, LY = 0.62, LZ = -0.55;                        // свет сверху-слева-спереди
+
+  const CAMX = 300, CAMZ = 40, CAMH = 96, WS = 0.42;
+  const BANDS = [[360, 1100], [230, 360], [140, 230], [60, 140]];  // дальний → ближний
+  sizes.forEach(({ w: W, h: H }, li) => {
+    const buf = new Uint32Array(W * H);
+    const horizon = H * 0.30, scale = H * 0.95, fov = 1.25 * W / H * 0.85;
+    const [z0, z1] = BANDS[li];
+    const yb = new Float32Array(W).fill(H);
+    let dz = 0.35 + z0 * 0.004, z = z0;
+    while (z < z1) {
+      const fog = Math.pow(Math.min(1, z / 1100), 0.9) * 0.88;
+      const amp = ampAt(z), snowLine = 168 + 12 * Math.sin(z * 0.03);
+      for (let x = 0; x < W; x++) {
+        const wx = CAMX + (x / W - 0.5) * fov * z, wz = CAMZ + z;
+        const det = (hs(wx * 1.9 + 91, wz * 1.9) - 0.5) * 9;
+        const h = hs(wx * WS, wz * WS) * amp + det;
+        const sy = (CAMH - h) / z * scale + horizon;
+        if (sy >= yb[x]) continue;
+        // нормаль по соседним высотам
+        const e = Math.max(0.7, z * 0.004);
+        const hx = hs((wx + e) * WS, wz * WS) * amp + (hs((wx + e) * 1.9 + 91, wz * 1.9) - 0.5) * 9 - h, hz = hs(wx * WS, (wz + e) * WS) * amp + (hs(wx * 1.9 + 91, (wz + e) * 1.9) - 0.5) * 9 - h;
+        let nx = -hx / e, ny = 1, nz = -hz / e; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+        const lam = Math.max(0, nx * LX + ny * LY + nz * LZ);
+        const steep = 1 - ny;                                      // 0 — ровно, 1 — отвесно
+        // цвет по высоте и крутизне
+        let c;
+        const rockT = smooth(0.3, 0.55, steep) * 0.7 + smooth(105, 150, h);
+        const base = h < 40 ? C.grass : C.forest;
+        const gT = Math.min(1, smooth(60, 100, h) + smooth(0.45, 0.6, hs(wx * 1.3 + 40, wz * 1.3 - 17)) * 0.8);
+        const g0 = C.grass[0] + (C.forest[0] - C.grass[0]) * gT, g1 = C.grass[1] + (C.forest[1] - C.grass[1]) * gT, g2 = C.grass[2] + (C.forest[2] - C.grass[2]) * gT;
+        const rT = Math.min(1, rockT);
+        let r = g0 + (C.rock[0] - g0) * rT, g = g1 + (C.rock[1] - g1) * rT, b = g2 + (C.rock[2] - g2) * rT;
+        const sT = smooth(snowLine - 25, snowLine + 10, h + (hs(wx * 1.7, wz * 1.7) - 0.5) * 50) * (1 - smooth(0.55, 0.8, steep));
+        r += (C.snow[0] - r) * sT; g += (C.snow[1] - g) * sT; b += (C.snow[2] - b) * sT;
+        const li2 = C.amb + lam * (1 - C.amb) * 1.15;
+        r *= li2 * C.sun[0]; g *= li2 * C.sun[1]; b *= li2 * C.sun[2];
+        r += (C.haze[0] - r) * fog; g += (C.haze[1] - g) * fog; b += (C.haze[2] - b) * fog;
+        const col = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
+        const top = Math.max(0, Math.floor(sy)), bot = Math.min(H, Math.ceil(yb[x]));
+        for (let y = top; y < bot; y++) buf[y * W + x] = col;
+        yb[x] = sy;
+      }
+      z += dz; dz *= 1.004;
+    }
+    out.bufs[li] = buf.buffer;
+    // башни: ставим на рельеф в среднем слое
+    if (li === 2) {
+      const T = [[-0.30, 170, 1], [-0.25, 176, 0.7], [0.2, 190, 0.9], [0.38, 160, 0.8]];
+      for (const [fx, tz, k] of T) {
+        const wx = CAMX + fx * fov * tz, wz = CAMZ + tz;
+        const h = hs(wx * WS, wz * WS) * ampAt(tz), sy = (CAMH - h) / tz * scale + horizon;
+        const sx = (fx + 0.5) * W, s = scale / tz * 0.1 * k, fog = Math.pow(tz / 1100, 0.9) * 0.88;
+        out.towers.push({ li, sx, sy, s, dark: C.tower.map((v, i) => Math.round(v + (C.haze[i] - v) * fog)), lit: C.stone.map((v, i) => Math.round(v + (C.haze[i] - v) * fog)) });
+      }
+    }
+  });
+  return out;
+}
+
+// Башни: жилая и боевая, светлая сторона и тень, ступенчатая крыша.
+function drawTowers(ctx, t, night) {
+  const { sx, sy, s } = t;
+  const poly = (pts, col) => { ctx.fillStyle = `rgb(${col})`; ctx.beginPath(); pts.forEach(([px, py], j) => j ? ctx.lineTo(sx + px * s, sy + py * s) : ctx.moveTo(sx + px * s, sy + py * s)); ctx.closePath(); ctx.fill(); };
+  poly([[12, 10], [14, -42], [44, -42], [46, 10]], t.dark);
+  poly([[12, 10], [14, -42], [30, -42], [30, 10]], t.lit);
+  poly([[-13, 10], [-9, -96], [9, -96], [13, 10]], t.dark);
+  poly([[-13, 10], [-9, -96], [0, -96], [0, 10]], t.lit);
+  poly([[-11, -96], [-11, -100], [0, -124], [11, -100], [11, -96]], t.dark);
+  poly([[-11, -96], [-11, -100], [0, -124], [0, -96]], t.lit);
+  ctx.fillStyle = night ? "rgba(240,200,110,.9)" : "rgba(30,25,20,.55)";
+  ctx.fillRect(sx - 2 * s, sy - 82 * s, 3 * s, 8 * s); ctx.fillRect(sx - 2 * s, sy - 54 * s, 3 * s, 7 * s); ctx.fillRect(sx + 20 * s, sy - 28 * s, 4 * s, 6 * s);
+}
+</script>
+<script>
+// Рисуем горы в фоне (в Web Worker, чтобы не тормозить страницу), потом проявляем слои.
+(() => {
+  const cvs = [...document.querySelectorAll(".scene canvas.layer")];
+  if (!cvs.length) return;
+  const darkQ = matchMedia("(prefers-color-scheme: dark)");
+  let worker = null, job = 0, lastW = 0;
+  function sizes() {
+    const dpr = Math.min(devicePixelRatio || 1, 1.5);
+    return cvs.map((c, i) => { const r = c.getBoundingClientRect(), k = dpr;
+      return { w: Math.max(1, Math.round(r.width * k)), h: Math.max(1, Math.round(r.height * k)) }; });
+  }
+  function paint(res, sz, dark) {
+    cvs.forEach((c, i) => {
+      c.width = sz[i].w; c.height = sz[i].h;
+      const ctx = c.getContext("2d");
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(res.bufs[i]), sz[i].w, sz[i].h), 0, 0);
+      res.towers.filter((t) => t.li === i).forEach((t) => drawTowers(ctx, t, dark));
+      c.classList.add("ready");
+    });
+  }
+  function render() {
+    const sz = sizes(), dark = darkQ.matches, id = ++job;
+    lastW = innerWidth;
+    try {
+      if (!worker) {
+        const src = document.getElementById("terrain-src").textContent +
+          "\nonmessage = (e) => { const r = mountainTerrain(e.data.sz, e.data.dark); postMessage({ id: e.data.id, r }, r.bufs); };";
+        worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+      }
+      worker.onmessage = (e) => { if (e.data.id === job) paint(e.data.r, sz, dark); };
+      worker.postMessage({ id, sz, dark });
+    } catch {
+      setTimeout(() => { if (id === job) paint(mountainTerrain(sz, dark), sz, dark); }, 50);
+    }
+  }
+  const start = () => ("requestIdleCallback" in window ? requestIdleCallback(render, { timeout: 600 }) : setTimeout(render, 200));
+  if (document.readyState === "complete") start(); else addEventListener("load", start, { once: true });
+  let rt = 0;
+  addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 40) render(); }, 350); });
+  darkQ.addEventListener ? darkQ.addEventListener("change", render) : darkQ.addListener(render);
+})();
+</script>
 <script>
 // Горы: слои сдвигаются от наклона телефона, а на компьютере — от мыши. При «уменьшить движение» всё стоит на месте.
 (() => {
   const scene = document.getElementById("scene"), btn = document.getElementById("tilt");
   if (!scene || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
-  const MAX_X = 34, MAX_Y = 18;               // сдвиг ближнего слоя в пикселях
+  const MAX_X = 48, MAX_Y = 28;               // сдвиг ближнего слоя в пикселях
   let tx = 0, ty = 0, x = 0, y = 0, raf = 0, base = null;
   const clamp = (v) => Math.max(-1, Math.min(1, v));
   function tick() {
@@ -1123,13 +1273,12 @@ if ("serviceWorker" in navigator) {
   listen();                                                       // Android: наклон работает сразу
   if (typeof DOE.requestPermission === "function") {
     // iPhone даёт наклон только после нажатия на кнопку «3D».
-    let saved = false; try { saved = localStorage.getItem("tilt3d") === "1"; } catch {}
     const ask = () => DOE.requestPermission().then((s) => {
       if (s === "granted") { btn.hidden = true; try { localStorage.setItem("tilt3d", "1"); } catch {} }
     }).catch(() => {});
     btn.hidden = false;
     btn.addEventListener("click", ask);
-    if (saved) addEventListener("touchend", ask, { once: true, passive: true });   // уже разрешали: включится от первого касания
+    addEventListener("touchend", ask, { once: true, passive: true });   // первое касание экрана тоже включает 3D
   }
   document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
 })();
