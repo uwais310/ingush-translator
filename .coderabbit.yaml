@@ -1,0 +1,28 @@
+# CodeRabbit: automatic AI review of every pull request (free for public repos).
+# Docs: https://docs.coderabbit.ai/getting-started/configure-coderabbit
+language: ru-RU
+reviews:
+  profile: chill
+  high_level_summary: true
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!data/**"          # big generated database, not reviewed line by line
+    - "!**/*.png"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Project rules (see CLAUDE.md):
+        - Never invent Ingush. Every Ingush word or form added in code, data or tests needs a source
+          (project glossary, PaydaDosh, or a native speaker). Flag any new Ingush text without a source.
+        - `verified: true` may only be set by a person on /review, never in code or data.
+        - No new dependencies, deleted files or changed data formats without the owner's OK.
+        - No API keys or secrets in code.
+    - path: "lib/rules/**"
+      instructions: "Grammar rules must stay silent when a form isn't attested. New rules need sourced examples and tests."
+    - path: "sw.js"
+      instructions: "If pages (index.html, review.html, rules.html, learn.html) changed in this PR, the cache version must be bumped."
+chat:
+  auto_reply: true
