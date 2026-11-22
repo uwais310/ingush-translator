@@ -967,8 +967,15 @@ function seedResult(p, src, more = []) {
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
 function fromDictionary(text, src, tgt) {
-  const lw = RET.lookupWord(text, src, 6, true);
+  let lw = RET.lookupWord(text, src, 6, true);
   if (!lw) return null;
+  // имя собственное по начальной форме — только если и в тексте слово с большой буквы:
+  // «карта» → «карт» → «Карт» (имя, «Кхарт») — не то слово
+  if (lw.lemma && !/^[А-ЯЁӀ]/.test(String(text).trim())) {
+    const items = lw.items.filter((it) => !(/^[А-ЯЁӀ]/.test(String(it.ru).trim()) && /^[А-ЯЁӀ]/.test(String(it.inh).trim())));
+    if (!items.length) return null;
+    lw = { ...lw, items };
+  }
   const lemmaNote = !lw.lemma ? ""
     : src === "ru"
       ? `В тексте слово стоит в другой форме. Перевод дан для начальной формы «${lw.lemma}»: окончание или класс в ингушском могут быть другими.`
