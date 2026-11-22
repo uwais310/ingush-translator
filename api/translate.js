@@ -1167,7 +1167,9 @@ function exactVariants(r, input, src, tgt, pool, fixT) {
     for (const p of seedAll(src).get(BASE.key(input)) || []) {
       const rev = REVIEW && REVIEW[p.id];
       const sp = src === "ru" && !(rev && rev.inh) ? splitNote(p.inh) : { text: "", note: "" };
-      const texts = src === "ru" ? ((rev && rev.inh) ? [rev.inh] : splitAlt(sp.text).map(noStress)) : [noParens(p.ru)];
+      // строка-пояснение словарика проекта («ала (наст. оал, …); …»): в вариант — заглавное слово, как в BASE.lookup
+      const gl = src === "ru" && !(rev && rev.inh) && p.kind === "word" && RET.sourceOf(p).from === "glossary" ? BASE.gloss(p.inh) : null;
+      const texts = src === "ru" ? ((rev && rev.inh) ? [rev.inh] : gl && gl.head ? [gl.translation] : splitAlt(sp.text).map(noStress)) : [noParens(p.ru)];
       const where = rev ? { source: "native", sourceLabel: "Проверено носителем", rank: 1 } : seedSource(p);
       for (const text of texts) list.push({ text, note: sp.note || (p.license ? glossNote(p.note) : noteFromLine(text, p.note)), ...where });
     }
