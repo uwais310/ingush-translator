@@ -274,17 +274,45 @@
       radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
   }
   .band, main { position: relative; z-index: 1; }
-  main { padding-top: clamp(26px, 11vh, 120px); }
-  .work, .block, .about { background: var(--card); border: 1px solid var(--card-line); border-radius: 22px; padding: 14px;
-    box-shadow: 0 10px 30px rgba(10, 40, 30, .14); -webkit-backdrop-filter: blur(10px) saturate(1.15); backdrop-filter: blur(10px) saturate(1.15); }
+  /* Карточки: главная — стеклянный лист над горами, остальное тише и прозрачнее, чтобы горы оставались главными. */
+  :root { --card-soft: rgba(255, 255, 255, .68); --sheet-shadow: 0 26px 60px -24px rgba(8, 32, 44, .45); }
+  @media (prefers-color-scheme: dark) { :root { --card-soft: rgba(17, 27, 22, .66); --sheet-shadow: 0 26px 60px -24px rgba(0, 0, 0, .7); } }
+  main { padding-top: clamp(64px, 17vh, 160px); will-change: transform; }
+  main > * { min-width: 0; }
+  .work { background: var(--card); border: 1px solid var(--card-line); border-radius: 28px; padding: 12px; box-shadow: var(--sheet-shadow);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
+  .block, .about { background: var(--card-soft); border: 1px solid var(--card-line); border-radius: 20px; padding: 14px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   .about { padding: 14px 16px; }
-  .tilt { position: absolute; top: 12px; right: 16px; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px;
-    border: 0; border-radius: 99px; background: var(--card); color: var(--green-deep); font-size: 14px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(10, 40, 30, .16); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  .tilt svg { width: 20px; height: 20px; }
-  .tilt:hover { background: var(--leaf); }
+  .field { background: color-mix(in srgb, var(--snow) 94%, transparent); border-width: 1px; }
+  .result { background: color-mix(in srgb, var(--mist) 86%, transparent); }
+  .langbar .lang select { background: color-mix(in srgb, var(--snow) 90%, transparent); border-width: 1px; }
+  .swap { background: color-mix(in srgb, var(--snow) 90%, transparent); border-width: 1px; }
+  .block h2 { color: var(--stone); font-weight: 600; }
+  @media (max-width: 819px) {
+    .top .band-in { padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px; }
+    .sign { width: 38px; height: 38px; } .sign svg { width: 29px; height: 29px; }
+    h1 { font-size: 18px; }
+    .output { font-size: 26px; }
+    /* примеры — одной строкой с прокруткой, чтобы не занимали пол-экрана */
+    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px 2px; scroll-snap-type: x proximity; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; scroll-snap-align: start; }
+  }
+  @media (max-width: 380px) { .sub { display: none; } }
+  /* подсказка про наклон: живёт в «окне» с горами над переводчиком */
+  .tilt { position: absolute; top: clamp(12px, 4vh, 40px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+    max-width: calc(100% - 32px); padding: 6px 14px 6px 10px; border-radius: 99px; background: var(--card); color: var(--ink);
+    font-size: 14px; font-weight: 600; white-space: nowrap; box-shadow: 0 8px 24px -10px rgba(8, 32, 44, .45);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .tilt span { overflow: hidden; text-overflow: ellipsis; }
+  .tilt svg { width: 22px; height: 22px; flex: none; color: var(--green-deep); animation: rock 1.6s ease-in-out 3; transform-origin: 50% 70%; }
+  .tilt button { display: none; border: 0; border-radius: 99px; background: #0a6b3d; color: #fff; font-weight: 700; font-size: 14px; padding: 6px 14px; min-height: 34px; cursor: pointer; flex: none; }
+  .tilt.ask { padding-right: 5px; }
+  .tilt.ask button { display: inline-block; }
+  @keyframes rock { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-16deg); } 70% { transform: rotate(16deg); } }
   @media (min-width: 820px) { .work { padding: 18px; } }
-  @media (prefers-reduced-motion: reduce) { .scene .layer, .scene .sky { will-change: auto; } .tilt { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .scene .layer, .scene .sky, main { will-change: auto; } .tilt { display: none !important; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -315,9 +343,11 @@
 </header>
 
 <main>
-  <button class="tilt" id="tilt" type="button" hidden aria-label="Включить 3D: горы двигаются, когда наклоняете телефон" title="Горы двигаются, когда наклоняете телефон">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M2 20l7-11 4 6 3-4 6 9z"/></svg>3D
-    </button>
+  <div class="tilt" id="tilt" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5" transform="rotate(-14 12 12)"/><path d="M3 9c-1 2-1 4 0 6M21 9c1 2 1 4 0 6"/></svg>
+    <span>Горы двигаются от наклона</span>
+    <button type="button">Включить</button>
+  </div>
   <div class="work">
     <div class="left">
       <div class="langbar">
@@ -693,6 +723,14 @@ $("clear").addEventListener("click", () => { els.input.value = ""; els.input.foc
 els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
 $("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
 els.input.addEventListener("input", refresh);
+// Без ИИ перевод почти мгновенный, поэтому переводим сами, когда человек перестал печатать.
+let typeTimer = 0;
+els.input.addEventListener("input", () => {
+  clearTimeout(typeTimer);
+  if (AI_ON && !noAi.checked) return;            // ИИ тратит деньги: с ним переводим только по кнопке
+  const wait = () => { if (busy) { typeTimer = setTimeout(wait, 150); return; } if (readInput()) translate(); };
+  typeTimer = setTimeout(wait, 450);
+});
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
 window.addEventListener("resize", grow);
 if (navigator.clipboard && navigator.clipboard.readText) {
@@ -770,7 +808,17 @@ let busy = false, controller = null;
 function isWord(text) {
   return !/\n/.test(text) && text.length <= 40 && text.split(/\s+/).length <= 3 && !/[.!?…]\s+\S/.test(text);
 }
+// Одинаковый запрос второй раз не идёт на сервер: ответ берётся из памяти страницы.
+const ANSWERS = new Map();
 async function api(payload, signal) {
+  if (payload.action || payload.compare) return fetchApi(payload, signal);   // исправления и сравнения всегда идут на сервер
+  const key = JSON.stringify(payload);
+  if (ANSWERS.has(key)) return ANSWERS.get(key);
+  const data = await fetchApi(payload, signal);
+  if (ANSWERS.size < 200) ANSWERS.set(key, data);
+  return data;
+}
+async function fetchApi(payload, signal) {
   const r = await fetch("/api/translate", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal
   });
@@ -807,7 +855,8 @@ async function translate() {
 
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
   hideExtras(); setButtons(false); setStatus(""); closePanels(); setMeta("");
-  els.output.classList.add("busy"); showText("…");
+  // заглушку «идёт перевод» показываем, только если ответ задержался: быстрый ответ появляется без мигания
+  const busyShow = setTimeout(() => { els.output.classList.add("busy"); showText("…"); }, 140);
   const my = ++reqId;
   controller = new AbortController();
   // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
@@ -864,7 +913,7 @@ async function translate() {
     lastResult = "";
     if (e.name !== "AbortError") showError(e);
   } finally {
-    clearTimeout(slowHint);
+    clearTimeout(slowHint); clearTimeout(busyShow);
     busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
   }
@@ -973,6 +1022,7 @@ $("fix-save").addEventListener("click", async () => {
   let translation = $("fix-text").value.trim();
   if (lastPair.tgt === "inh") translation = fixPalochka(translation);
   if (!translation) return;
+  ANSWERS.clear();
   const btn = $("fix-save"); btn.disabled = true; btn.textContent = "Сохраняю…";
   try {
     await api({ action: "correct", text: lastInput, translation, source: lastPair.src, target: lastPair.tgt, code: $("fix-code").value });
@@ -1239,46 +1289,58 @@ function drawTowers(ctx, t, night) {
 })();
 </script>
 <script>
-// Горы: слои сдвигаются от наклона телефона, а на компьютере — от мыши. При «уменьшить движение» всё стоит на месте.
+// Горы: слои сдвигаются от наклона телефона, а на компьютере — от мыши. Ближние слои двигаются сильнее дальних,
+// вся сцена чуть поворачивается, а карточка переводчика уходит в другую сторону — так она «висит» над горами.
+// При «уменьшить движение» всё стоит на месте.
 (() => {
-  const scene = document.getElementById("scene"), btn = document.getElementById("tilt");
+  const scene = document.getElementById("scene"), cue = document.getElementById("tilt"), main = document.querySelector("main");
   if (!scene || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
-  const MAX_X = 48, MAX_Y = 28;               // сдвиг ближнего слоя в пикселях
+  const MAX_X = 52, MAX_Y = 30;               // сдвиг ближнего слоя в пикселях
   let tx = 0, ty = 0, x = 0, y = 0, raf = 0, base = null;
   const clamp = (v) => Math.max(-1, Math.min(1, v));
   function tick() {
-    x += (tx - x) * 0.09; y += (ty - y) * 0.09;
+    x += (tx - x) * 0.12; y += (ty - y) * 0.12;
     for (const { el, d } of layers) el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y).toFixed(2)}px, 0)`;
-    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.002 ? requestAnimationFrame(tick) : 0;
+    scene.style.transform = `perspective(900px) rotateY(${(x * 2.2).toFixed(3)}deg) rotateX(${(-y * 1.6).toFixed(3)}deg) scale(1.06)`;
+    main.style.transform = `translate3d(${(x * 7).toFixed(2)}px, ${(y * 5).toFixed(2)}px, 0)`;
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.001 ? requestAnimationFrame(tick) : 0;
   }
   function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); if (!raf && !document.hidden) raf = requestAnimationFrame(tick); }
 
   addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") aim(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); }, { passive: true });
 
+  let live = false;
   function onTilt(e) {
     if (e.beta == null || e.gamma == null) return;
-    btn.hidden = true;                                 // наклон уже работает — кнопка не нужна
+    if (!live) { live = true; showCue(false); }
     const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
     let h = e.gamma, v = e.beta;                       // h — влево/вправо, v — к себе/от себя
     if (angle === 90) { h = e.beta; v = -e.gamma; } else if (angle === -90 || angle === 270) { h = -e.beta; v = e.gamma; }
     if (!base) base = { h, v };
-    base.h += (h - base.h) * 0.01; base.v += (v - base.v) * 0.01;   // как телефон держат — та позиция и «ровная»
-    aim((h - base.h) / 18, (v - base.v) / 18);
+    // «ровным» считается то, как телефон держат обычно; подстраиваемся медленно (~10 секунд), чтобы наклон был заметен
+    base.h += (h - base.h) * 0.0025; base.v += (v - base.v) * 0.0025;
+    aim((h - base.h) / 14, (v - base.v) / 14);
   }
-  function listen() { addEventListener("deviceorientation", onTilt); }
 
   const DOE = window.DeviceOrientationEvent;
   if (!DOE || !matchMedia("(pointer: coarse)").matches) return;   // компьютер: только мышь
-  listen();                                                       // Android: наклон работает сразу
+  addEventListener("deviceorientation", onTilt);                  // Android: наклон работает сразу
+  let seen = false; try { seen = localStorage.getItem("tilt-seen") === "1"; } catch {}
+  function showCue(on, needsTap) {
+    cue.hidden = !on;
+    cue.classList.toggle("ask", !!needsTap);
+    if (on) try { localStorage.setItem("tilt-seen", "1"); } catch {}
+  }
   if (typeof DOE.requestPermission === "function") {
-    // iPhone даёт наклон только после нажатия на кнопку «3D».
-    const ask = () => DOE.requestPermission().then((s) => {
-      if (s === "granted") { btn.hidden = true; try { localStorage.setItem("tilt3d", "1"); } catch {} }
-    }).catch(() => {});
-    btn.hidden = false;
-    btn.addEventListener("click", ask);
-    addEventListener("touchend", ask, { once: true, passive: true });   // первое касание экрана тоже включает 3D
+    // iPhone даёт наклон только после нажатия: подсказка с кнопкой, и любое первое касание тоже включает
+    const ask = () => DOE.requestPermission().then((s) => { if (s === "granted") showCue(false); }).catch(() => {});
+    showCue(true, true);
+    cue.querySelector("button").addEventListener("click", ask);
+    addEventListener("touchend", ask, { once: true, passive: true });
+  } else if (!seen) {
+    // Android: один раз подсказываем, что горы двигаются от наклона
+    setTimeout(() => { showCue(true); setTimeout(() => showCue(false), 5000); }, 1500);
   }
   document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
 })();

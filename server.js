@@ -137,8 +137,28 @@ function start() {
     if (keys.length) console.log("  ИИ: " + keys.map((k) => k.replace("_API_KEY", "")).join(", ") + ". Ключи взяты из " + (hasEnvFile ? ".env" : "переменных окружения") + ".");
     else console.log("  Ключа ИИ нет: работают только ответы из базы.\n  Чтобы переводил Gemini, скопируйте .env.example в .env и впишите GEMINI_API_KEY.");
     console.log("\n  Чтобы остановить, нажмите Ctrl+C.\n");
+    warmUp();
   });
   return server;
+}
+
+// Прогрев: словари, корпус и правила строят свои индексы при первом переводе (это 1–2 секунды).
+// Делаем это сразу после запуска, чтобы первый человек на сайте не ждал. Только база и правила, без ИИ.
+async function warmUp() {
+  if (process.env.NO_WARMUP) return;
+  const handler = require("./api/translate.js");
+  const t0 = Date.now();
+  const jobs = [
+    ["Доброе утро! Как у тебя дела?", "ru", "inh", "text"], ["Мой брат вчера ходил в магазин и купил хлеб", "ru", "inh", "text"],
+    ["маму", "ru", "inh", "word"], ["Сона хьо веза", "inh", "ru", "text"], ["нана", "inh", "ru", "word"],
+  ];
+  for (const [text, source, target, mode] of jobs) {
+    await new Promise((done) => {
+      const out = { status() { return this; }, json() { done(); } };
+      Promise.resolve(handler({ method: "POST", body: { text, source, target, mode, noAi: true, warmup: true } }, out)).catch(() => done()).finally(done);
+    });
+  }
+  console.log(`  Словари и правила загружены за ${((Date.now() - t0) / 1000).toFixed(1)} с: переводы будут быстрыми.\n`);
 }
 
 if (require.main === module) start();
