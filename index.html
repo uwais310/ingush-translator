@@ -117,6 +117,7 @@
   .trust.ok { background: var(--leaf); color: var(--green-deep); }
   .trust.native { background: #0a6b3d; color: #fff; }
   .trust.ai { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
+  .trust.draft { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
   .trust.rules { background: var(--leaf); color: var(--green-deep); border-bottom: 1px dashed color-mix(in srgb, var(--green) 45%, transparent); }
   .output { padding: 16px 16px 10px; font-size: 24px; line-height: 1.38; font-weight: 600; color: var(--green-deep); white-space: pre-wrap; overflow-wrap: anywhere; }
   .output.placeholder { color: var(--stone); font-size: 16px; font-weight: 400; min-height: 84px; }
@@ -677,13 +678,17 @@ function setMeta(text, kind) {
   if (kind === "ai") {
     body.textContent = "Перевёл ИИ: возможны ошибки, важное проверьте у носителя языка";
     if (text) { const s = document.createElement("small"); s.textContent = text; body.appendChild(s); }
+  } else if (kind === "draft") {
+    // перевод по словам: черновик, а не проверенный перевод (жёлтая метка, как у ИИ)
+    body.textContent = "Черновик";
+    const s = document.createElement("small"); s.textContent = (text ? text + ". " : "") + "Проверьте у носителя языка"; body.appendChild(s);
   } else if (kind === "rules") {
     body.textContent = text || "Без ИИ: по правилам грамматики";
     const s = document.createElement("small"); s.textContent = "Слова из словаря, грамматика из справочника. Проверьте у носителя языка"; body.appendChild(s);
   } else body.textContent = text;
-  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules") {
+  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules" || kind === "draft") {
     els.meta.classList.add(kind);
-    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" ? "ai" : kind === "rules" ? "rules" : "ok"]);
+    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" || kind === "draft" ? "ai" : kind === "rules" ? "rules" : "ok"]);
   }
   els.meta.appendChild(body);
 }
@@ -916,7 +921,9 @@ async function translate() {
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
-    setMeta((data.model || "") + (data.ai && data.fast ? " · быстрый режим" : ""), data.verified ? "native" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "");
+    const metaText = (data.model || "") + (data.ai && data.fast ? " · быстрый режим" : "");
+    const metaKind = data.verified ? "native" : data.chunks ? "draft" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "";
+    setMeta(metaText, metaKind);
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";
@@ -931,7 +938,7 @@ async function translate() {
     }
     setStatus(note, noteKind);
 
-    addHistory(src, tgt, text, lastResult);
+    addHistory(src, tgt, text, lastResult, { text: metaText, kind: metaKind });
     // второй проход (ИИ заменяет слова, которых нет в ингушских текстах) — в фоне: перевод уже на экране,
     // кнопка свободна; если проверка найдёт лучше, перевод тихо обновится
     if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) repairLater(my, text, src, tgt, note, noteKind, fixT);
@@ -955,7 +962,7 @@ async function repairLater(my, text, src, tgt, note, noteKind, fixT) {
       markInto(els.output, lastResult, r.unknown);
       if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
       setStatus("Перевод уточнён: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
-      addHistory(src, tgt, text, lastResult);
+      addHistory(src, tgt, text, lastResult, { text: "", kind: "ai" });
     } else setStatus(note, noteKind);
   } catch (e) {
     if (my === reqId) setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
@@ -1057,7 +1064,7 @@ $("fix-save").addEventListener("click", async () => {
     setMeta("Проверено носителем языка", "native");
     hideExtras(); $("fix-panel").hidden = true;
     setStatus("Сохранено. Спасибо! Теперь эта фраза всегда будет переводиться так" + (AI_ON ? ", а ИИ будет учиться на ней." : "."), "good");
-    addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
+    addHistory(lastPair.src, lastPair.tgt, lastInput, translation, { text: "Проверено носителем языка", kind: "native" });
   } catch (e) {
     if (e.status === 403) { $("code-row").hidden = false; $("fix-code").focus(); setStatus("Чтобы сохранить, введите код редактора.", "error"); }
     else setStatus(e.message || "Не сохранилось. Нажмите «Сохранить» ещё раз.", "error");
@@ -1111,9 +1118,11 @@ $("cmp-close").addEventListener("click", () => { $("cmp-panel").hidden = true; }
 function loadHistory() {
   try { return JSON.parse(localStorage.getItem("inh-tr-history") || "[]"); } catch (e) { return []; }
 }
-function addHistory(src, tgt, input, output) {
+// meta — метка над переводом ({ text, kind }): из истории перевод открывается с той же меткой
+// («Черновик» у перевода по словам), а не как проверенный
+function addHistory(src, tgt, input, output, meta = null) {
   let h = loadHistory().filter((x) => !(x.src === src && x.tgt === tgt && x.input === input));
-  h.unshift({ src, tgt, input, output });
+  h.unshift({ src, tgt, input, output, meta: meta && meta.kind ? { text: String(meta.text || ""), kind: meta.kind } : null });
   h = h.slice(0, 8);
   try { localStorage.setItem("inh-tr-history", JSON.stringify(h)); } catch (e) {}
   renderHistory(h);
@@ -1131,7 +1140,10 @@ function renderHistory(h = loadHistory()) {
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
       els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
-      showText(x.output); hideExtras(); closePanels(); setButtons(true); setStatus(""); setMeta(""); refresh();
+      showText(x.output); hideExtras(); closePanels(); setButtons(true); setStatus("");
+      // старые записи без метки — «Черновик»: откуда перевод, неизвестно, проверенным его не показываем
+      const m = x.meta && x.meta.kind ? x.meta : { text: "Из истории, откуда перевод — неизвестно", kind: "draft" };
+      setMeta(m.text, m.kind); refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);
