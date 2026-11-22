@@ -920,7 +920,9 @@ async function translate() {
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";
-    if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
+    if (data.chunks) {
+      // перевод по словам: без больших предупреждений — есть маленькая «Неправильный перевод?» под ним
+    } else if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
       note = "Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный."; noteKind = "error";
     } else if (data.unknown && data.unknown.length && !trusted) {
       note = "Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : "");
