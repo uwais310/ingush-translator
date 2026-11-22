@@ -206,6 +206,8 @@ const fixPalochka = (s) => String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, 
 const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
 
 let code = "", item = null, index = -1, busy = false, tab = "check", askItem = null, askIndex = -1;
+// когда показана пара: второе нажатие двойного тапа не должно сохранить «Верно» для пары, которую ещё не видели
+let shownAt = 0;
 try { code = sessionStorage.getItem("inh-review-code") || ""; } catch (e) {}
 
 async function api(payload) {
@@ -240,7 +242,7 @@ function show(data) {
   $("pct").textContent = pct < 1 && data.reviewed ? "<1%" : Math.round(pct) + "%";
   $("n-check").textContent = `${fmt(data.reviewed)} из ${fmt(data.total)}`;
   if (data.done) { $("card").hidden = true; $("done").hidden = false; return; }
-  item = data.item; index = data.index;
+  item = data.item; index = data.index; shownAt = Date.now();
   $("done").hidden = true; $("card").hidden = tab !== "check"; showEditor(false);
   $("ru").textContent = item.ru;
   $("inh").textContent = item.inh;
@@ -268,7 +270,7 @@ async function next(after, okMessage = "") {
   } finally { setBusy(false); $("enter").disabled = false; }
 }
 async function save(decision, inh) {
-  if (busy || !item) return;
+  if (busy || !item || Date.now() - shownAt < 700) return; // 0,7 с после показа пары: двойной тап не проверяет следующую
   setBusy(true); setStatus("Сохраняю…");
   try {
     await api({ action: "review-save", id: item.id, decision, inh });
