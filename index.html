@@ -642,6 +642,8 @@ noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai"
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
 els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
 $("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
+// нажатие на Ӏ не должно забирать фокус у поля: иначе на телефоне клавиатура прячется и выскакивает снова
+for (const k of [els.key, $("fix-key")]) k.addEventListener("mousedown", (e) => e.preventDefault());
 els.input.addEventListener("input", refresh);
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
 window.addEventListener("resize", grow);
