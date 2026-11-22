@@ -140,9 +140,10 @@
   .pinfo.miss-info { border-color: var(--amber-line); background: var(--amber-bg); color: var(--amber-ink); }
   .pinfo.miss-info .pf { color: inherit; }
   .phint { padding: 0 16px 8px; font-size: 13px; color: var(--stone); }
-  .fixcall { margin: 0 12px 12px; padding: 12px; border-radius: 14px; background: var(--amber-bg); border: 1.5px solid var(--amber-line); color: var(--amber-ink); display: grid; gap: 10px; font-size: 14px; line-height: 1.4; }
-  .fixcall b { font-size: 15px; }
-  .fixcall .act { width: 100%; min-height: 50px; font-size: 16px; }
+  /* маленькая строка под переводом: «Неправильный перевод?» и «Исправить» */
+  .fixcall { margin: 0 12px 8px; display: flex; gap: 14px; justify-content: flex-end; }
+  .fixcall .flag { background: none; border: 0; padding: 8px 2px; min-height: 36px; font: inherit; font-size: 13px; color: var(--muted, #6b7280); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .fixcall .flag:disabled { text-decoration: none; cursor: default; }
   .status { padding: 0 16px 10px; font-size: 14px; color: var(--stone); }
   .status:empty { display: none; }
   .status.error { color: var(--amber-ink); }
@@ -386,8 +387,8 @@
       <div class="pinfo" id="p-info" hidden aria-live="polite"></div>
       <div class="status" id="status"></div>
       <div class="fixcall" id="fix-call" hidden>
-        <div><b>Перевод собран по словам — он может быть неточным.</b><br><span id="fix-call-note">Окончания и формы глаголов могут быть неверными. Если вы знаете ингушский, поправьте перевод: дальше эта фраза всегда будет переводиться так.</span></div>
-        <button class="act main" id="fix-call-btn" type="button">Сообщить об ошибке / Исправить</button>
+        <button class="flag" id="report-btn" type="button">Неправильный перевод?</button>
+        <button class="flag" id="fix-call-btn" type="button">Исправить</button>
       </div>
 
       <div class="variants" id="variants" hidden>
@@ -716,6 +717,16 @@ const noAi = $("noai");
 els.compare.hidden = true;
 api({ action: "config" }).then((c) => applyAi(c && c.ai === true)).catch(() => applyAi(false));
 $("fix-call-btn").addEventListener("click", () => openFix());
+// «Неправильный перевод?» — одно нажатие: текст, перевод и направление уходят на сервер (action "report")
+$("report-btn").addEventListener("click", async () => {
+  const b = $("report-btn");
+  if (!lastResult || b.disabled) return;
+  b.disabled = true; b.textContent = "Отправляю…";
+  try {
+    await api({ action: "report", text: lastInput, translation: lastResult, source: lastPair.src, target: lastPair.tgt });
+    b.textContent = "Спасибо, отметили";
+  } catch (e) { b.disabled = false; b.textContent = "Не отправилось, ещё раз?"; }
+});
 try { noAi.checked = localStorage.getItem("inh-tr-noai") === "1"; } catch (e) {}
 noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai", noAi.checked ? "1" : "0"); } catch (e) {} });
 
@@ -898,7 +909,8 @@ async function translate() {
     if (!(pieces && markPieces(els.output, lastResult, pieces))) markInto(els.output, lastResult, data.unknown);
     $("p-hint").hidden = !pieces;
     // перевод по словам грубый: просим носителя языка поправить — кнопка крупная и сразу под переводом
-    $("fix-call").hidden = !data.chunks;
+    $("fix-call").hidden = false; // маленькая строка — под любым переводом
+    $("report-btn").disabled = false; $("report-btn").textContent = "Неправильный перевод?";
     if (data.chunks && data.details) data.details.note = ""; // то же сказано в жёлтой плашке
     const hasVariants = renderVariants(data.variants, fixT);
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
@@ -908,7 +920,9 @@ async function translate() {
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";
-    if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
+    if (data.chunks) {
+      // перевод по словам: без больших предупреждений — есть маленькая «Неправильный перевод?» под ним
+    } else if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
       note = "Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный."; noteKind = "error";
     } else if (data.unknown && data.unknown.length && !trusted) {
       note = "Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : "");

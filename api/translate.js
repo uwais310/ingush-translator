@@ -1304,6 +1304,22 @@ module.exports = async (req, res) => {
   const input = (source === "inh" ? fixPalochka(text) : text).trim();
   const fixT = (s) => (target === "inh" ? fixPalochka(s) : String(s || "").trim());
 
+  // --- «Неправильный перевод?»: сохранить жалобу (текст, перевод, направление) для проверки носителем ---
+  if (action === "report") {
+    const store = phraseStore();
+    if (!store) return res.status(501).json({ error: "Сохранение недоступно на этом хостинге." });
+    try {
+      const list = (await store.get("reports", { type: "json" })) || [];
+      list.push({ text: input.slice(0, 500), translation: String(body.translation || "").slice(0, 1000), source, target, at: new Date().toISOString() });
+      while (list.length > 2000) list.shift();
+      await store.setJSON("reports", list);
+      return res.status(200).json({ ok: true, count: list.length });
+    } catch (e) {
+      console.error("report:", e.message);
+      return res.status(500).json({ error: "Не удалось отправить. Попробуйте ещё раз." });
+    }
+  }
+
   // --- сохранить исправление ---
   if (action === "correct") {
     const translation = fixT(body.translation || "").trim();
@@ -1408,7 +1424,7 @@ module.exports = async (req, res) => {
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
         pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
-        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
+        details: { alternatives: [], note: "Собрано по словам из словаря; слова в [скобках] не найдены." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
       };
       if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
       result.variants = finishVariants([{ text: result.translation, note: "", source: "chunks", sourceLabel: "по словам из словаря", rank: 4 }], fixT);
