@@ -109,7 +109,7 @@
   .switch input:checked::after { transform: translateX(16px); }
 
   /* ---------- перевод ---------- */
-  .result { border-radius: var(--radius); background: var(--mist); overflow: hidden; }
+  .result { border-radius: var(--radius); background: var(--mist); overflow: hidden; scroll-margin-top: 8px; }
   .trust { display: flex; align-items: flex-start; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; line-height: 1.35; }
   .trust:empty { display: none; }
   .trust small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
@@ -817,7 +817,13 @@ async function translate() {
     clearTimeout(slowHint);
     busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
+    revealResult();
   }
+}
+// маленький телефон или телефон боком: перевод может оказаться ниже края экрана — подкручиваем к нему,
+// только если его не видно целиком (на обычном телефоне страница не прыгает)
+function revealResult() {
+  if (els.output.getBoundingClientRect().bottom > window.innerHeight) els.output.closest(".result").scrollIntoView({ block: "start", behavior: "smooth" });
 }
 let reqId = 0;
 async function repairLater(my, text, src, tgt, note, noteKind, fixT) {
