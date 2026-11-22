@@ -1297,7 +1297,8 @@ module.exports = async (req, res) => {
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
   // страница спрашивает, включён ли ИИ на сервере: если нет — прячет кнопки «Сравнить ИИ» и «Без ИИ»
   if (action === "config") return res.status(200).json({ ai: aiEnabled() });
-  if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
+  // Object.hasOwn: «__proto__», «constructor», «toString» — тоже ключи объекта, но не языки
+  if (!Object.hasOwn(LANGS, String(source)) || !Object.hasOwn(LANGS, String(target))) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
 
