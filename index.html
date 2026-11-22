@@ -57,6 +57,8 @@
   .band { background: #0a6b3d; color: var(--on-green); }
   @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
   .band-in { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  /* телефон боком: вырез экрана слева или справа (viewport-fit=cover) — отступ не меньше выреза */
+  .band-in { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
   .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 12px; }
   .sign { width: 44px; height: 44px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
   .sign svg { width: 34px; height: 34px; display: block; }
@@ -65,6 +67,8 @@
 
   /* ---------- белое поле ---------- */
   main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 14px 16px 28px; display: grid; gap: 22px; align-content: start; }
+  main { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  main > * { min-width: 0; } /* длинное слово перевода не раздвигает сетку шире экрана */
 
   .langbar { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; gap: 8px; }
   .lang { position: relative; }
@@ -84,7 +88,7 @@
   textarea { display: block; width: 100%; border: 0; outline: 0; background: transparent; resize: none; }
   #input { min-height: 112px; max-height: 46vh; padding: 16px 16px 6px; font-size: 21px; line-height: 1.4; overflow-wrap: anywhere; }
   #input::placeholder { color: var(--stone); opacity: .75; }
-  .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; }
+  .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; flex-wrap: wrap; } /* iPhone SE (320 px): «Очистить» переносится, а не уходит за край */
   .grow { flex: 1; }
   .count { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; padding-right: 6px; white-space: nowrap; }
   .count.near { color: var(--amber-ink); font-weight: 600; }
