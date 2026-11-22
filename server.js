@@ -136,6 +136,8 @@ function start() {
     if (keys.length) console.log("  ИИ: " + keys.map((k) => k.replace("_API_KEY", "")).join(", ") + ". Ключи взяты из " + (hasEnvFile ? ".env" : "переменных окружения") + ".");
     else console.log("  Ключа ИИ нет: работают только ответы из базы.\n  Чтобы переводил Gemini, скопируйте .env.example в .env и впишите GEMINI_API_KEY.");
     console.log("\n  Чтобы остановить, нажмите Ctrl+C.\n");
+    // прогрев: таблицы для перевода без ИИ строятся сейчас, а не на первом запросе человека
+    setImmediate(() => require("./api/translate.js").warmup().then((ms) => console.log(`  Готов к быстрому переводу (подготовка: ${(ms / 1000).toFixed(1)} с).\n`)));
   });
   return server;
 }
