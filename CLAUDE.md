@@ -15,6 +15,7 @@ node scripts/eval-rules.js                       # rules vs native speakers (Pay
 node scripts/eval-chunks.js                      # word-by-word translator vs native speakers
 node scripts/eval-retrieval.js                   # how many needed words reach the AI prompt
 node scripts/eval-postcheck.js                   # Russian words left in Ingush AI output
+node scripts/score.js                            # all no-AI scores above in one table (compare before/after)
 ```
 
 AI keys live only in `.env` locally (see `.env.example`) and in Netlify environment variables. Never put a key in code or commits.
