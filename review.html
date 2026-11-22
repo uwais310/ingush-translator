@@ -319,6 +319,8 @@ $("fix").addEventListener("click", () => showEditor(true));
 $("cancel").addEventListener("click", () => showEditor(false));
 $("pal").addEventListener("click", () => insertPal($("edit")));
 $("a-pal").addEventListener("click", () => insertPal($("a-edit")));
+// кнопка Ӏ не забирает фокус у поля: иначе на телефоне клавиатура закрывается и открывается снова
+for (const id of ["pal", "a-pal"]) for (const ev of ["pointerdown", "mousedown"]) $(id).addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 $("save").addEventListener("click", () => {
   const inh = fixPalochka($("edit").value).trim();
   if (!inh) { setStatus("Впишите перевод.", "error"); return; }
