@@ -1517,6 +1517,26 @@ module.exports = async (req, res) => {
 };
 
 // для тестов
+// Прогрев: строит словарь, таблицу слов и всё, что иначе строится на первом переводе (несколько секунд).
+// Сервер (server.js) вызывает его сразу после запуска, чтобы первый человек не ждал.
+module.exports.warmup = () => {
+  const t0 = Date.now();
+  try {
+    RET.lookupWord("дом", "ru");
+    CHUNKS.translate("отвези еду маме", "ru");
+    CHUNKS.translate("Со цӀа вода", "inh");
+    RULES.translate("Это мой дом");
+    words();
+  } catch (e) { console.error("прогрев:", e.message); }
+  // и один настоящий запрос: база с исправлениями, проверки ответа — всё, что строится лениво
+  const fake = (body) => new Promise((resolve) => {
+    const res = { status() { return this; }, json() { resolve(); }, setHeader() {} };
+    Promise.resolve(module.exports({ method: "POST", body }, res)).catch(() => resolve());
+  });
+  return fake({ text: "куда отвезти еду", source: "ru", target: "inh", mode: "text" })
+    .then(() => fake({ text: "Со цӀа вода", source: "inh", target: "ru", mode: "text" }))
+    .then(() => Date.now() - t0);
+};
 module.exports._checkIngush = checkIngush;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
