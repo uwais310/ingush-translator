@@ -496,6 +496,7 @@ function fixPalochka(s) {
   if (!s) return s;
   return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 }
+function keepFocus(b) { for (const ev of ["pointerdown", "mousedown"]) b.addEventListener(ev, (e) => e.preventDefault(), { passive: false }); }
 function insertAt(t, ch) { t.setRangeText(ch, t.selectionStart, t.selectionEnd, "end"); t.focus(); }
 
 /* ---------- языки ---------- */
@@ -738,6 +739,8 @@ noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai"
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
 els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
 $("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
+// кнопка Ӏ не забирает фокус у поля: иначе на телефоне клавиатура закрывается и открывается снова
+keepFocus(els.key); keepFocus($("fix-key"));
 els.input.addEventListener("input", refresh);
 // Пока человек печатает, перевод готовится молча (на экране ничего не меняется). Показываем его только
 // по кнопке «Перевести» или Ctrl/⌘+Enter — тогда ответ уже готов и появляется сразу, целиком.
