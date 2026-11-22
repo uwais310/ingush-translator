@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0a6b3d">
+<link rel="icon" href="/icon-192.png">
+<title>Админка — Ингушский переводчик</title>
+<style>
+  /* Админка: что переводили и жалобы «Неправильный перевод?». Оформление — как у /review. */
+  :root {
+    --snow: #ffffff; --mist: #f2f6f3; --ink: #14201a; --stone: #5d6a63; --line: #dbe5df;
+    --green: #0a6b3d; --green-deep: #07542f; --leaf: #e2f3e9; --on-green-soft: rgba(255, 255, 255, .78);
+    --amber: #fff1d6; --amber-ink: #7a4a00; --red: #b3261e; --radius: 18px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --snow: #111b16; --mist: #17241d; --ink: #e9f1ec; --stone: #9aaba2; --line: #26372e;
+      --green: #49c486; --green-deep: #6ad49c; --leaf: #173426; --amber: #3a2c12; --amber-ink: #ffc978; --red: #ff8a80; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: var(--snow); -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--snow); color: var(--ink);
+    font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--green) 55%, transparent); outline-offset: 2px; }
+
+  .band { background: #0a6b3d; color: #fff; }
+  @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
+  .band-in { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 12px; }
+  .sign { width: 44px; height: 44px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .sign svg { width: 34px; height: 34px; display: block; }
+  h1 { margin: 0; font-size: 20px; line-height: 1.15; font-weight: 700; letter-spacing: -.01em; }
+  .sub { margin: 2px 0 0; font-size: 13px; color: var(--on-green-soft); }
+  .band a { color: #fff; text-underline-offset: 3px; }
+  .top .grow { flex: 1; min-width: 0; }
+  .top .tools { display: flex; gap: 8px; }
+  .top .tools button { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 40px; }
+  .top .tools button:hover { background: rgba(255,255,255,.24); }
+  .bottom .band-in { padding-top: 14px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); font-size: 13px; color: var(--on-green-soft); }
+  .bottom p { margin: 0; }
+
+  .wrap { flex: 1; width: 100%; max-width: 980px; margin: 0 auto; padding: 16px 16px 32px; display: grid; gap: 16px; align-content: start; }
+  .card { background: var(--mist); border-radius: var(--radius); padding: 18px 16px; display: grid; gap: 14px; }
+  .login { max-width: 440px; width: 100%; justify-self: center; }
+  label { font-size: 14px; color: var(--stone); display: grid; gap: 6px; }
+  input, select { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--snow); outline: none; min-height: 46px; }
+  input:focus, select:focus { border-color: var(--green); }
+  .login input { font-size: 20px; }
+  .btn { border: 1.5px solid var(--line); background: var(--snow); border-radius: 12px; padding: 10px 14px; font-size: 15px; font-weight: 650; cursor: pointer; min-height: 44px; touch-action: manipulation; }
+  .btn:hover { border-color: var(--green); }
+  .btn.primary { background: #0a6b3d; color: #fff; border-color: #0a6b3d; font-size: 18px; min-height: 54px; }
+  .btn.primary:hover { background: #07542f; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .status { font-size: 15px; min-height: 22px; margin: 0; color: var(--stone); }
+  .status.error { color: var(--amber-ink); }
+  .status:empty { display: none; }
+
+  /* цифры сверху */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .stat { background: var(--mist); border-radius: 16px; padding: 14px; display: grid; gap: 2px; }
+  .stat b { font-size: 28px; line-height: 1.1; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 13px; color: var(--stone); }
+  .stat.alert b { color: var(--amber-ink); }
+  .stat.alert { background: var(--amber); }
+  @media (max-width: 640px) { .stats { grid-template-columns: 1fr 1fr; } }
+
+  /* график по дням */
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .chart-head h2 { margin: 0; font-size: 16px; }
+  .legend { display: flex; gap: 12px; font-size: 13px; color: var(--stone); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; align-items: end; height: 130px; }
+  .day { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; min-width: 0; }
+  .col { display: flex; flex-direction: column-reverse; justify-content: flex-start; height: 100%; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--line) 45%, transparent); position: relative; }
+  .col i { display: block; width: 100%; }
+  .col .a { background: var(--green); }
+  .col .b { background: color-mix(in srgb, var(--green) 45%, var(--snow)); }
+  .col .c { background: color-mix(in srgb, var(--stone) 35%, var(--snow)); }
+  .day small { font-size: 11px; color: var(--stone); text-align: center; white-space: nowrap; overflow: hidden; }
+  .day.today small { color: var(--ink); font-weight: 700; }
+  .day[title] { cursor: default; }
+
+  /* вкладки и фильтры */
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--mist); padding: 5px; border-radius: 16px; }
+  .tab { border: 0; border-radius: 12px; padding: 10px 8px; font-size: 16px; font-weight: 650; background: transparent; color: var(--stone); cursor: pointer; min-height: 50px; }
+  .tab[aria-selected="true"] { background: #0a6b3d; color: #fff; }
+  .tab .n { display: inline-block; margin-left: 6px; font-size: 13px; padding: 1px 8px; border-radius: 99px; background: var(--amber); color: var(--amber-ink); }
+  .tab[aria-selected="true"] .n { background: rgba(255,255,255,.22); color: #fff; }
+  .tab .n:empty { display: none; }
+  .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; }
+  @media (max-width: 720px) { .filters { grid-template-columns: 1fr 1fr; } .filters .search, .filters #state, .filters #how { grid-column: 1 / -1; } }
+  @media (max-width: 420px) { .top .tools button { padding: 6px 10px; font-size: 13px; min-height: 36px; } h1 { font-size: 18px; } }
+  .summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--stone); }
+  .summary .btn { min-height: 36px; padding: 6px 12px; font-size: 14px; }
+
+  /* записи */
+  .list { display: grid; gap: 10px; }
+  .item { background: var(--mist); border-radius: 16px; padding: 14px 16px; display: grid; gap: 8px; border-left: 4px solid transparent; }
+  .item.new { border-left-color: var(--amber-ink); }
+  .item.done { opacity: .72; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 13px; color: var(--stone); }
+  .chip { background: var(--leaf); color: var(--green-deep); border-radius: 99px; padding: 2px 10px; font-weight: 650; font-size: 12px; white-space: nowrap; }
+  .chip.warn { background: var(--amber); color: var(--amber-ink); }
+  .chip.grey { background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--stone); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; gap: 6px; } }
+  .pair .tag { font-size: 12px; color: var(--stone); font-weight: 600; }
+  .pair .txt { font-size: 17px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .pair .out { color: var(--green-deep); font-weight: 600; }
+  .pair .none { color: var(--stone); font-style: italic; font-weight: 400; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row-actions .btn { min-height: 38px; padding: 6px 12px; font-size: 14px; }
+  .row-actions .btn.ok { background: #0a6b3d; color: #fff; border-color: #0a6b3d; }
+  mark { background: color-mix(in srgb, #ffd54a 55%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+  .empty { text-align: center; color: var(--stone); padding: 28px 12px; background: var(--mist); border-radius: 16px; }
+  .more { justify-self: center; }
+  .note { font-size: 13px; color: var(--stone); margin: 0; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="band top">
+  <div class="band-in">
+    <div class="sign" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none" stroke="#d3212c" stroke-width="3.6" stroke-linecap="round">
+        <circle cx="24" cy="24" r="7.6"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(120 24 24)"/>
+        <path d="M24 16.4C24 9.6 28.6 5.6 35 6.4" transform="rotate(240 24 24)"/>
+      </svg>
+    </div>
+    <div class="grow">
+      <h1>Админка</h1>
+      <p class="sub"><a href="/">Переводчик</a> · <a href="/review">Проверка</a></p>
+    </div>
+    <div class="tools" id="tools" hidden>
+      <button type="button" id="refresh" title="Загрузить заново">Обновить</button>
+      <button type="button" id="logout">Выйти</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <form class="card login" id="login">
+    <label>Код администратора
+      <input id="code" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary" type="submit" id="enter">Войти</button>
+    <p class="status" id="login-status" aria-live="polite"></p>
+  </form>
+
+  <div id="app" hidden>
+    <div class="wrap" style="padding:0">
+      <div class="stats" id="stats"></div>
+
+      <section class="card" aria-label="Переводы по дням">
+        <div class="chart-head">
+          <h2>Переводы за 14 дней</h2>
+          <div class="legend"><span><i style="background:var(--green)"></i>рус → инг</span><span><i style="background:color-mix(in srgb, var(--green) 45%, var(--snow))"></i>инг → рус</span><span><i style="background:color-mix(in srgb, var(--stone) 35%, var(--snow))"></i>без перевода</span></div>
+        </div>
+        <div class="chart" id="chart"></div>
+      </section>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" id="tab-reports" role="tab" aria-selected="true" type="button">Жалобы<span class="n" id="n-reports"></span></button>
+        <button class="tab" id="tab-log" role="tab" aria-selected="false" type="button">Что переводили</button>
+      </div>
+
+      <section class="card">
+        <div class="filters">
+          <input class="search" id="q" type="search" placeholder="Поиск по тексту и переводу" autocomplete="off" aria-label="Поиск">
+          <select id="dir" aria-label="Направление">
+            <option value="">рус ↔ инг</option>
+            <option value="ru>inh">рус → инг</option>
+            <option value="inh>ru">инг → рус</option>
+          </select>
+          <select id="period" aria-label="Период">
+            <option value="">За всё время</option>
+            <option value="1">Сегодня</option>
+            <option value="7">7 дней</option>
+            <option value="30">30 дней</option>
+          </select>
+          <select id="state" aria-label="Статус жалобы">
+            <option value="new">Новые</option>
+            <option value="done">Обработанные</option>
+            <option value="">Все жалобы</option>
+          </select>
+          <select id="how" aria-label="Откуда перевод" hidden>
+            <option value="">Любой ответ</option>
+            <option value="none">Без перевода</option>
+            <option value="chunks">По словам (черновик)</option>
+            <option value="rules">Правила грамматики</option>
+            <option value="base">Из базы</option>
+            <option value="verified">Проверено носителем</option>
+            <option value="ai">ИИ</option>
+          </select>
+        </div>
+        <div class="summary">
+          <span id="shown" aria-live="polite"></span>
+          <button class="btn" type="button" id="csv">Скачать CSV</button>
+        </div>
+      </section>
+
+      <p class="status error" id="app-status" aria-live="polite"></p>
+      <div class="list" id="list"></div>
+      <button class="btn more" type="button" id="more" hidden>Показать ещё</button>
+      <p class="note" id="foot"></p>
+    </div>
+  </div>
+</div>
+
+<footer class="band bottom">
+  <div class="band-in"><p>Журнал хранит только текст и перевод: без IP-адресов и данных о людях.</p></div>
+</footer>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const PAGE = 60;
+const KEY = "inh-admin-code";
+let code = "";
+let data = null;           // { reports, log, stats, storage, logging }
+let tab = "reports";
+let limit = PAGE;
+
+function store(get, val) {
+  try { if (get) return sessionStorage.getItem(KEY) || ""; if (val) sessionStorage.setItem(KEY, val); else sessionStorage.removeItem(KEY); } catch (e) {}
+  return "";
+}
+
+async function api(body) {
+  const r = await fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin", code, ...body }) });
+  let j = {};
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw Object.assign(new Error(j.error || "Ошибка " + r.status), { status: r.status });
+  return j;
+}
+
+// ---------- вход ----------
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  code = $("code").value.trim();
+  if (!code) return;
+  $("enter").disabled = true;
+  $("login-status").className = "status";
+  $("login-status").textContent = "Загружаю…";
+  try {
+    await load();
+    store(false, code);
+  } catch (err) {
+    $("login-status").className = "status error";
+    $("login-status").textContent = err.message;
+  } finally { $("enter").disabled = false; }
+});
+$("logout").addEventListener("click", () => {
+  store(false, ""); code = ""; data = null;
+  $("app").hidden = true; $("tools").hidden = true; $("login").hidden = false;
+  $("code").value = ""; $("login-status").textContent = "";
+});
+$("refresh").addEventListener("click", async () => {
+  $("refresh").disabled = true;
+  try { await load(); } catch (err) { $("app-status").textContent = err.message; } finally { $("refresh").disabled = false; }
+});
+
+async function load() {
+  data = await api({ op: "data" });
+  $("app-status").textContent = "";
+  $("login").hidden = true; $("app").hidden = false; $("tools").hidden = false;
+  renderStats(); renderChart(); renderList();
+}
+
+// ---------- даты ----------
+const pad = (n) => String(n).padStart(2, "0");
+const dayKey = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); // местный день
+const utcKey = (d) => d.toISOString().slice(0, 10);
+function when(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const now = new Date();
+  const mins = Math.round((now - d) / 60000);
+  const time = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  if (mins < 1) return "только что";
+  if (mins < 60) return mins + " мин назад";
+  if (dayKey(d) === dayKey(now)) return "сегодня, " + time;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (dayKey(d) === dayKey(y)) return "вчера, " + time;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" }) + ", " + time;
+}
+const inDays = (iso, days) => !days || (Date.now() - new Date(iso).getTime()) <= days * 864e5;
+const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
+
+// ---------- цифры ----------
+function renderStats() {
+  const days = data.stats || {};
+  const today = utcKey(new Date());
+  let week = 0;
+  for (let i = 0; i < 7; i++) { const d = new Date(Date.now() - i * 864e5); week += (days[utcKey(d)] || {}).total || 0; }
+  const fresh = data.reports.filter((r) => !r.handled).length;
+  const total = Object.values(days).reduce((s, d) => s + (d.total || 0), 0) || data.log.length;
+  const cells = [
+    [fmt((days[today] || {}).total || 0), "переводов сегодня"],
+    [fmt(week), "за 7 дней"],
+    [fmt(total), "всего в журнале"],
+    [fmt(fresh), fresh === 1 ? "новая жалоба" : "новых жалоб", fresh > 0],
+  ];
+  const box = $("stats");
+  box.textContent = "";
+  for (const [n, label, alert] of cells) {
+    const el = document.createElement("div");
+    el.className = "stat" + (alert ? " alert" : "");
+    const b = document.createElement("b"); b.textContent = n;
+    const s = document.createElement("span"); s.textContent = label;
+    el.append(b, s); box.append(el);
+  }
+  $("n-reports").textContent = fresh ? String(fresh) : "";
+  const where = { supabase: "Supabase", netlify: "Netlify Blobs", local: "папка local-data", none: "нет хранилища — данные не сохраняются" }[data.storage] || data.storage;
+  $("foot").textContent = "Хранилище: " + where + "." + (data.logging ? " Журнал хранит последние 3000 переводов, счётчики по дням — 4 месяца." : " Журнал переводов выключен (ADMIN_LOG=0).");
+}
+
+function renderChart() {
+  const days = data.stats || {};
+  const list = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 864e5);
+    list.push({ d, s: days[utcKey(d)] || { total: 0, ruInh: 0, inhRu: 0, empty: 0 } });
+  }
+  const max = Math.max(1, ...list.map((x) => x.s.total));
+  const box = $("chart");
+  box.textContent = "";
+  list.forEach(({ d, s }, i) => {
+    const day = document.createElement("div");
+    day.className = "day" + (i === 13 ? " today" : "");
+    const other = Math.max(0, s.total - s.ruInh - s.inhRu);
+    day.title = d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ": " + s.total + " (рус→инг " + s.ruInh + ", инг→рус " + s.inhRu + (other ? ", другие " + other : "") + "; без перевода " + (s.empty || 0) + ")";
+    const col = document.createElement("div");
+    col.className = "col";
+    // доля без перевода показана отдельно, остальное — по направлениям
+    const empty = Math.min(s.empty || 0, s.total);
+    const scale = (n) => (n / max) * 100 + "%";
+    const ok = Math.max(0, s.total - empty);
+    const ru = s.total ? (s.ruInh / s.total) * ok : 0;
+    const inh = Math.max(0, ok - ru);
+    for (const [cls, n] of [["a", ru], ["b", inh], ["c", empty]]) {
+      if (n <= 0) continue;
+      const bar = document.createElement("i"); bar.className = cls; bar.style.height = scale(n); col.append(bar);
+    }
+    const lab = document.createElement("small");
+    lab.textContent = i === 13 ? "сег." : String(d.getDate()); // полная дата — в подсказке столбика
+    day.append(col, lab); box.append(day);
+  });
+}
+
+// ---------- список ----------
+function setTab(t) {
+  tab = t; limit = PAGE;
+  $("tab-reports").setAttribute("aria-selected", String(t === "reports"));
+  $("tab-log").setAttribute("aria-selected", String(t === "log"));
+  $("state").hidden = t !== "reports";
+  $("how").hidden = t !== "log";
+  renderList();
+}
+$("tab-reports").addEventListener("click", () => setTab("reports"));
+$("tab-log").addEventListener("click", () => setTab("log"));
+for (const id of ["dir", "period", "state", "how"]) $(id).addEventListener("change", () => { limit = PAGE; renderList(); });
+let qTimer = null;
+$("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => { limit = PAGE; renderList(); }, 150); });
+$("more").addEventListener("click", () => { limit += PAGE; renderList(); });
+
+const norm = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/[1lI|]/g, "ӏ");
+function filtered() {
+  if (!data) return [];
+  const q = norm($("q").value.trim());
+  const dir = $("dir").value;
+  const days = Number($("period").value) || 0;
+  const rows = tab === "reports" ? data.reports : data.log;
+  return rows.filter((r) => {
+    if (dir && r.source + ">" + r.target !== dir) return false;
+    if (!inDays(r.at, days)) return false;
+    if (tab === "reports") {
+      const st = $("state").value;
+      if (st === "new" && r.handled) return false;
+      if (st === "done" && !r.handled) return false;
+    } else {
+      const how = $("how").value;
+      if (how && (r.how || "none") !== how) return false;
+    }
+    if (q && !norm(r.text + " " + r.translation).includes(q)) return false;
+    return true;
+  });
+}
+
+// подсветка найденного: только текстовые узлы, чужой текст никогда не становится разметкой
+function highlight(el, text) {
+  const q = norm($("q").value.trim());
+  const s = String(text || "");
+  if (!q) { el.textContent = s; return; }
+  const low = norm(s);
+  let i = 0, at;
+  while ((at = low.indexOf(q, i)) !== -1) {
+    el.append(document.createTextNode(s.slice(i, at)));
+    const m = document.createElement("mark"); m.textContent = s.slice(at, at + q.length); el.append(m);
+    i = at + q.length;
+  }
+  el.append(document.createTextNode(s.slice(i)));
+}
+
+const LANG = { ru: "рус", inh: "инг", en: "англ", ce: "чеч" };
+const HOW = { none: ["без перевода", "warn"], chunks: ["по словам", "warn"], rules: ["правила", ""], base: ["из базы", ""], verified: ["проверено", ""], ai: ["ИИ", "grey"] };
+
+function chip(text, cls) { const c = document.createElement("span"); c.className = "chip" + (cls ? " " + cls : ""); c.textContent = text; return c; }
+
+function pairBlock(r) {
+  const pair = document.createElement("div"); pair.className = "pair";
+  const left = document.createElement("div");
+  const lt = document.createElement("div"); lt.className = "tag"; lt.textContent = "Текст (" + (LANG[r.source] || r.source) + ")";
+  const lx = document.createElement("div"); lx.className = "txt"; highlight(lx, r.text);
+  left.append(lt, lx);
+  const right = document.createElement("div");
+  const rt = document.createElement("div"); rt.className = "tag"; rt.textContent = "Перевод (" + (LANG[r.target] || r.target) + ")";
+  const rx = document.createElement("div"); rx.className = "txt out";
+  if (r.translation) highlight(rx, r.translation); else { rx.classList.add("none"); rx.textContent = "— перевода не нашлось —"; }
+  right.append(rt, rx);
+  pair.append(left, right);
+  return pair;
+}
+
+function copyBtn(r) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = "Копировать";
+  b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(r.text + "\n" + (r.translation || "")); b.textContent = "Скопировано"; } catch (e) { b.textContent = "Не вышло"; }
+    setTimeout(() => (b.textContent = "Копировать"), 1500);
+  });
+  return b;
+}
+
+function reportItem(r) {
+  const el = document.createElement("article");
+  el.className = "item " + (r.handled ? "done" : "new");
+  const meta = document.createElement("div"); meta.className = "meta";
+  meta.append(chip((LANG[r.source] || r.source) + " → " + (LANG[r.target] || r.target)));
+  meta.append(r.handled ? chip("обработано", "grey") : chip("новая", "warn"));
+  const t = document.createElement("span"); t.textContent = when(r.at); t.title = new Date(r.at).toLocaleString("ru-RU"); meta.append(t);
+  if (r.handled && r.handledAt) { const h = document.createElement("span"); h.textContent = "· отмечено " + when(r.handledAt); meta.append(h); }
+  const actions = document.createElement("div"); actions.className = "row-actions";
+  const mark = document.createElement("button"); mark.type = "button";
+  mark.className = "btn" + (r.handled ? "" : " ok");
+  mark.textContent = r.handled ? "Вернуть в новые" : "Обработано ✓";
+  mark.addEventListener("click", async () => {
+    mark.disabled = true;
+    try {
+      const out = await api({ op: "report", id: r.id, handled: !r.handled });
+      r.handled = out.handled; r.handledAt = out.handledAt || undefined;
+      renderStats(); renderList();
+    } catch (e) { $("app-status").textContent = e.message; mark.disabled = false; }
+  });
+  actions.append(mark, copyBtn(r));
+  el.append(meta, pairBlock(r), actions);
+  return el;
+}
+
+function logItem(r) {
+  const el = document.createElement("article"); el.className = "item";
+  const meta = document.createElement("div"); meta.className = "meta";
+  meta.append(chip((LANG[r.source] || r.source) + " → " + (LANG[r.target] || r.target)));
+  const how = HOW[r.how || "none"] || [r.how, "grey"];
+  const c = chip(how[0], how[1]); if (r.label) c.title = r.label; meta.append(c);
+  const t = document.createElement("span"); t.textContent = when(r.at); t.title = new Date(r.at).toLocaleString("ru-RU"); meta.append(t);
+  el.append(meta, pairBlock(r));
+  return el;
+}
+
+function renderList() {
+  if (!data) return;
+  const rows = filtered();
+  const box = $("list");
+  box.textContent = "";
+  if (!rows.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    const all = tab === "reports" ? data.reports.length : data.log.length;
+    e.textContent = all ? "Ничего не подходит под фильтры." : tab === "reports" ? "Жалоб пока нет. Они приходят с кнопки «Неправильный перевод?» под переводом." : "Журнал пока пуст: здесь появятся переводы, сделанные после запуска админки.";
+    box.append(e);
+  }
+  for (const r of rows.slice(0, limit)) box.append(tab === "reports" ? reportItem(r) : logItem(r));
+  $("more").hidden = rows.length <= limit;
+  $("more").textContent = "Показать ещё (" + fmt(rows.length - limit) + ")";
+  $("shown").textContent = "Показано " + fmt(Math.min(limit, rows.length)) + " из " + fmt(rows.length);
+}
+
+// ---------- CSV ----------
+$("csv").addEventListener("click", () => {
+  const rows = filtered();
+  const cols = tab === "reports" ? ["at", "source", "target", "text", "translation", "handled"] : ["at", "source", "target", "how", "text", "translation"];
+  const esc = (v) => { const s = v == null ? "" : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = "﻿" + [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = (tab === "reports" ? "zhaloby-" : "perevody-") + dayKey(new Date()) + ".csv";
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+// код помнится до закрытия вкладки
+const saved = store(true);
+if (saved) { code = saved; $("code").value = saved; load().catch(() => { store(false, ""); code = ""; }); }
+</script>
+</body>
+</html>

@@ -52,7 +52,7 @@ function fileStore(name) {
 
 // ---------- страницы и файлы сайта (только из этого списка) ----------
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png", ".webmanifest": "application/manifest+json; charset=utf-8" };
-const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/rules": "rules.html", "/rules.html": "rules.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
+const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/rules": "rules.html", "/rules.html": "rules.html", "/admin": "admin.html", "/admin.html": "admin.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
 for (const f of fs.readdirSync(ROOT)) if (f.endsWith(".png")) PAGES["/" + f] = f;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
@@ -133,6 +133,7 @@ function start() {
     console.log(`  На этом компьютере:      http://localhost:${port}`);
     if (host === "0.0.0.0") for (const a of lanAddresses()) console.log(`  С телефона в том же Wi-Fi: http://${a}:${port}`);
     console.log(`  Проверка переводов:      http://localhost:${port}/review` + (process.env.EDITOR_CODE ? "" : "  (нужен EDITOR_CODE в .env)"));
+    console.log(`  Админка (переводы и жалобы): http://localhost:${port}/admin` + (process.env.ADMIN_CODE ? "" : "  (нужен ADMIN_CODE в .env)"));
     console.log("");
     if (keys.length) console.log("  ИИ: " + keys.map((k) => k.replace("_API_KEY", "")).join(", ") + ". Ключи взяты из " + (hasEnvFile ? ".env" : "переменных окружения") + ".");
     else console.log("  Ключа ИИ нет: работают только ответы из базы.\n  Чтобы переводил Gemini, скопируйте .env.example в .env и впишите GEMINI_API_KEY.");

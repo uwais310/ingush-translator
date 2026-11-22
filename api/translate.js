@@ -1285,7 +1285,7 @@ async function reviewAction(action, body, res) {
   }
 }
 
-module.exports = async (req, res) => {
+async function handleRequest(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
   let body = req.body;
@@ -1539,6 +1539,74 @@ module.exports = async (req, res) => {
     const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
     return res.status(status).json({ error: e.message, detail: e.detail });
   }
+}
+
+// ---------------- админка /admin: журнал переводов и жалобы «Неправильный перевод?» ----------------
+// Доступ — только по коду ADMIN_CODE (переменная окружения хостинга или .env). Без него админка выключена.
+const LOG = require("../lib/activity-log.js").createLog(() => phraseStore());
+const reportId = (r) => require("crypto").createHash("sha1").update(String(r.at || "") + "|" + String(r.text || "") + "|" + String(r.source || "")).digest("hex").slice(0, 12);
+function sameCode(given, code) {
+  const crypto = require("crypto");
+  const a = crypto.createHash("sha256").update(String(given || "")).digest();
+  const b = crypto.createHash("sha256").update(String(code)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+async function adminAction(body, res) {
+  const code = process.env.ADMIN_CODE;
+  if (!code) return res.status(503).json({ error: "Админка выключена: добавьте переменную ADMIN_CODE в настройках хостинга (Railway → Variables) или в .env и перезапустите." });
+  if (!sameCode(body.code, code)) {
+    await new Promise((r) => setTimeout(r, 700)); // подбор кода медленный
+    return res.status(403).json({ error: "Неверный код" });
+  }
+  const store = phraseStore();
+  const op = body.op || "data";
+  try {
+    if (op === "data") {
+      let reports = [];
+      if (store) reports = (await store.get("reports", { type: "json" })) || [];
+      const log = await LOG.read();
+      return res.status(200).json({
+        reports: (Array.isArray(reports) ? reports : []).map((r) => ({ ...r, id: reportId(r) })).reverse(),
+        log: log.list.slice().reverse(),
+        stats: log.stats,
+        storage: store ? (process.env.SUPABASE_URL ? "supabase" : storeOverride ? "local" : "netlify") : "none",
+        logging: process.env.ADMIN_LOG !== "0",
+      });
+    }
+    if (op === "report") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const list = (await store.get("reports", { type: "json" })) || [];
+      const r = list.find((x) => reportId(x) === body.id);
+      if (!r) return res.status(404).json({ error: "Жалоба не найдена (может, уже удалена)." });
+      if (body.handled) { r.handled = true; r.handledAt = new Date().toISOString(); } else { delete r.handled; delete r.handledAt; }
+      await store.setJSON("reports", list);
+      return res.status(200).json({ ok: true, id: body.id, handled: !!r.handled, handledAt: r.handledAt || null });
+    }
+    return res.status(400).json({ error: "Неизвестное действие" });
+  } catch (e) {
+    console.error("admin:", e.message);
+    return res.status(500).json({ error: "Не удалось загрузить данные. Попробуйте ещё раз." });
+  }
+}
+
+module.exports = async (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+  body = body || {};
+  if (req.method === "POST" && body.action === "admin") return adminAction(body, res);
+  // обычный перевод (без action): ответ записывается в журнал для /admin — только текст и перевод
+  if (req.method === "POST" && !body.action && res && typeof res.json === "function") {
+    const json = res.json;
+    // на Netlify / Vercel функция «засыпает» сразу после ответа: там журнал сохраняется до ответа,
+    // на обычном сервере (Railway, server.js) — пачкой в фоне, чтобы перевод не ждал хранилище
+    const serverless = !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY || process.env.VERCEL);
+    res.json = function (obj) {
+      try { LOG.add(body, obj); } catch (e) { console.error("log:", e.message); }
+      if (!serverless) return json.call(this, obj);
+      return LOG.flush().catch(() => {}).then(() => json.call(this, obj));
+    };
+  }
+  return handleRequest({ ...req, body }, res);
 };
 
 // для тестов
@@ -1558,11 +1626,13 @@ module.exports.warmup = () => {
     const res = { status() { return this; }, json() { resolve(); }, setHeader() {} };
     Promise.resolve(module.exports({ method: "POST", body }, res)).catch(() => resolve());
   });
-  return fake({ text: "куда отвезти еду", source: "ru", target: "inh", mode: "text" })
-    .then(() => fake({ text: "Со цӀа вода", source: "inh", target: "ru", mode: "text" }))
+  return fake({ text: "куда отвезти еду", source: "ru", target: "inh", mode: "text", warmup: true })
+    .then(() => fake({ text: "Со цӀа вода", source: "inh", target: "ru", mode: "text", warmup: true }))
     .then(() => Date.now() - t0);
 };
 module.exports._checkIngush = checkIngush;
+module.exports._log = LOG;
+module.exports._reportId = reportId;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
 module.exports._cool = { isCooling, coolDown };
