@@ -723,14 +723,22 @@ $("clear").addEventListener("click", () => { els.input.value = ""; els.input.foc
 els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
 $("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
 els.input.addEventListener("input", refresh);
-// Без ИИ перевод почти мгновенный, поэтому переводим сами, когда человек перестал печатать.
+// Пока человек печатает, перевод готовится молча (на экране ничего не меняется). Показываем его только
+// по кнопке «Перевести» или Ctrl/⌘+Enter — тогда ответ уже готов и появляется сразу, целиком.
 let typeTimer = 0;
-els.input.addEventListener("input", () => {
-  clearTimeout(typeTimer);
-  if (AI_ON && !noAi.checked) return;            // ИИ тратит деньги: с ним переводим только по кнопке
-  const wait = () => { if (busy) { typeTimer = setTimeout(wait, 150); return; } if (readInput()) translate(); };
-  typeTimer = setTimeout(wait, 450);
-});
+const PREP = new Map(); // «src|tgt|текст» → обещание ответа сервера
+const prepKey = (src, tgt, text) => src + "|" + tgt + "|" + text;
+function prepare() {
+  const text = readInput();
+  if (!text || (AI_ON && !noAi.checked)) return; // ИИ тратит деньги: с ним — только по кнопке
+  const src = els.src.value, tgt = els.tgt.value, k = prepKey(src, tgt, text);
+  if (PREP.has(k)) return;
+  if (PREP.size > 20) PREP.delete(PREP.keys().next().value);
+  const p = api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: true });
+  p.catch(() => PREP.delete(k));
+  PREP.set(k, p);
+}
+els.input.addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(prepare, 450); });
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
 window.addEventListener("resize", grow);
 if (navigator.clipboard && navigator.clipboard.readText) {
@@ -865,7 +873,11 @@ async function translate() {
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
   try {
-    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: AI_ON ? noAi.checked : true }, controller.signal);
+    // готовый ответ, подготовленный пока печатали, — если текст тот же; иначе переводим сейчас
+    const useNoAi = AI_ON ? noAi.checked : true;
+    const ready = useNoAi ? PREP.get(prepKey(src, tgt, text)) : null;
+    const data = ready ? await ready.catch(() => api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal))
+      : await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal);
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
     if (data.noAi) {
