@@ -307,6 +307,7 @@
             <span id="shown" aria-live="polite"></span>
             <span class="addbar">
               <button class="btn" type="button" id="add" hidden>+ Добавить слово или фразу</button>
+              <button class="btn" type="button" id="to-claude" hidden title="Скопировать жалобы готовым сообщением для Claude">Жалобы → Claude</button>
               <button class="btn" type="button" id="csv">Скачать CSV</button>
             </span>
           </div>
@@ -703,6 +704,7 @@ function setTab(t) {
   $("period").hidden = t === "dict";
   $("add").hidden = t !== "dict";
   $("csv").hidden = false;
+  $("to-claude").hidden = t !== "reports";
   $("add-slot").textContent = "";
   $("q").placeholder = t === "dict" ? "Поиск по словарю" : "Поиск по тексту и переводу";
   renderList();
@@ -866,6 +868,36 @@ function renderList() {
   $("more").textContent = "Показать ещё (" + fmt(rows.length - limit) + ")";
   $("shown").textContent = "Показано " + fmt(Math.min(limit, rows.length)) + " из " + fmt(rows.length);
 }
+
+// ---------- жалобы → Claude ----------
+// Сайт сам ИИ не вызывает: кнопка собирает жалобы (те, что сейчас в списке) в готовое сообщение,
+// копирует его и открывает claude.ai — остаётся вставить (⌘V / долгое нажатие → Вставить) и отправить.
+function claudePrompt(rows) {
+  const lines = rows.map((r, i) => (i + 1) + ". [" + dirName(r) + "] «" + r.text + "» → сайт перевёл: «" + (r.translation || "— перевода не нашлось —") + "»" + (r.fixed ? " (уже исправлено на «" + r.fixed + "»)" : ""));
+  return [
+    "Это жалобы «Неправильный перевод?» с моего ингушско-русского переводчика (репозиторий uwais310/ingush-translator, сайт без ИИ: база data/phrases.json, правила lib/rules/, перевод по словам lib/rules/chunks.js).",
+    "",
+    "Для каждой жалобы:",
+    "1) почему так получилось (нет слова в базе, ошибка правила, не та форма, разбор по словам и т.п.);",
+    "2) как исправить в коде или источниках, чтобы такие случаи переводились правильно, а не только эта фраза;",
+    "3) что нужно спросить у носителя языка (моего отца), если правильной ингушской формы нет в источниках.",
+    "",
+    "Важно: не придумывай ингушские слова и формы. Каждое ингушское слово — только из глоссария проекта, PaydaDosh или от носителя языка; если не уверен — так и напиши и вынеси в вопросы носителю.",
+    "",
+    "Жалобы (" + rows.length + "):",
+    ...lines,
+  ].join("\n");
+}
+$("to-claude").addEventListener("click", async () => {
+  const rows = filtered();
+  if (!rows.length) { toast("В списке нет жалоб: поменяйте фильтр"); return; }
+  const text = claudePrompt(rows.slice(0, 200));
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; } catch (e) {}
+  if (!copied) download("zhaloby-dlya-claude-" + dayKey(new Date()) + ".txt", text, "text/plain");
+  window.open("https://claude.ai/new", "_blank", "noopener");
+  toast(copied ? "Скопировано " + rows.length + " жалоб: вставьте в Claude" : "Файл с жалобами скачан: приложите его в Claude");
+});
 
 // ---------- CSV ----------
 $("csv").addEventListener("click", () => {

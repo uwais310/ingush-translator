@@ -205,6 +205,9 @@ function call(body) {
   const html = require("fs").readFileSync(require("path").join(__dirname, "../admin.html"), "utf8");
   assert.ok(!/innerHTML/.test(html), "admin.html не использует innerHTML (тексты людей — только textContent)");
   assert.ok(/noindex/.test(html), "админка не индексируется");
+  // «Жалобы → Claude»: только копирует текст и открывает claude.ai — сайт сам ИИ не вызывает
+  assert.ok(html.includes("https://claude.ai/new") && html.includes("не придумывай ингушские слова"), "кнопка для Claude с правилом «не придумывать ингушский»");
+  assert.ok(!/api\.anthropic\.com|x-api-key/i.test(html), "никаких вызовов ИИ со страницы");
   const { createServer } = require("../server.js");
   const srv = createServer().listen(0);
   await new Promise((ok) => srv.once("listening", ok));
