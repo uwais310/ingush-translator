@@ -939,6 +939,43 @@ function reorderedQuestion(text) {
   return r;
 }
 
+// Обратный поиск для «ингушский → русский» по парам «русский → ингушский»: ингушская фраза из тех же слов
+// (порядок в ингушском свободный, падежи показывают, кто что делает). 2–5 слов, только разговорник,
+// справочник и исправления носителей. Палочка (1, l, I) и знаки препинания не важны.
+let REV_IDX = null;
+const inhWords = (t) => RET.wordsOf(fixPalochka(String(t)).toLowerCase().replace(/ё/g, "е"));
+function reverseFromRuInh(text, pool) {
+  const ws = inhWords(text);
+  if (ws.length < 2 || ws.length > 5) return null;
+  const k = bagKey(ws);
+  // исправления носителей (рус → инг) — первыми
+  for (let i = (pool || []).length - 1; i >= 0; i--) {
+    const p = pool[i];
+    if (p.source === "ru" && p.target === "inh" && bagKey(inhWords(p.translation)) === k) {
+      return { translation: noParens(p.text), verified: true, label: "Проверено носителем языка (те же слова в другом порядке)" };
+    }
+  }
+  if (!REV_IDX) {
+    REV_IDX = new Map();
+    for (const p of SEED) {
+      if (p.kind !== "phrase" || p.rare || !/^(PaydaDosh|Справочник)/.test(p.source || "")) continue;
+      for (const v of splitAlt(splitNote(p.inh).text)) {
+        const pw = inhWords(v);
+        if (pw.length < 2 || pw.length > 5) continue;
+        const kk = bagKey(pw);
+        if (!REV_IDX.has(kk)) REV_IDX.set(kk, p);
+      }
+    }
+  }
+  const p = REV_IDX.get(k);
+  if (!p) return null;
+  const r = seedResult(p, "inh");
+  r.kind = "reorder";
+  r.label += ", те же слова";
+  r.note = joinNotes(`В разговорнике: «${splitNote(p.inh).text}» — те же ингушские слова в другом порядке.`, r.note);
+  return r;
+}
+
 let SEED_IDX = null;
 function seedIndex() {
   if (SEED_IDX) return SEED_IDX;
@@ -1063,6 +1100,9 @@ function resolveExact0(text, src, tgt, pool) {
   if (d && !d.lemma) return d;
   // тот же вопрос с другим порядком слов: «как зовут тебя», «тебя как зовут» — «Как тебя зовут?» из разговорника
   if (src === "ru") { const ro = reorderedQuestion(text); if (ro) return ro; }
+  // ингушский → русский: смотрим в пары «русский → ингушский» (разговорник и исправления носителей) — фраза
+  // из тех же ингушских слов в другом порядке: «Хьо сона веза» = «Сона хьо веза» — «Я тебя люблю»
+  if (src === "inh") { const rv = reverseFromRuInh(text, pool); if (rv) return rv; }
   // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
   if (RET.wordsOf(text).length >= 2) {
     const rr = src === "ru" ? RULES.translate(text) : RULES.translateInh(text);
@@ -1462,9 +1502,16 @@ async function handleRequest(req, res) {
   if (noAi && action !== "compare") {
     // запасной шаг без ИИ: перевод по кускам и словам. Грубый, поэтому не «из базы», а с пометкой
     const ch = ruInh ? CHUNKS.translate(input, source) : null;
+    // проверка обратным переводом: русский черновик переводим обратно на ингушский по базе — если получилась
+    // та же ингушская фраза, перевод подтверждён парой «русский → ингушский»
+    let backOk = false;
+    if (ch && source === "inh" && ch.translation && !/\[/.test(ch.translation)) {
+      const back = resolveExact(ch.translation, "ru", "inh", pool);
+      backOk = !!(back && back.translation && back.kind !== "rules" && bagKey(inhWords(back.translation)) === bagKey(inhWords(input)));
+    }
     if (ch) {
       const result = {
-        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : "Без ИИ: по словам из словаря", rules: true, chunks: true,
+        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : backOk ? "Без ИИ: по словам, подтверждено обратным переводом по базе" : "Без ИИ: по словам из словаря", rules: true, chunks: true, roundTrip: backOk || undefined,
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
         pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
