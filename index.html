@@ -57,6 +57,8 @@
   .band { background: #0a6b3d; color: var(--on-green); }
   @media (prefers-color-scheme: dark) { .band { background: #0c3a25; } }
   .band-in { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  /* телефон боком: вырез экрана слева или справа (viewport-fit=cover) — отступ не меньше выреза */
+  .band-in { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
   .top .band-in { display: flex; align-items: center; gap: 12px; padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: 12px; }
   .sign { width: 44px; height: 44px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; }
   .sign svg { width: 34px; height: 34px; display: block; }
@@ -65,6 +67,8 @@
 
   /* ---------- белое поле ---------- */
   main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 14px 16px 28px; display: grid; gap: 22px; align-content: start; }
+  main { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  main > * { min-width: 0; } /* длинное слово перевода не раздвигает сетку шире экрана */
 
   .langbar { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; gap: 8px; }
   .lang { position: relative; }
@@ -84,7 +88,7 @@
   textarea { display: block; width: 100%; border: 0; outline: 0; background: transparent; resize: none; }
   #input { min-height: 112px; max-height: 46vh; padding: 16px 16px 6px; font-size: 21px; line-height: 1.4; overflow-wrap: anywhere; }
   #input::placeholder { color: var(--stone); opacity: .75; }
-  .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; }
+  .tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px 8px; flex-wrap: wrap; } /* iPhone SE (320 px): «Очистить» переносится, а не уходит за край */
   .grow { flex: 1; }
   .count { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; padding-right: 6px; white-space: nowrap; }
   .count.near { color: var(--amber-ink); font-weight: 600; }
@@ -117,6 +121,7 @@
   .trust.ok { background: var(--leaf); color: var(--green-deep); }
   .trust.native { background: #0a6b3d; color: #fff; }
   .trust.ai { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
+  .trust.draft { background: var(--amber-bg); color: var(--amber-ink); border-bottom: 1px solid var(--amber-line); }
   .trust.rules { background: var(--leaf); color: var(--green-deep); border-bottom: 1px dashed color-mix(in srgb, var(--green) 45%, transparent); }
   .output { padding: 16px 16px 10px; font-size: 24px; line-height: 1.38; font-weight: 600; color: var(--green-deep); white-space: pre-wrap; overflow-wrap: anywhere; }
   .output.placeholder { color: var(--stone); font-size: 16px; font-weight: 400; min-height: 84px; }
@@ -140,9 +145,10 @@
   .pinfo.miss-info { border-color: var(--amber-line); background: var(--amber-bg); color: var(--amber-ink); }
   .pinfo.miss-info .pf { color: inherit; }
   .phint { padding: 0 16px 8px; font-size: 13px; color: var(--stone); }
-  .fixcall { margin: 0 12px 12px; padding: 12px; border-radius: 14px; background: var(--amber-bg); border: 1.5px solid var(--amber-line); color: var(--amber-ink); display: grid; gap: 10px; font-size: 14px; line-height: 1.4; }
-  .fixcall b { font-size: 15px; }
-  .fixcall .act { width: 100%; min-height: 50px; font-size: 16px; }
+  /* маленькая строка под переводом: «Неправильный перевод?» и «Исправить» */
+  .fixcall { margin: 0 12px 8px; display: flex; gap: 14px; justify-content: flex-end; }
+  .fixcall .flag { background: none; border: 0; padding: 8px 2px; min-height: 36px; font: inherit; font-size: 13px; color: var(--muted, #6b7280); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .fixcall .flag:disabled { text-decoration: none; cursor: default; }
   .status { padding: 0 16px 10px; font-size: 14px; color: var(--stone); }
   .status:empty { display: none; }
   .status.error { color: var(--amber-ink); }
@@ -245,10 +251,289 @@
     .langbar { max-width: 520px; }
   }
   @media (max-width: 819px) { .left { display: contents; } }
+  /* ---------- горы за переводчиком ----------
+     Слои гор лежат под страницей и чуть сдвигаются, когда наклоняешь телефон (или ведёшь мышью).
+     Дальние слои двигаются меньше ближних — так получается объём. Башни — силуэты ингушских боевых башен. */
+  :root { --sky-top: #8ec4ea; --sky-low: #e4f2f8; --sunlight: #fff6cf;
+    --card: rgba(255, 255, 255, .86); --card-line: rgba(255, 255, 255, .7); }
+  @media (prefers-color-scheme: dark) {
+    :root { --sky-top: #07111b; --sky-low: #1a3140; --sunlight: #e9eedf;
+      --card: rgba(17, 27, 22, .84); --card-line: rgba(255, 255, 255, .07); }
+  }
+  html { background: var(--sky-low); }
+  body { background: transparent; }
+  .scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 62%); }
+  .scene .layer { position: absolute; left: -80px; width: calc(100% + 160px); bottom: -100px; height: calc(100vh + 52px); height: calc(100lvh + 52px); display: block; will-change: transform; opacity: 0; transition: opacity .8s ease; }
+  .scene .layer.ready { opacity: 1; }
+  .scene .sky { position: absolute; inset: -30px; will-change: transform; }
+  .scene .sunball { position: absolute; right: max(16%, 130px); top: 9vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
+    box-shadow: 0 0 60px 26px color-mix(in srgb, var(--sunlight) 55%, transparent); }
+  .scene .stars { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; background-image:
+      radial-gradient(1.4px 1.4px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 27% 8%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 41% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 58% 12%, #dfe9ff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 69% 27%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 88% 9%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 6% 33%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 31%, #fff 50%, transparent 51%),
+      radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
+  .scene.is-night .stars { opacity: 1; }
+  .scene.is-night .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
+  /* заставка: башня из камней и солнце-знак; потом растворяется, а переводчик выезжает снизу */
+  .splash { position: fixed; inset: 0; z-index: 50; background: radial-gradient(ellipse 120% 90% at 50% 55%, #1b222c 0%, #0c1015 55%, #050608 100%);
+    transition: opacity .8s ease, transform .9s cubic-bezier(.3, 0, .2, 1); cursor: pointer; }
+  .splash canvas { width: 100%; height: 100%; display: block; }
+  .splash.out { opacity: 0; transform: scale(1.12); pointer-events: none; }
+  .splash-out main, .splash-out .band { animation: card-in .9s .1s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  .band, main { position: relative; z-index: 1; }
+  /* Карточки: главная — стеклянный лист над горами, остальное тише и прозрачнее, чтобы горы оставались главными. */
+  :root { --card-soft: rgba(255, 255, 255, .68); --sheet-shadow: 0 26px 60px -24px rgba(8, 32, 44, .45); }
+  @media (prefers-color-scheme: dark) { :root { --card-soft: rgba(17, 27, 22, .66); --sheet-shadow: 0 26px 60px -24px rgba(0, 0, 0, .7); } }
+  main { padding-top: clamp(64px, 17vh, 160px); }
+  main > * { min-width: 0; }
+  .work { background: var(--card); border: 1px solid var(--card-line); border-radius: 28px; padding: 12px; box-shadow: var(--sheet-shadow);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
+  .work { position: relative; }
+  .work::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, .22), transparent 50%); mix-blend-mode: soft-light; }
+  @media (prefers-color-scheme: dark) { .work::after { background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, .10), transparent 55%); mix-blend-mode: normal; } }
+  .block, .about { background: var(--card-soft); border: 1px solid var(--card-line); border-radius: 20px; padding: 14px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .about { padding: 14px 16px; }
+  .field { background: color-mix(in srgb, var(--snow) 94%, transparent); border-width: 1px; }
+  .result { background: color-mix(in srgb, var(--mist) 86%, transparent); }
+  .langbar .lang select { background: color-mix(in srgb, var(--snow) 90%, transparent); border-width: 1px; }
+  .swap { background: color-mix(in srgb, var(--snow) 90%, transparent); border-width: 1px; }
+  .block h2 { color: var(--stone); font-weight: 600; }
+  @media (max-width: 819px) {
+    .top .band-in { padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px; }
+    .sign { width: 38px; height: 38px; } .sign svg { width: 29px; height: 29px; }
+    h1 { font-size: 18px; }
+    .output { font-size: 26px; }
+    /* примеры — одной строкой с прокруткой, чтобы не занимали пол-экрана */
+    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px 2px; scroll-snap-type: x proximity; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; scroll-snap-align: start; }
+  }
+  @media (max-width: 380px) { .sub { display: none; } }
+  /* подсказка про наклон: живёт в «окне» с горами над переводчиком */
+  .tilt { position: absolute; top: clamp(12px, 4vh, 40px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+    max-width: calc(100% - 32px); padding: 6px 14px 6px 10px; border-radius: 99px; background: var(--card); color: var(--ink);
+    font-size: 14px; font-weight: 600; white-space: nowrap; box-shadow: 0 8px 24px -10px rgba(8, 32, 44, .45);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .tilt span { overflow: hidden; text-overflow: ellipsis; }
+  .tilt svg { width: 22px; height: 22px; flex: none; color: var(--green-deep); animation: rock 1.6s ease-in-out 3; transform-origin: 50% 70%; }
+  .tilt button { display: none; border: 0; border-radius: 99px; background: #0a6b3d; color: #fff; font-weight: 700; font-size: 14px; padding: 6px 14px; min-height: 34px; cursor: pointer; flex: none; }
+  .tilt.ask { padding-right: 5px; }
+  .tilt.ask button { display: inline-block; }
+  @keyframes rock { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-16deg); } 70% { transform: rotate(16deg); } }
+  @media (min-width: 820px) { .work { padding: 18px; } }
+  @media (prefers-reduced-motion: reduce) { .scene .layer, .scene .sky, main { will-change: auto; } .tilt { display: none !important; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
+<div class="scene" id="scene" aria-hidden="true">
+  <div class="sky" data-depth="0.12"><div class="stars"></div><div class="sunball"></div></div>
+  <canvas class="layer" data-depth="0.2"></canvas>
+  <canvas class="layer" data-depth="0.38"></canvas>
+  <canvas class="layer" data-depth="0.58"></canvas>
+  <canvas class="layer" data-depth="0.8"></canvas>
+  <canvas class="layer" data-depth="1"></canvas>
+</div>
+<script>
+// Время суток (по часам посетителя) и цвета неба — нужны сразу, ещё до заставки.
+const SKY = {
+  night:   { top: "#07111b", low: "#1a3140", sun: "#e9eedf", x: "18%", y: "9vh", size: 46 },
+  morning: { top: "#8fb0db", low: "#f8d8c3", sun: "#ffe3b3", x: "70%", y: "30vh", size: 90 },
+  day:     { top: "#8ec4ea", low: "#e4f2f8", sun: "#fff6cf", x: "16%", y: "9vh", size: 74 },
+  evening: { top: "#4c5d98", low: "#f4a87c", sun: "#ffb46c", x: "12%", y: "27vh", size: 96 },
+};
+function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60; return h >= 5 && h < 10 ? "morning" : h >= 10 && h < 17 ? "day" : h >= 17 && h < 21 ? "evening" : "night"; }
+{ const k = SKY[dayPhase()], r = document.documentElement.style; r.setProperty("--sky-top", k.top); r.setProperty("--sky-low", k.low); r.setProperty("--sunlight", k.sun); }
+</script>
+<div class="splash" id="splash" aria-hidden="true" hidden><canvas></canvas></div>
+<script>
+// Заставка: тёмный «кинозал», ингушская боевая башня собирается из камней, которые летят из глубины
+// на зрителя и кувыркаются (снизу вверх, последней — ступенчатая крыша), камера медленно наезжает.
+// Потом за башней восходит солнце — знак с флага, лучи закручиваются, появляется надпись.
+// Держится, пока сайт не загрузится (window load + горы нарисованы); потом растворяется в горы.
+// Тап — пропустить. Один раз за визит; при «уменьшить движение» не показывается.
+(() => {
+  let show = false;
+  try { show = !matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("splash"); sessionStorage.setItem("splash", "1"); } catch (e) {}
+  if (!show) return;
+  const box = document.getElementById("splash"), cv = box.querySelector("canvas"), ctx = cv.getContext("2d");
+  box.hidden = false; document.body.classList.add("splashing");
+  const SUNC = SKY[dayPhase()].sun;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(",");
+  const GLOW = rgb(SUNC);
+  const STONE = { lit: [214, 203, 184], dark: [118, 110, 99] };
+
+  // ---- камни башни (единицы — как в tower(): основание y=10, верх крыши y=-126) ----
+  const pieces = [];
+  const taperMain = (y) => 13 - (10 - y) / 106 * 4;
+  const add = (pts, lit) => {
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const k = 0.88 + Math.random() * 0.2;
+    const c = (lit ? STONE.lit : STONE.dark).map((v) => Math.round(v * k));
+    pieces.push({ pts: pts.map(([x, y]) => [x - cx, y - cy]), cx, cy, col: `rgb(${c})`, lit, y: cy });
+  };
+  for (let r = 0; r < 12; r++) {
+    const y0 = 10 - r * 8.83, y1 = y0 - 8.83, w0 = taperMain(y0), w1 = taperMain(y1);
+    const cuts = r % 2 ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1];
+    for (let j = 0; j < cuts.length - 1; j++) {
+      const a = cuts[j], b = cuts[j + 1];
+      add([[a * w0, y0], [b * w0, y0], [b * w1, y1], [a * w1, y1]], b <= 0);
+    }
+  }
+  for (let r = 0; r < 6; r++) {
+    const y0 = 10 - r * 8.67, y1 = y0 - 8.67, l0 = 12 + (r / 6) * 2, l1 = 12 + ((r + 1) / 6) * 2, rr0 = 46 - (r / 6) * 2, rr1 = 46 - ((r + 1) / 6) * 2;
+    const cuts = r % 2 ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
+    for (let j = 0; j < cuts.length - 1; j++) {
+      const a = cuts[j], b = cuts[j + 1], X = (t, l, R) => l + (R - l) * t;
+      add([[X(a, l0, rr0), y0], [X(b, l0, rr0), y0], [X(b, l1, rr1), y1], [X(a, l1, rr1), y1]], b <= 0.5);
+    }
+  }
+  pieces.sort((p, q) => q.y - p.y);
+  const roof = [
+    [[[-11, -96], [0, -96], [0, -100], [-11, -100]], true], [[[0, -96], [11, -96], [11, -100], [0, -100]], false],
+    [[[-9, -100], [0, -100], [0, -108], [-7, -108]], true], [[[0, -100], [9, -100], [7, -108], [0, -108]], false],
+    [[[-7, -108], [0, -108], [0, -116], [-4.5, -116]], true], [[[0, -108], [7, -108], [4.5, -116], [0, -116]], false],
+    [[[-4.5, -116], [0, -116], [0, -126]], true], [[[0, -116], [4.5, -116], [0, -126]], false],
+  ];
+  roof.forEach(([pts, lit]) => add(pts, lit));
+
+  const N = pieces.length, STAGGER = 1700 / N, FLY = 720;
+  pieces.forEach((p, i) => {
+    const a = Math.random() * Math.PI * 2;
+    p.z = 2.2 + Math.random() * 1.6;                              // летит из глубины: начальный масштаб
+    p.dx = Math.cos(a) * (0.35 + Math.random() * 0.4); p.dy = Math.sin(a) * (0.3 + Math.random() * 0.3) - 0.15;
+    p.rot = (Math.random() - 0.5) * 4; p.spin = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random() * 1.5) * Math.PI;
+    p.t0 = i * STAGGER + (i >= N - roof.length ? 180 : 0); p.landed = false;
+  });
+  const BUILT = pieces[N - 1].t0 + FLY, SUN = 900, TITLE = BUILT + 450, MIN = BUILT + SUN + 600;
+
+  // пыль: медленно парит в луче света; при приземлении камня — облачко
+  const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
+  const puffs = [];
+
+  function sign(x, y, R, turn, grow, glow) {
+    ctx.save(); ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * (3.2 + glow));
+    g.addColorStop(0, `rgba(${GLOW},.55)`); g.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * (3.2 + glow), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+    const k = R / 24; ctx.scale(k, k); ctx.rotate(turn);
+    ctx.strokeStyle = "#d3212c"; ctx.lineWidth = 3.6; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.arc(0, 0, 7.6 * Math.min(1, grow * 1.4), 0, Math.PI * 2); ctx.stroke();
+    const G = Math.max(0, Math.min(1, grow));
+    for (let i = 0; i < 3; i++) {
+      ctx.save(); ctx.rotate(i * 2 * Math.PI / 3);
+      ctx.beginPath(); ctx.moveTo(0, -7.6);
+      ctx.bezierCurveTo(0, -7.6 - 6.8 * G, 4.6 * G, -7.6 - 10.8 * G, 11 * G, -7.6 - 10 * G);
+      ctx.stroke(); ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  let W = 0, H = 0, dpr = 1, start = performance.now(), ready = false, leaving = 0, done = false, last = start;
+  function size() { dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; }
+  size(); addEventListener("resize", size);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const ease = (t) => 1 - Math.pow(1 - t, 3), inout = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const back = (t) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
+
+  function frame(now) {
+    if (done) return;
+    const t = Math.max(0, now - start), dt = Math.min(50, now - last); last = now;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    // башня + солнце занимают по ширине -13..81 единиц, по высоте 136
+    const s = Math.min(H * 0.56 / 136, W * 0.86 / 96), gx = W / 2 - 34 * s, gy = H * 0.64;
+    // свет за башней разгорается
+    const lightR = Math.max(W, H) * 0.75, lg = ctx.createRadialGradient(gx + 16 * s, gy - 60 * s, 0, gx + 16 * s, gy - 60 * s, lightR);
+    const la = 0.1 + 0.16 * clamp(t / 1500) + 0.12 * ease(clamp((t - BUILT) / SUN));
+    lg.addColorStop(0, `rgba(${GLOW},${la})`); lg.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+    // пылинки
+    for (const m of motes) {
+      m.y -= m.v * dt / 1000; if (m.y < -0.02) m.y = 1.02;
+      ctx.fillStyle = `rgba(${GLOW},${m.a * clamp(t / 800)})`;
+      ctx.beginPath(); ctx.arc(m.x * W + Math.sin(t / 2000 + m.y * 9) * 8, m.y * H, m.r, 0, Math.PI * 2); ctx.fill();
+    }
+    // камера: медленный наезд
+    const cam = 1.1 - 0.1 * inout(clamp(t / (BUILT + SUN)));
+    ctx.translate(W / 2, gy - 50 * s); ctx.scale(cam, cam); ctx.translate(-W / 2, -(gy - 50 * s));
+    // линия горизонта
+    const hz = ease(clamp(t / 900));
+    const hg = ctx.createLinearGradient(W / 2 - W * 0.45 * hz, 0, W / 2 + W * 0.45 * hz, 0);
+    hg.addColorStop(0, `rgba(${GLOW},0)`); hg.addColorStop(0.5, `rgba(${GLOW},.7)`); hg.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = hg; ctx.fillRect(W / 2 - W * 0.45 * hz, gy + 10 * s, W * 0.9 * hz, Math.max(1, 0.4 * s));
+    // солнце встаёт из-за башни
+    const ts = clamp((t - BUILT + 100) / SUN);
+    if (ts > 0) {
+      const breath = ready || t < BUILT + SUN ? 0 : (Math.sin((t - BUILT - SUN) / 380) + 1) / 2;
+      sign(gx + 62 * s, gy - 4 * s - ease(ts) * 100 * s, 16 * s * (1 + breath * 0.05), (1 - ease(ts)) * -Math.PI * 1.8, ease(ts), breath);
+    }
+    // камни: из глубины на место, кувыркаясь
+    for (const p of pieces) {
+      const k = clamp((t - p.t0) / FLY);
+      if (k <= 0) continue;
+      const e = ease(k), b = back(k), z = 1 + (p.z - 1) * (1 - e);
+      const x = gx + p.cx * s + p.dx * W * (1 - e) * z, y = gy + p.cy * s + p.dy * H * (1 - e) * z;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot * (1 - b)); ctx.scale(z * Math.max(0.15, Math.abs(Math.cos(p.spin * (1 - e)))), z);
+      ctx.globalAlpha = clamp(k * 3);
+      const flip = Math.cos(p.spin * (1 - e)) < 0;                // «оборот» — тёмная сторона
+      ctx.fillStyle = flip ? "rgb(70,66,60)" : p.col;
+      ctx.beginPath(); p.pts.forEach(([px, py], j) => (j ? ctx.lineTo(px * s, py * s) : ctx.moveTo(px * s, py * s))); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(20,16,12,.45)"; ctx.lineWidth = Math.max(0.6, 0.3 * s / z); ctx.stroke();
+      ctx.restore();
+      if (k >= 1 && !p.landed) {
+        p.landed = true;
+        for (let i = 0; i < 3; i++) puffs.push({ x: gx + p.cx * s, y: gy + p.cy * s + 3 * s, vx: (Math.random() - 0.5) * 40, vy: -10 - Math.random() * 20, t: 0 });
+      }
+    }
+    // облачка пыли от приземлений
+    for (let i = puffs.length - 1; i >= 0; i--) {
+      const q = puffs[i]; q.t += dt; if (q.t > 700) { puffs.splice(i, 1); continue; }
+      const f = q.t / 700; ctx.fillStyle = `rgba(${STONE.lit},${0.2 * (1 - f)})`;
+      ctx.beginPath(); ctx.arc(q.x + q.vx * f, q.y + q.vy * f, (1 + f * 3) * s * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
+    // бойницы загораются, когда башня собрана
+    const tw = clamp((t - BUILT) / 400);
+    if (tw > 0) {
+      ctx.globalAlpha = tw; ctx.fillStyle = "rgba(255,196,110,.95)"; ctx.shadowColor = "rgba(255,180,90,.9)"; ctx.shadowBlur = 3 * s;
+      ctx.fillRect(gx - 1.5 * s, gy - 82 * s, 3 * s, 8 * s); ctx.fillRect(gx - 1.5 * s, gy - 54 * s, 3 * s, 7 * s); ctx.fillRect(gx + 27 * s, gy - 28 * s, 4 * s, 6 * s);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+    // надпись
+    const tt = clamp((t - TITLE) / 700);
+    if (tt > 0) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textAlign = "center";
+      const fs = Math.max(22, Math.min(44, W * 0.075));
+      ctx.globalAlpha = ease(tt); ctx.fillStyle = "#f4efe6";
+      ctx.font = `600 ${fs}px Georgia, "Times New Roman", serif`;
+      ctx.fillText("ГӀалгӀай мотт", W / 2, gy + 10 * s + fs * 1.9 + (1 - ease(tt)) * 14);
+      ctx.globalAlpha = ease(clamp((t - TITLE - 250) / 700)) * 0.7; ctx.font = `500 ${fs * 0.36}px system-ui, sans-serif`;
+      ctx.fillText("ИНГУШСКИЙ ПЕРЕВОДЧИК", W / 2, gy + 10 * s + fs * 2.9);
+      ctx.globalAlpha = 1;
+    }
+    if (!leaving && ready && t >= MIN) leave();
+    requestAnimationFrame(frame);
+  }
+  function leave() {
+    if (leaving) return; leaving = 1;
+    box.classList.add("out"); document.body.classList.add("splash-out"); document.body.classList.remove("splashing");
+    setTimeout(() => { done = true; box.remove(); document.body.classList.remove("splash-out"); }, 900);
+  }
+  let loaded = document.readyState === "complete", hills = false;
+  const check = () => { ready = loaded && hills; };
+  addEventListener("load", () => { loaded = true; check(); }, { once: true });
+  addEventListener("mountains-ready", () => { hills = true; check(); }, { once: true });
+  setTimeout(() => { loaded = hills = true; check(); }, 9000);
+  box.addEventListener("pointerdown", leave);
+  requestAnimationFrame(frame);
+})();
+</script>
 <header class="band top">
   <div class="band-in">
     <div class="sign" aria-hidden="true">
@@ -268,6 +553,11 @@
 </header>
 
 <main>
+  <div class="tilt" id="tilt" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5" transform="rotate(-14 12 12)"/><path d="M3 9c-1 2-1 4 0 6M21 9c1 2 1 4 0 6"/></svg>
+    <span>Горы двигаются от наклона</span>
+    <button type="button">Включить</button>
+  </div>
   <div class="work">
     <div class="left">
       <div class="langbar">
@@ -306,8 +596,8 @@
       <div class="pinfo" id="p-info" hidden aria-live="polite"></div>
       <div class="status" id="status"></div>
       <div class="fixcall" id="fix-call" hidden>
-        <div><b>Перевод собран по словам — он может быть неточным.</b><br><span id="fix-call-note">Окончания и формы глаголов могут быть неверными. Если вы знаете ингушский, поправьте перевод: дальше эта фраза всегда будет переводиться так.</span></div>
-        <button class="act main" id="fix-call-btn" type="button">Сообщить об ошибке / Исправить</button>
+        <button class="flag" id="report-btn" type="button">Неправильный перевод?</button>
+        <button class="flag" id="fix-call-btn" type="button">Исправить</button>
       </div>
 
       <div class="variants" id="variants" hidden>
@@ -414,6 +704,7 @@ function fixPalochka(s) {
   if (!s) return s;
   return s.replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 }
+function keepFocus(b) { for (const ev of ["pointerdown", "mousedown"]) b.addEventListener(ev, (e) => e.preventDefault(), { passive: false }); }
 function insertAt(t, ch) { t.setRangeText(ch, t.selectionStart, t.selectionEnd, "end"); t.focus(); }
 
 /* ---------- языки ---------- */
@@ -596,13 +887,17 @@ function setMeta(text, kind) {
   if (kind === "ai") {
     body.textContent = "Перевёл ИИ: возможны ошибки, важное проверьте у носителя языка";
     if (text) { const s = document.createElement("small"); s.textContent = text; body.appendChild(s); }
+  } else if (kind === "draft") {
+    // перевод по словам: черновик, а не проверенный перевод (жёлтая метка, как у ИИ)
+    body.textContent = "Черновик";
+    const s = document.createElement("small"); s.textContent = (text ? text + ". " : "") + "Проверьте у носителя языка"; body.appendChild(s);
   } else if (kind === "rules") {
     body.textContent = text || "Без ИИ: по правилам грамматики";
     const s = document.createElement("small"); s.textContent = "Слова из словаря, грамматика из справочника. Проверьте у носителя языка"; body.appendChild(s);
   } else body.textContent = text;
-  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules") {
+  if (kind === "native" || kind === "ok" || kind === "ai" || kind === "rules" || kind === "draft") {
     els.meta.classList.add(kind);
-    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" ? "ai" : kind === "rules" ? "rules" : "ok"]);
+    els.meta.insertAdjacentHTML("afterbegin", ICON[kind === "ai" || kind === "draft" ? "ai" : kind === "rules" ? "rules" : "ok"]);
   }
   els.meta.appendChild(body);
 }
@@ -636,13 +931,41 @@ const noAi = $("noai");
 els.compare.hidden = true;
 api({ action: "config" }).then((c) => applyAi(c && c.ai === true)).catch(() => applyAi(false));
 $("fix-call-btn").addEventListener("click", () => openFix());
+// «Неправильный перевод?» — одно нажатие: текст, перевод и направление уходят на сервер (action "report")
+$("report-btn").addEventListener("click", async () => {
+  const b = $("report-btn");
+  if (!lastResult || b.disabled) return;
+  b.disabled = true; b.textContent = "Отправляю…";
+  try {
+    await api({ action: "report", text: lastInput, translation: lastResult, source: lastPair.src, target: lastPair.tgt });
+    b.textContent = "Спасибо, отметили";
+  } catch (e) { b.disabled = false; b.textContent = "Не отправилось, ещё раз?"; }
+});
 try { noAi.checked = localStorage.getItem("inh-tr-noai") === "1"; } catch (e) {}
 noAi.addEventListener("change", () => { try { localStorage.setItem("inh-tr-noai", noAi.checked ? "1" : "0"); } catch (e) {} });
 
 $("clear").addEventListener("click", () => { els.input.value = ""; els.input.focus(); resetOutput(); refresh(); });
 els.key.addEventListener("click", () => { insertAt(els.input, "Ӏ"); refresh(); });
 $("fix-key").addEventListener("click", () => insertAt($("fix-text"), "Ӏ"));
+// кнопка Ӏ не забирает фокус у поля: иначе на телефоне клавиатура закрывается и открывается снова
+keepFocus(els.key); keepFocus($("fix-key"));
 els.input.addEventListener("input", refresh);
+// Пока человек печатает, перевод готовится молча (на экране ничего не меняется). Показываем его только
+// по кнопке «Перевести» или Ctrl/⌘+Enter — тогда ответ уже готов и появляется сразу, целиком.
+let typeTimer = 0;
+const PREP = new Map(); // «src|tgt|текст» → обещание ответа сервера
+const prepKey = (src, tgt, text) => src + "|" + tgt + "|" + text;
+function prepare() {
+  const text = readInput();
+  if (!text || (AI_ON && !noAi.checked)) return; // ИИ тратит деньги: с ним — только по кнопке
+  const src = els.src.value, tgt = els.tgt.value, k = prepKey(src, tgt, text);
+  if (PREP.has(k)) return;
+  if (PREP.size > 20) PREP.delete(PREP.keys().next().value);
+  const p = api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: true });
+  p.catch(() => PREP.delete(k));
+  PREP.set(k, p);
+}
+els.input.addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(prepare, 450); });
 els.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) translate(); });
 window.addEventListener("resize", grow);
 if (navigator.clipboard && navigator.clipboard.readText) {
@@ -720,7 +1043,17 @@ let busy = false, controller = null;
 function isWord(text) {
   return !/\n/.test(text) && text.length <= 40 && text.split(/\s+/).length <= 3 && !/[.!?…]\s+\S/.test(text);
 }
+// Одинаковый запрос второй раз не идёт на сервер: ответ берётся из памяти страницы.
+const ANSWERS = new Map();
 async function api(payload, signal) {
+  if (payload.action || payload.compare) return fetchApi(payload, signal);   // исправления и сравнения всегда идут на сервер
+  const key = JSON.stringify(payload);
+  if (ANSWERS.has(key)) return ANSWERS.get(key);
+  const data = await fetchApi(payload, signal);
+  if (ANSWERS.size < 200) ANSWERS.set(key, data);
+  return data;
+}
+async function fetchApi(payload, signal) {
   const r = await fetch("/api/translate", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal
   });
@@ -751,13 +1084,14 @@ function readInput() {
 
 async function translate() {
   if (busy) return;
-  const src = els.src.value, tgt = els.tgt.value;
+  let src = els.src.value, tgt = els.tgt.value; // let: сервер может сказать, что текст на другом языке (switched)
   const text = readInput();
   if (!text) { resetOutput("Сначала введите слово или текст"); els.input.focus(); return; }
 
   busy = true; els.go.disabled = true; els.go.textContent = "Перевожу…";
   hideExtras(); setButtons(false); setStatus(""); closePanels(); setMeta("");
-  els.output.classList.add("busy"); showText("…");
+  // заглушку «идёт перевод» показываем, только если ответ задержался: быстрый ответ появляется без мигания
+  const busyShow = setTimeout(() => { els.output.classList.add("busy"); showText("…"); }, 140);
   const my = ++reqId;
   controller = new AbortController();
   // база и правила отвечают сразу; если ответа долго нет — значит, переводит ИИ, говорим об этом
@@ -766,7 +1100,17 @@ async function translate() {
   const fixS = (s) => (src === "inh" ? fixPalochka(s) : s);
 
   try {
-    const data = await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: AI_ON ? noAi.checked : true }, controller.signal);
+    // готовый ответ, подготовленный пока печатали, — если текст тот же; иначе переводим сейчас
+    const useNoAi = AI_ON ? noAi.checked : true;
+    const ready = useNoAi ? PREP.get(prepKey(src, tgt, text)) : null;
+    const data = ready ? await ready.catch(() => api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal))
+      : await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal);
+    // текст на русском, а выбрано «ингушский → русский»: сервер перевёл с русского — переключаем языки на экране
+    if (data.switched && data.switched.source && data.switched.target) {
+      src = data.switched.source; tgt = data.switched.target;
+      els.src.value = src; els.tgt.value = tgt;
+      prev = { src, tgt }; rememberLangs();
+    }
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
     if (data.noAi) {
@@ -787,26 +1131,32 @@ async function translate() {
     if (!(pieces && markPieces(els.output, lastResult, pieces))) markInto(els.output, lastResult, data.unknown);
     $("p-hint").hidden = !pieces;
     // перевод по словам грубый: просим носителя языка поправить — кнопка крупная и сразу под переводом
-    $("fix-call").hidden = !data.chunks;
+    $("fix-call").hidden = false; // маленькая строка — под любым переводом
+    $("report-btn").disabled = false; $("report-btn").textContent = "Неправильный перевод?";
     if (data.chunks && data.details) data.details.note = ""; // то же сказано в жёлтой плашке
     const hasVariants = renderVariants(data.variants, fixT);
     if (data.details) renderDetails(data.details, fixS, fixT, hasVariants);
     renderBase(data.words, data.similar, fixT);
     const trusted = data.verified || data.base;
-    setMeta((data.model || "") + (data.ai && data.fast ? " · быстрый режим" : ""), data.verified ? "native" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "");
+    const metaText = (data.model || "") + (data.ai && data.fast ? " · быстрый режим" : "");
+    const metaKind = data.verified ? "native" : data.chunks ? "draft" : data.rules ? "rules" : trusted ? "ok" : data.ai ? "ai" : "";
+    setMeta(metaText, metaKind);
     setButtons(true);
     const swapped = (data.fixed || []).map((f) => f[0] + " → " + f[1]).join(", ");
     let note = "", noteKind = "";
-    if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
+    if (data.chunks) {
+      // перевод по словам: без больших предупреждений — есть маленькая «Неправильный перевод?» под ним
+    } else if (tgt === "inh" && !trusted && typeof data.coverage === "number" && data.coverage < 0.5) {
       note = "Большинства этих слов нет в ингушских текстах: скорее всего, перевод неверный."; noteKind = "error";
     } else if (data.unknown && data.unknown.length && !trusted) {
       note = "Подчёркнутых слов нет в ингушских книгах и газетах. Проверьте их у носителя языка." + (swapped ? " Чеченские формы заменены: " + swapped + "." : "");
     } else if (swapped) {
       note = "Чеченские формы заменены на ингушские: " + swapped + ".";
     }
+    if (data.switched && !note) note = "Похоже, текст на русском: перевёл с русского на ингушский.";
     setStatus(note, noteKind);
 
-    addHistory(src, tgt, text, lastResult);
+    addHistory(src, tgt, text, lastResult, { text: metaText, kind: metaKind });
     // второй проход (ИИ заменяет слова, которых нет в ингушских текстах) — в фоне: перевод уже на экране,
     // кнопка свободна; если проверка найдёт лучше, перевод тихо обновится
     if (data.ai && tgt === "inh" && data.suspect && data.suspect.length && !data.repaired) repairLater(my, text, src, tgt, note, noteKind, fixT);
@@ -814,7 +1164,7 @@ async function translate() {
     lastResult = "";
     if (e.name !== "AbortError") showError(e);
   } finally {
-    clearTimeout(slowHint);
+    clearTimeout(slowHint); clearTimeout(busyShow);
     busy = false; els.go.disabled = false; els.go.textContent = "Перевести";
     els.output.classList.remove("busy");
   }
@@ -830,7 +1180,7 @@ async function repairLater(my, text, src, tgt, note, noteKind, fixT) {
       markInto(els.output, lastResult, r.unknown);
       if (Array.isArray(r.variants) && r.variants.length) renderVariants(r.variants, fixT);
       setStatus("Перевод уточнён: заменены слова, которых нет в ингушских текстах." + (r.unknown && r.unknown.length ? " Подчёркнутые слова проверьте у носителя языка." : ""));
-      addHistory(src, tgt, text, lastResult);
+      addHistory(src, tgt, text, lastResult, { text: "", kind: "ai" });
     } else setStatus(note, noteKind);
   } catch (e) {
     if (my === reqId) setStatus(note, noteKind); // не получилось проверить — остаётся первый вариант
@@ -923,6 +1273,7 @@ $("fix-save").addEventListener("click", async () => {
   let translation = $("fix-text").value.trim();
   if (lastPair.tgt === "inh") translation = fixPalochka(translation);
   if (!translation) return;
+  ANSWERS.clear();
   const btn = $("fix-save"); btn.disabled = true; btn.textContent = "Сохраняю…";
   try {
     await api({ action: "correct", text: lastInput, translation, source: lastPair.src, target: lastPair.tgt, code: $("fix-code").value });
@@ -931,7 +1282,7 @@ $("fix-save").addEventListener("click", async () => {
     setMeta("Проверено носителем языка", "native");
     hideExtras(); $("fix-panel").hidden = true;
     setStatus("Сохранено. Спасибо! Теперь эта фраза всегда будет переводиться так" + (AI_ON ? ", а ИИ будет учиться на ней." : "."), "good");
-    addHistory(lastPair.src, lastPair.tgt, lastInput, translation);
+    addHistory(lastPair.src, lastPair.tgt, lastInput, translation, { text: "Проверено носителем языка", kind: "native" });
   } catch (e) {
     if (e.status === 403) { $("code-row").hidden = false; $("fix-code").focus(); setStatus("Чтобы сохранить, введите код редактора.", "error"); }
     else setStatus(e.message || "Не сохранилось. Нажмите «Сохранить» ещё раз.", "error");
@@ -985,9 +1336,11 @@ $("cmp-close").addEventListener("click", () => { $("cmp-panel").hidden = true; }
 function loadHistory() {
   try { return JSON.parse(localStorage.getItem("inh-tr-history") || "[]"); } catch (e) { return []; }
 }
-function addHistory(src, tgt, input, output) {
+// meta — метка над переводом ({ text, kind }): из истории перевод открывается с той же меткой
+// («Черновик» у перевода по словам), а не как проверенный
+function addHistory(src, tgt, input, output, meta = null) {
   let h = loadHistory().filter((x) => !(x.src === src && x.tgt === tgt && x.input === input));
-  h.unshift({ src, tgt, input, output });
+  h.unshift({ src, tgt, input, output, meta: meta && meta.kind ? { text: String(meta.text || ""), kind: meta.kind } : null });
   h = h.slice(0, 8);
   try { localStorage.setItem("inh-tr-history", JSON.stringify(h)); } catch (e) {}
   renderHistory(h);
@@ -1005,7 +1358,10 @@ function renderHistory(h = loadHistory()) {
     b.addEventListener("click", () => {
       els.src.value = x.src; els.tgt.value = x.tgt; prev = { src: x.src, tgt: x.tgt };
       els.input.value = x.input; lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
-      showText(x.output); hideExtras(); closePanels(); setButtons(true); setStatus(""); setMeta(""); refresh();
+      showText(x.output); hideExtras(); closePanels(); setButtons(true); setStatus("");
+      // старые записи без метки — «Черновик»: откуда перевод, неизвестно, проверенным его не показываем
+      const m = x.meta && x.meta.kind ? x.meta : { text: "Из истории, откуда перевод — неизвестно", kind: "draft" };
+      setMeta(m.text, m.kind); refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
     box.appendChild(b);
@@ -1022,6 +1378,267 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
 }
+</script>
+<script>
+// Горы нарисованы как иллюстрация: 5 слоёв (дальний хребет, снежные вершины, средний хребет, холмы с башнями,
+// ближний склон с елями). У каждой вершины освещённая и теневая грань, снег, в долинах туман.
+// Рисуется векторно в canvas за несколько миллисекунд, поэтому чётко на любом экране.
+function drawMountains(cvs, phase) {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  const PAL = {
+    night: { far: ["#2b3f52", "#34495d", "#5d7286", "#6c8296"], main: ["#2a3d51", "#3c5268", "#7d93aa", "#b7c7d6"],
+      mid: ["#1d3338", "#26413f"], hill: ["#142a22", "#1b3529"], near: ["#0b1a13", "#10241a"], pine: "#08140e",
+      mist: "rgba(30, 52, 70, ", stone: ["#2a3433", "#3c4846"], win: "rgba(240, 200, 110, .9)" },
+    morning: { far: ["#a99fb8", "#cdb6c0", "#eadbe0", "#fbefee"], main: ["#837f9e", "#c6a2ab", "#d6cce0", "#ffe4d8"],
+      mid: ["#5d7276", "#8a907d"], hill: ["#3c6146", "#607f55"], near: ["#22412c", "#305637"], pine: "#1a3522",
+      mist: "rgba(246, 226, 226, ", stone: ["#8d8277", "#ecd0b6"], win: "rgba(40, 30, 20, .55)" },
+    day: { far: ["#a9bfcf", "#bdd0dc", "#dbe6ee", "#eef4f8"], main: ["#7b91a6", "#a3b6c6", "#c3d3e2", "#ffffff"],
+      mid: ["#5d7d78", "#79978c"], hill: ["#3b6849", "#4d7d57"], near: ["#21452e", "#2c5839"], pine: "#183722",
+      mist: "rgba(222, 236, 243, ", stone: ["#8a857b", "#d8d0c0"], win: "rgba(40, 30, 20, .55)" },
+    evening: { far: ["#86789a", "#ad8e9c", "#d6b6b8", "#f2d3c9"], main: ["#5b5679", "#c27e6f", "#a597b6", "#ffcfae"],
+      mid: ["#3e5360", "#6f6e69"], hill: ["#2c4939", "#526548"], near: ["#19311f", "#26432e"], pine: "#122819",
+      mist: "rgba(236, 192, 172, ", stone: ["#6f6259", "#e3b48d"], win: "rgba(255, 210, 120, .9)" },
+  };
+  const P = PAL[phase] || PAL.day;
+
+  // гребень: опорные вершины и седловины + мелкая «рваность» делением отрезков пополам
+  function ridge(W, H, o) {
+    const ctrl = [];
+    let x = -o.step * H * rnd(), up = rnd() < 0.5;
+    while (ctrl.length < 3 || ctrl[ctrl.length - 1].x < W + 20) {
+      const t = up ? o.top + (o.peakVar * rnd()) : o.top + o.peakVar + (o.bot - o.top - o.peakVar) * (0.45 + 0.55 * rnd());
+      ctrl.push({ x, y: t * H, peak: up });
+      x += o.step * H * (0.55 + 0.9 * rnd()); up = !up;
+    }
+    if (o.center != null) {   // главная вершина — там, где её видно (по центру экрана)
+      const want = W * o.center, peaks = ctrl.filter((c) => c.peak);
+      const near = peaks.reduce((a, c) => (Math.abs(c.x - want) < Math.abs(a.x - want) ? c : a), peaks[0]);
+      const dx = want - near.x; ctrl.forEach((c) => { c.x += dx; });
+      near.y = o.top * H * 0.85;
+      while (ctrl[ctrl.length - 1].x < W + 20) { const l = ctrl[ctrl.length - 1]; ctrl.push({ x: l.x + o.step * H * 0.8, y: (l.peak ? o.bot - 0.05 : o.top + o.peakVar) * H, peak: !l.peak }); }
+      while (ctrl[0].x > -20) { const f = ctrl[0]; ctrl.unshift({ x: f.x - o.step * H * 0.8, y: (f.peak ? o.bot - 0.05 : o.top + o.peakVar) * H, peak: !f.peak }); }
+    }
+    let pts = ctrl.map((c) => [c.x, c.y]);
+    let amp = o.rough * H;
+    for (let lvl = 0; lvl < 5; lvl++) {
+      const next = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+        next.push([(x0 + x1) / 2 + (rnd() - 0.5) * amp * 0.3, (y0 + y1) / 2 + (rnd() - 0.5) * amp], pts[i]);
+      }
+      pts = next; amp *= 0.5;
+    }
+    // индексы опорных точек в подробном гребне (каждая 32-я)
+    return { pts, ctrl: ctrl.map((c, i) => ({ ...c, i: i * 32 })) };
+  }
+  const path = (ctx, pts, H) => { ctx.beginPath(); ctx.moveTo(pts[0][0], H + 10); pts.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.lineTo(pts[pts.length - 1][0], H + 10); ctx.closePath(); };
+
+  // освещённые грани: свет слева, у каждой вершины левый склон светлее
+  function faces(ctx, r, H, col, depthK) {
+    ctx.fillStyle = col;
+    for (let k = 1; k < r.ctrl.length - 1; k++) {
+      const c = r.ctrl[k]; if (!c.peak) continue;
+      const a = r.ctrl[k - 1], b = r.ctrl[k + 1];
+      ctx.beginPath();
+      for (let i = a.i; i <= c.i; i++) { const [x, y] = r.pts[i]; i === a.i ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+      // «хребет» грани уходит от вершины вниз чуть вправо, с изломом
+      const drop = (Math.max(a.y, b.y) - c.y) * depthK;
+      ctx.lineTo(c.x + (b.x - c.x) * 0.12, c.y + drop * 0.45);
+      ctx.lineTo(c.x + (b.x - c.x) * 0.05, c.y + drop);
+      ctx.lineTo(a.x + (c.x - a.x) * 0.5, Math.max(a.y, c.y + drop) + H * 0.05);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  // снег: от каждой вершины вниз на долю высоты, нижний край рваный, «языки» в кулуарах
+  function snow(ctx, r, H, depth) {
+    ctx.beginPath();
+    for (let k = 1; k < r.ctrl.length - 1; k++) {
+      const c = r.ctrl[k]; if (!c.peak) continue;
+      const a = r.ctrl[k - 1], b = r.ctrl[k + 1];
+      const line = c.y + (Math.min(a.y, b.y) - c.y) * depth;
+      const x0 = a.x + (c.x - a.x) * 0.2, x1 = c.x + (b.x - c.x) * 0.8, n = 14;
+      ctx.moveTo(x0, line - H * 0.2);
+      ctx.lineTo(x1, line - H * 0.2);
+      for (let j = n; j >= 0; j--) {
+        const x = x0 + (x1 - x0) * j / n;
+        const tongue = (j % 2 ? 1 : 0.25) * (rnd() * 0.55 + 0.2) * (line - c.y + H * 0.02);
+        ctx.lineTo(x, line + tongue * (j % 3 === 0 ? 1.4 : 0.6));
+      }
+      ctx.closePath();
+    }
+  }
+  function mist(ctx, W, H, y0, y1, a) {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, P.mist + "0)"); g.addColorStop(1, P.mist + a + ")");
+    ctx.fillStyle = g; ctx.fillRect(0, y0, W, y1 - y0 + 1);
+    ctx.fillStyle = P.mist + a + ")"; ctx.fillRect(0, y1, W, H - y1 + 10);   // ниже — ровный туман, без полосы
+  }
+  function tower(ctx, x, y, s) {
+    const poly = (pts, col) => { ctx.fillStyle = col; ctx.beginPath(); pts.forEach(([px, py], j) => j ? ctx.lineTo(x + px * s, y + py * s) : ctx.moveTo(x + px * s, y + py * s)); ctx.closePath(); ctx.fill(); };
+    poly([[12, 14], [14, -42], [44, -42], [46, 14]], P.stone[0]);
+    poly([[12, 14], [14, -42], [29, -42], [29, 14]], P.stone[1]);
+    poly([[-13, 14], [-9, -96], [9, -96], [13, 14]], P.stone[0]);
+    poly([[-13, 14], [-9, -96], [0, -96], [0, 14]], P.stone[1]);
+    poly([[-11, -96], [-11, -100], [0, -124], [11, -100], [11, -96]], P.stone[0]);
+    poly([[-11, -96], [-11, -100], [0, -124], [0, -96]], P.stone[1]);
+    ctx.fillStyle = P.win;
+    ctx.fillRect(x - 2 * s, y - 82 * s, 3 * s, 8 * s); ctx.fillRect(x - 2 * s, y - 54 * s, 3 * s, 7 * s); ctx.fillRect(x + 20 * s, y - 28 * s, 4 * s, 6 * s);
+  }
+  const yAt = (pts, x) => { let best = pts[0]; for (const p of pts) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p; return best[1]; };
+
+  const LAY = [
+    (ctx, W, H) => {   // дальний хребет
+      const r = ridge(W, H, { top: 0.22, bot: 0.4, peakVar: 0.06, step: 0.16, rough: 0.05, center: 0.68 });
+      path(ctx, r.pts, H); ctx.fillStyle = P.far[0]; ctx.fill();
+      ctx.save(); path(ctx, r.pts, H); ctx.clip();
+      faces(ctx, r, H, P.far[1], 0.8);
+      snow(ctx, r, H, 0.35); ctx.fillStyle = P.far[2]; ctx.fill();
+      mist(ctx, W, H, H * 0.34, H * 0.52, 0.9);
+      ctx.restore();
+    },
+    (ctx, W, H) => {   // главные снежные вершины
+      const r = ridge(W, H, { top: 0.12, bot: 0.5, peakVar: 0.12, step: 0.24, rough: 0.07, center: 0.42 });
+      path(ctx, r.pts, H); ctx.fillStyle = P.main[0]; ctx.fill();
+      ctx.save(); path(ctx, r.pts, H); ctx.clip();
+      faces(ctx, r, H, P.main[1], 0.85);
+      ctx.save(); snow(ctx, r, H, 0.42); ctx.clip();
+      ctx.fillStyle = P.main[2]; ctx.fillRect(0, 0, W, H);       // снег в тени
+      faces(ctx, r, H, P.main[3], 0.85);                         // снег на солнце
+      ctx.restore();
+      mist(ctx, W, H, H * 0.42, H * 0.6, 0.85);
+      ctx.restore();
+    },
+    (ctx, W, H) => {   // средний хребет
+      const r = ridge(W, H, { top: 0.5, bot: 0.62, peakVar: 0.04, step: 0.2, rough: 0.035 });
+      path(ctx, r.pts, H); ctx.fillStyle = P.mid[0]; ctx.fill();
+      ctx.save(); path(ctx, r.pts, H); ctx.clip(); faces(ctx, r, H, P.mid[1], 0.9); mist(ctx, W, H, H * 0.58, H * 0.72, 0.75); ctx.restore();
+    },
+    (ctx, W, H) => {   // холмы с башнями
+      const r = ridge(W, H, { top: 0.64, bot: 0.72, peakVar: 0.02, step: 0.3, rough: 0.02 });
+      path(ctx, r.pts, H); ctx.fillStyle = P.hill[0]; ctx.fill();
+      ctx.save(); path(ctx, r.pts, H); ctx.clip(); faces(ctx, r, H, P.hill[1], 1); mist(ctx, W, H, H * 0.74, H * 0.86, 0.45); ctx.restore();
+      const s = Math.min(H, W * 1.1) / 900 * 0.75;
+      for (const fx of [0.16, 0.21, 0.66, 0.9]) { const x = fx * W; tower(ctx, x, yAt(r.pts, x) + 6 * s, s * (fx === 0.21 ? 0.7 : fx === 0.9 ? 0.6 : 1)); }
+    },
+    (ctx, W, H) => {   // ближний склон с елями
+      const r = ridge(W, H, { top: 0.84, bot: 0.9, peakVar: 0.02, step: 0.45, rough: 0.012 });
+      path(ctx, r.pts, H); ctx.fillStyle = P.near[0]; ctx.fill();
+      ctx.save(); path(ctx, r.pts, H); ctx.clip(); faces(ctx, r, H, P.near[1], 1); ctx.restore();
+      ctx.fillStyle = P.pine;
+      const u = H / 900;
+      for (let x = -10; x < W + 10; x += (10 + rnd() * 26) * u) {
+        if (rnd() < 0.35) continue;
+        const h = (26 + rnd() * 46) * u, w = h * 0.36, y = yAt(r.pts, x) + 4 * u;
+        ctx.beginPath();
+        for (let t = 0; t < 3; t++) { const ty = y - h * (t * 0.28); ctx.moveTo(x - w * (1 - t * 0.22), ty); ctx.lineTo(x, ty - h * 0.46); ctx.lineTo(x + w * (1 - t * 0.22), ty); }
+        ctx.fill(); ctx.fillRect(x - u, y - 2, 2 * u, 6 * u);
+      }
+    },
+  ];
+  cvs.forEach((c, i) => {
+    const ctx = c.getContext("2d"), W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+    seed = 101 + i * 977;
+    LAY[i](ctx, W, H);
+  });
+}
+
+// Время суток берём по часам посетителя: утро 5–10, день 10–17, вечер 17–21, ночь 21–5.
+// Небо, солнце или луна, звёзды и цвета гор меняются вместе; проверяем раз в 5 минут.
+(() => {
+  const cvs = [...document.querySelectorAll(".scene canvas.layer")], scene = document.getElementById("scene");
+  if (!cvs.length) return;
+  const sun = scene.querySelector(".sunball"), root = document.documentElement;
+  let lastW = 0, phase = "";
+  function sky(ph) {
+    const k = SKY[ph];
+    root.style.setProperty("--sky-top", k.top); root.style.setProperty("--sky-low", k.low); root.style.setProperty("--sunlight", k.sun);
+    scene.classList.toggle("is-night", ph === "night");
+    Object.assign(sun.style, { right: k.x, top: k.y, width: k.size + "px", height: k.size + "px" });
+    const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (meta) meta.content = k.top;
+  }
+  function render() {
+    lastW = innerWidth; phase = dayPhase(); sky(phase);
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    cvs.forEach((c) => { const r = c.getBoundingClientRect(); c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr)); });
+    drawMountains(cvs, phase);
+    cvs.forEach((c) => c.classList.add("ready"));
+    window.dispatchEvent(new Event("mountains-ready"));
+  }
+  sky(dayPhase());
+  requestAnimationFrame(() => setTimeout(render, 0));
+  let rt = 0;
+  addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 40) render(); }, 250); });
+  setInterval(() => { if (dayPhase() !== phase) render(); }, 5 * 60 * 1000);
+})();
+</script>
+<script>
+// Объём (как «пространственные» обои на iPhone): наклон телефона, мышь и прокрутка сдвигают слои гор —
+// ближние сильнее дальних; карточка переводчика чуть наклоняется и по ней скользит блик.
+// При «уменьшить движение» всё стоит на месте.
+(() => {
+  const scene = document.getElementById("scene"), cue = document.getElementById("tilt"), card = document.querySelector(".work");
+  if (!scene || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const layers = [...scene.querySelectorAll("[data-depth]")].map((el) => ({ el, d: +el.dataset.depth }));
+  const MAX_X = 64, MAX_Y = 38, SENS = 9;      // сдвиг ближнего слоя (px) и сколько градусов наклона дают полный сдвиг
+  let tx = 0, ty = 0, x = 0, y = 0, sy = 0, raf = 0, base = null;
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  function tick() {
+    x += (tx - x) * 0.18; y += (ty - y) * 0.18;
+    const sc = Math.min(scrollY, 400);
+    layers.forEach(({ el, d }, i) => {
+      el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y - sc * d * 0.1).toFixed(2)}px, 0) scale(${(1 + d * 0.04).toFixed(3)})`;
+    });
+    if (card) {
+      // карточка смещается на целые пиксели и не поворачивается: так текст остаётся чётким
+      card.style.transform = `translate(${Math.round(x * 8)}px, ${Math.round(y * 6)}px)`;
+      card.style.setProperty("--gx", (50 + x * 45).toFixed(1) + "%");
+      card.style.setProperty("--gy", (30 + y * 40).toFixed(1) + "%");
+    }
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.0008 ? requestAnimationFrame(tick) : 0;
+  }
+  const kick = () => { if (!raf && !document.hidden) raf = requestAnimationFrame(tick); };
+  function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); kick(); }
+
+  addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") aim(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); }, { passive: true });
+  addEventListener("scroll", kick, { passive: true });
+
+  let live = false;
+  function onTilt(e) {
+    if (e.beta == null || e.gamma == null) return;
+    if (!live) { live = true; showCue(false); }
+    const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let h = e.gamma, v = e.beta;                       // h — влево/вправо, v — к себе/от себя
+    if (angle === 90) { h = e.beta; v = -e.gamma; } else if (angle === -90 || angle === 270) { h = -e.beta; v = e.gamma; }
+    if (!base) base = { h, v };
+    // «ровным» считается то, как телефон держат обычно; подстраиваемся медленно, чтобы наклон не «съедался»
+    base.h += (h - base.h) * 0.003; base.v += (v - base.v) * 0.003;
+    aim((h - base.h) / SENS, (v - base.v) / SENS);
+  }
+
+  function showCue(on, needsTap) {
+    if (!cue) return;
+    cue.hidden = !on;
+    cue.classList.toggle("ask", !!needsTap);
+    if (on) try { localStorage.setItem("tilt-seen", "1"); } catch {}
+  }
+  const DOE = window.DeviceOrientationEvent;
+  if (!DOE || !matchMedia("(pointer: coarse)").matches) return;   // компьютер: мышь и прокрутка
+  addEventListener("deviceorientation", onTilt);                  // Android: наклон работает сразу
+  let seen = false; try { seen = localStorage.getItem("tilt-seen") === "1"; } catch {}
+  if (typeof DOE.requestPermission === "function") {
+    // iPhone даёт наклон только после нажатия: кнопка «Включить», и любое первое касание тоже включает
+    const ask = () => DOE.requestPermission().then((s) => { if (s === "granted") showCue(false); }).catch(() => {});
+    showCue(true, true);
+    cue.querySelector("button").addEventListener("click", ask);
+    addEventListener("touchend", ask, { once: true, passive: true });
+  } else if (!seen) {
+    setTimeout(() => { if (!live) return; showCue(true); setTimeout(() => showCue(false), 4000); }, 1500);
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; } });
+})();
 </script>
 </body>
 </html>

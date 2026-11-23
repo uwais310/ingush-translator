@@ -12,6 +12,9 @@
 //   node scripts/eval-chunks.js --inh     — ингушский → русский
 //   node scripts/eval-chunks.js --diff    — показать 40 примеров
 //   node scripts/eval-chunks.js --no-align — без таблицы слов (как было)
+//   node scripts/eval-chunks.js --no-cons  — без конструкций с несколькими местами (chunks.js, construction)
+//   node scripts/eval-chunks.js --cons-stats — сколько фраз дошли до каждой проверки конструкций
+// Конструкции, как и перевод по аналогии, выписываются только из обучающих частей (EXAMPLES: train).
 
 const KB = require("../lib/ingush-guide.js");
 const LEX = require("../lib/corpus-lexicon.js");
@@ -23,6 +26,8 @@ const makeAlign = require("../lib/rules/align.js");
 const INH = process.argv.includes("--inh");
 const SHOW = process.argv.includes("--diff");
 const NO_ALIGN = process.argv.includes("--no-align");
+const NO_CONS = process.argv.includes("--no-cons");
+const CONS_STATS = process.argv.includes("--cons-stats");
 const FOLDS = 5;
 // --dump файл.json — сохранить все переводы (для сравнения версий)
 const DUMP = process.argv.includes("--dump") ? process.argv[process.argv.indexOf("--dump") + 1] : null;
@@ -53,6 +58,9 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
   const foldOf = (s) => { let h = 0; for (const ch of norm(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % FOLDS; };
   const allPhrases = phrasePairs(), words = wordPairs();
   const chunksFor = [];
+  if (NO_CONS) tune = { ...tune, noCons: true };
+  const consStats = {};
+  if (CONS_STATS) tune = { ...tune, consStats };
   for (let f = 0; f < FOLDS; f++) {
     let ALIGN = null, train = null;
     if (!NO_ALIGN) {
@@ -84,6 +92,7 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
   log(`Фраз (от 2 слов): ${refs.size}. Переведено по кускам: ${done} (${pct(done, refs.size)}).`);
   log(`  слова на месте (есть в переводе носителя): ${pct(hitW, allW)}`);
   log(`  совпало целиком (порядок слов не важен):   ${same} (${pct(same, done)})`);
+  if (CONS_STATS) log(`  конструкции (до какой проверки дошли): ${JSON.stringify(consStats)}`);
   return { total: refs.size, done, words: allW ? hitW / allW : 0, same };
 }
 

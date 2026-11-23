@@ -57,6 +57,7 @@
   .btn.primary:hover { background: #07542f; }
   .btn.ghost { background: transparent; color: var(--stone); }
   .btn:disabled { opacity: .55; cursor: default; }
+  .btn { touch-action: manipulation; } /* без двойного тапа для увеличения */
   .actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
   .actions .wide { grid-column: 1 / -1; }
   .palbtn { min-width: 62px; font-size: 22px; color: var(--green-deep); }
@@ -205,7 +206,7 @@ const PAL_RE = new RegExp("([\\u0400-\\u04FF])([" + LOOK + "])|([" + LOOK + "])(
 const fixPalochka = (s) => String(s || "").replace(/ӏ/g, "Ӏ").replace(PAL_RE, (m, a) => (a ? a + "Ӏ" : "Ӏ"));
 const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
 
-let code = "", item = null, index = -1, busy = false, tab = "check", askItem = null, askIndex = -1;
+let code = "", item = null, index = -1, busy = false, tab = "check", askItem = null, askIndex = -1, shownAt = 0;
 try { code = sessionStorage.getItem("inh-review-code") || ""; } catch (e) {}
 
 async function api(payload) {
@@ -240,7 +241,7 @@ function show(data) {
   $("pct").textContent = pct < 1 && data.reviewed ? "<1%" : Math.round(pct) + "%";
   $("n-check").textContent = `${fmt(data.reviewed)} из ${fmt(data.total)}`;
   if (data.done) { $("card").hidden = true; $("done").hidden = false; return; }
-  item = data.item; index = data.index;
+  item = data.item; index = data.index; shownAt = Date.now();
   $("done").hidden = true; $("card").hidden = tab !== "check"; showEditor(false);
   $("ru").textContent = item.ru;
   $("inh").textContent = item.inh;
@@ -267,8 +268,11 @@ async function next(after, okMessage = "") {
     else setStatus(e.name === "TypeError" ? "Нет связи. Проверьте интернет." : e.message, "error");
   } finally { setBusy(false); $("enter").disabled = false; }
 }
+// Двойной тап по «Верно»: второй тап приходит, когда на экране уже следующая пара, и одобрял бы её
+// не глядя. Новую пару можно одобрить только через REVIEW_PAUSE_MS после того, как она показана.
+const REVIEW_PAUSE_MS = 700;
 async function save(decision, inh) {
-  if (busy || !item) return;
+  if (busy || !item || Date.now() - shownAt < REVIEW_PAUSE_MS) return;
   setBusy(true); setStatus("Сохраняю…");
   try {
     await api({ action: "review-save", id: item.id, decision, inh });
@@ -319,6 +323,8 @@ $("fix").addEventListener("click", () => showEditor(true));
 $("cancel").addEventListener("click", () => showEditor(false));
 $("pal").addEventListener("click", () => insertPal($("edit")));
 $("a-pal").addEventListener("click", () => insertPal($("a-edit")));
+// кнопка Ӏ не забирает фокус у поля: иначе на телефоне клавиатура закрывается и открывается снова
+for (const id of ["pal", "a-pal"]) for (const ev of ["pointerdown", "mousedown"]) $(id).addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 $("save").addEventListener("click", () => {
   const inh = fixPalochka($("edit").value).trim();
   if (!inh) { setStatus("Впишите перевод.", "error"); return; }

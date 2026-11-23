@@ -906,6 +906,76 @@ async function saveReview(id, decision, inh) {
   return Object.keys(data).length;
 }
 
+// Короткие вопросы разговорника по набору слов (без порядка): в русском порядок слов в вопросе свободный,
+// «как зовут тебя» = «тебя как зовут» = «Как тебя зовут?». Только вопросы (в базе со знаком «?»)
+// из 2–4 слов с вопросительным словом, только надёжные источники — так смысл не меняется.
+let REORDER_IDX = null;
+const bagKey = (ws) => ws.slice().sort().join(" ");
+function reorderedQuestion(text) {
+  const L = require("../lib/rules/lexicon.js");
+  const ws = RET.wordsOf(String(text).toLowerCase().replace(/ё/g, "е"));
+  if (ws.length < 2 || ws.length > 4 || !ws.some((w) => L.QUESTION_WORDS[w])) return null;
+  if (!REORDER_IDX) {
+    REORDER_IDX = new Map();
+    for (const p of SEED) {
+      if (p.kind !== "phrase" || p.rare || !/\?\s*$/.test(p.ru || "") || !/^(PaydaDosh|Справочник)/.test(p.source || "")) continue;
+      const pw = RET.wordsOf(String(p.ru).toLowerCase().replace(/ё/g, "е"));
+      if (pw.length < 2 || pw.length > 4) continue;
+      const k = bagKey(pw);
+      if (!REORDER_IDX.has(k)) REORDER_IDX.set(k, []);
+      REORDER_IDX.get(k).push(p);
+    }
+  }
+  const list = REORDER_IDX.get(bagKey(ws));
+  if (!list) return null;
+  const best = seedBest(list[0].ru, "ru") || list[0];
+  const r = seedResult(best, "ru");
+  const alts = list.filter((p) => p !== best).map((p) => ({ text: noStress(splitAlt(splitNote(p.inh).text)[0] || p.inh), meaning: "" }))
+    .filter((x, i, all) => x.text !== r.translation && all.findIndex((y) => y.text === x.text) === i);
+  if (alts.length) r.alternatives = (r.alternatives || []).concat(alts);
+  r.kind = "reorder";
+  r.label += ", тот же вопрос";
+  r.note = joinNotes(`В разговорнике: «${noParens(best.ru)}» — те же слова в другом порядке.`, r.note);
+  return r;
+}
+
+// Обратный поиск для «ингушский → русский» по парам «русский → ингушский»: ингушская фраза из тех же слов
+// (порядок в ингушском свободный, падежи показывают, кто что делает). 2–5 слов, только разговорник,
+// справочник и исправления носителей. Палочка (1, l, I) и знаки препинания не важны.
+let REV_IDX = null;
+const inhWords = (t) => RET.wordsOf(fixPalochka(String(t)).toLowerCase().replace(/ё/g, "е"));
+function reverseFromRuInh(text, pool) {
+  const ws = inhWords(text);
+  if (ws.length < 2 || ws.length > 5) return null;
+  const k = bagKey(ws);
+  // исправления носителей (рус → инг) — первыми
+  for (let i = (pool || []).length - 1; i >= 0; i--) {
+    const p = pool[i];
+    if (p.source === "ru" && p.target === "inh" && bagKey(inhWords(p.translation)) === k) {
+      return { translation: noParens(p.text), verified: true, label: "Проверено носителем языка (те же слова в другом порядке)" };
+    }
+  }
+  if (!REV_IDX) {
+    REV_IDX = new Map();
+    for (const p of SEED) {
+      if (p.kind !== "phrase" || p.rare || !/^(PaydaDosh|Справочник)/.test(p.source || "")) continue;
+      for (const v of splitAlt(splitNote(p.inh).text)) {
+        const pw = inhWords(v);
+        if (pw.length < 2 || pw.length > 5) continue;
+        const kk = bagKey(pw);
+        if (!REV_IDX.has(kk)) REV_IDX.set(kk, p);
+      }
+    }
+  }
+  const p = REV_IDX.get(k);
+  if (!p) return null;
+  const r = seedResult(p, "inh");
+  r.kind = "reorder";
+  r.label += ", те же слова";
+  r.note = joinNotes(`В разговорнике: «${splitNote(p.inh).text}» — те же ингушские слова в другом порядке.`, r.note);
+  return r;
+}
+
 let SEED_IDX = null;
 function seedIndex() {
   if (SEED_IDX) return SEED_IDX;
@@ -967,8 +1037,15 @@ function seedResult(p, src, more = []) {
 // Ответ из словаря по значению записи («носить» в записи «носить, поносить; эксплуатировать»)
 // или по начальной форме слова («маму» → запись «мама»). prio — надёжность источника (0 — словарь проекта).
 function fromDictionary(text, src, tgt) {
-  const lw = RET.lookupWord(text, src, 6, true);
+  let lw = RET.lookupWord(text, src, 6, true);
   if (!lw) return null;
+  // имя собственное по начальной форме — только если и в тексте слово с большой буквы:
+  // «карта» → «карт» → «Карт» (имя, «Кхарт») — не то слово
+  if (lw.lemma && !/^[А-ЯЁӀ]/.test(String(text).trim())) {
+    const items = lw.items.filter((it) => !(/^[А-ЯЁӀ]/.test(String(it.ru).trim()) && /^[А-ЯЁӀ]/.test(String(it.inh).trim())));
+    if (!items.length) return null;
+    lw = { ...lw, items };
+  }
   const lemmaNote = !lw.lemma ? ""
     : src === "ru"
       ? `В тексте слово стоит в другой форме. Перевод дан для начальной формы «${lw.lemma}»: окончание или класс в ингушском могут быть другими.`
@@ -994,7 +1071,7 @@ function fromDictionary(text, src, tgt) {
 // Кроме фраз с вопросительным словом или «ли» («Как дела», «Где ты» пишут и без знака).
 function resolveExact(text, src, tgt, pool) {
   const r = resolveExact0(text, src, tgt, pool);
-  if (r && !r.verified && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
+  if (r && !r.verified && r.kind !== "reorder" && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
     const ws = RET.wordsOf(String(text).toLowerCase());
     const L = require("../lib/rules/lexicon.js");
     if (ws.length >= 2 && !L.QUESTION_WORDS[ws[0]] && !ws.includes("ли")) return null;
@@ -1021,6 +1098,11 @@ function resolveExact0(text, src, tgt, pool) {
   // записи словаря остаются в вариантах
   if (p && pp === 5 && d && !d.lemma && d.prio >= 6) return seedResult(p, src, d.items || []);
   if (d && !d.lemma) return d;
+  // тот же вопрос с другим порядком слов: «как зовут тебя», «тебя как зовут» — «Как тебя зовут?» из разговорника
+  if (src === "ru") { const ro = reorderedQuestion(text); if (ro) return ro; }
+  // ингушский → русский: смотрим в пары «русский → ингушский» (разговорник и исправления носителей) — фраза
+  // из тех же ингушских слов в другом порядке: «Хьо сона веза» = «Сона хьо веза» — «Я тебя люблю»
+  if (src === "inh") { const rv = reverseFromRuInh(text, pool); if (rv) return rv; }
   // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
   if (RET.wordsOf(text).length >= 2) {
     const rr = src === "ru" ? RULES.translate(text) : RULES.translateInh(text);
@@ -1278,7 +1360,7 @@ async function reviewAction(action, body, res) {
   }
 }
 
-module.exports = async (req, res) => {
+async function handleRequest(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
   let body = req.body;
@@ -1297,12 +1379,30 @@ module.exports = async (req, res) => {
   if (action === "ask-next" || action === "ask-save") return askAction(action, body || {}, res);
   // страница спрашивает, включён ли ИИ на сервере: если нет — прячет кнопки «Сравнить ИИ» и «Без ИИ»
   if (action === "config") return res.status(200).json({ ai: aiEnabled() });
-  if (!LANGS[source] || !LANGS[target]) return res.status(400).json({ error: "Unknown language" });
+  // только свои коды языков: «__proto__», «constructor» и т.п. есть у любого объекта — это не язык
+  const isLang = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(LANGS, c);
+  if (!isLang(source) || !isLang(target)) return res.status(400).json({ error: "Unknown language" });
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Empty text" });
   if (text.length > MAX_CHARS) return res.status(413).json({ error: `Не больше ${MAX_CHARS} символов` });
 
   const input = (source === "inh" ? fixPalochka(text) : text).trim();
   const fixT = (s) => (target === "inh" ? fixPalochka(s) : String(s || "").trim());
+
+  // --- «Неправильный перевод?»: сохранить жалобу (текст, перевод, направление) для проверки носителем ---
+  if (action === "report") {
+    const store = phraseStore();
+    if (!store) return res.status(501).json({ error: "Сохранение недоступно на этом хостинге." });
+    try {
+      const list = (await store.get("reports", { type: "json" })) || [];
+      list.push({ text: input.slice(0, 500), translation: String(body.translation || "").slice(0, 1000), source, target, at: new Date().toISOString() });
+      while (list.length > 2000) list.shift();
+      await store.setJSON("reports", list);
+      return res.status(200).json({ ok: true, count: list.length });
+    } catch (e) {
+      console.error("report:", e.message);
+      return res.status(500).json({ error: "Не удалось отправить. Попробуйте ещё раз." });
+    }
+  }
 
   // --- сохранить исправление ---
   if (action === "correct") {
@@ -1402,13 +1502,20 @@ module.exports = async (req, res) => {
   if (noAi && action !== "compare") {
     // запасной шаг без ИИ: перевод по кускам и словам. Грубый, поэтому не «из базы», а с пометкой
     const ch = ruInh ? CHUNKS.translate(input, source) : null;
+    // проверка обратным переводом: русский черновик переводим обратно на ингушский по базе — если получилась
+    // та же ингушская фраза, перевод подтверждён парой «русский → ингушский»
+    let backOk = false;
+    if (ch && source === "inh" && ch.translation && !/\[/.test(ch.translation)) {
+      const back = resolveExact(ch.translation, "ru", "inh", pool);
+      backOk = !!(back && back.translation && back.kind !== "rules" && bagKey(inhWords(back.translation)) === bagKey(inhWords(input)));
+    }
     if (ch) {
       const result = {
-        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : "Без ИИ: по словам из словаря", rules: true, chunks: true,
+        translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : backOk ? "Без ИИ: по словам, подтверждено обратным переводом по базе" : "Без ИИ: по словам из словаря", rules: true, chunks: true, roundTrip: backOk || undefined,
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
         pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
-        details: { alternatives: [], note: "Перевод собран по словам и готовым кускам из словаря. Окончания и формы глаголов могут быть неточными, слова в [скобках] не найдены. Проверьте у носителя языка." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
+        details: { alternatives: [], note: "Собрано по словам из словаря; слова в [скобках] не найдены." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
       };
       if (target === "inh") Object.assign(result, checkIngush(result.translation, input));
       result.variants = finishVariants([{ text: result.translation, note: "", source: "chunks", sourceLabel: "по словам из словаря", rank: 4 }], fixT);
@@ -1514,10 +1621,212 @@ module.exports = async (req, res) => {
     const status = e.status === 429 ? 429 : e.status === 401 ? 502 : 503;
     return res.status(status).json({ error: e.message, detail: e.detail });
   }
+}
+
+// ---------------- админка /admin: журнал переводов и жалобы «Неправильный перевод?» ----------------
+// Доступ — только по коду ADMIN_CODE (переменная окружения хостинга или .env). Без него админка выключена.
+const LOG = require("../lib/activity-log.js").createLog(() => phraseStore());
+const INSIGHTS = require("../lib/admin-insights.js");
+const looksRussian = require("../lib/lang-detect.js")({ POST });
+const phraseId = (p) => require("crypto").createHash("sha1").update(String(p.source) + ">" + String(p.target) + ">" + normKey(p.text)).digest("hex").slice(0, 12);
+// убрать исправление из словаря сайта; null — такой записи нет
+async function removePhrase(id) {
+  const store = phraseStore();
+  const list = await loadPhrases(true);
+  const kept = list.filter((p) => phraseId(p) !== id);
+  if (kept.length === list.length) return null;
+  await store.setJSON("all", kept);
+  PHRASES = kept; PHRASES_AT = Date.now();
+  CACHE.clear();
+  return kept.length;
+}
+const reportId = (r) => require("crypto").createHash("sha1").update(String(r.at || "") + "|" + String(r.text || "") + "|" + String(r.source || "")).digest("hex").slice(0, 12);
+function sameCode(given, code) {
+  const crypto = require("crypto");
+  const a = crypto.createHash("sha256").update(String(given || "")).digest();
+  const b = crypto.createHash("sha256").update(String(code)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+async function adminAction(body, res) {
+  const code = process.env.ADMIN_CODE;
+  if (!code) return res.status(503).json({ error: "Админка выключена: добавьте переменную ADMIN_CODE в настройках хостинга (Railway → Variables) или в .env и перезапустите." });
+  if (!sameCode(body.code, code)) {
+    await new Promise((r) => setTimeout(r, 700)); // подбор кода медленный
+    return res.status(403).json({ error: "Неверный код" });
+  }
+  const store = phraseStore();
+  const op = body.op || "data";
+  try {
+    if (op === "data") {
+      let reports = [];
+      if (store) reports = (await store.get("reports", { type: "json" })) || [];
+      const log = await LOG.read();
+      return res.status(200).json({
+        reports: (Array.isArray(reports) ? reports : []).map((r) => ({ ...r, id: reportId(r) })).reverse(),
+        log: log.list.slice().reverse(),
+        stats: log.stats,
+        storage: store ? (process.env.SUPABASE_URL ? "supabase" : storeOverride ? "local" : "netlify") : "none",
+        logging: process.env.ADMIN_LOG !== "0",
+        // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
+        dict: (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse(),
+        popular: INSIGHTS.popular(log.list),
+        missed: INSIGHTS.missed(log.list),
+        trash: await (async () => { try { const t = await store.get("trash", { type: "json" }); return t && t.what ? { what: t.what, at: t.at } : null; } catch { return null; } })(),
+      });
+    }
+    // резервная копия: всё, что сайт хранит сам (база data/phrases.json и так лежит в git)
+    if (op === "backup") {
+      const get = async (k, d) => { if (!store) return d; try { const v = await store.get(k, { type: "json" }); return v == null ? d : v; } catch (e) { console.error("backup " + k + ":", e.message); return d; } };
+      await LOG.flush();
+      return res.status(200).json({
+        kind: "ingush-translator-backup", version: 1, at: new Date().toISOString(),
+        corrections: await get("all", []), review: await get("review", {}), reports: await get("reports", []),
+        distilled: await get("distilled", []), log: await get("log", []), logStats: await get("log-stats", {}),
+      });
+    }
+    // исправить перевод (из жалобы или словаря): сохраняется как исправление носителя — сайт сразу отвечает им
+    if (op === "fix" || op === "dict-save") {
+      const isLang = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(LANGS, c);
+      const { source, target } = body;
+      if (!isLang(source) || !isLang(target) || source === target) return res.status(400).json({ error: "Неверное направление" });
+      const text = (source === "inh" ? fixPalochka(body.text || "") : String(body.text || "")).trim();
+      const translation = (target === "inh" ? fixPalochka(body.translation || "") : String(body.translation || "")).trim();
+      if (!text || !translation) return res.status(400).json({ error: "Нужны и текст, и перевод" });
+      if (text.length > 500 || translation.length > 1000) return res.status(413).json({ error: "Слишком длинно" });
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      if (op === "dict-save" && body.id) await removePhrase(body.id); // правка: старая запись уходит
+      const count = await savePhrase({ source, target, text, translation, at: new Date().toISOString() });
+      let report = null;
+      if (body.reportId) {
+        const list = (await store.get("reports", { type: "json" })) || [];
+        const r = list.find((x) => reportId(x) === body.reportId);
+        if (r) { r.handled = true; r.handledAt = new Date().toISOString(); r.fixed = translation; await store.setJSON("reports", list); report = { id: body.reportId, handled: true, handledAt: r.handledAt, fixed: translation }; }
+      }
+      const entry = { source, target, text, translation };
+      return res.status(200).json({ ok: true, count, entry: { ...entry, id: phraseId(entry) }, report });
+    }
+    // очистка: прежние данные кладутся в "trash" (одна последняя очистка), их можно вернуть кнопкой «Вернуть»
+    if (op === "clear") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const what = body.what;
+      const get = async (k, d) => { const v = await store.get(k, { type: "json" }); return v == null ? d : v; };
+      await LOG.flush();
+      let saved = {};
+      if (what === "log") {
+        saved = { log: await get("log", []) };
+        await LOG.clear({ log: true });
+      } else if (what === "stats") {
+        saved = { "log-stats": await get("log-stats", {}) };
+        await LOG.clear({ log: false, stats: true });
+      } else if (what === "reports-handled" || what === "reports") {
+        const list = await get("reports", []);
+        saved = { reports: list };
+        await store.setJSON("reports", what === "reports" ? [] : list.filter((r) => !r.handled));
+      } else return res.status(400).json({ error: "Неизвестно, что очищать" });
+      const removed = Object.values(saved).map((v) => (Array.isArray(v) ? v.length : Object.keys(v.days || {}).length))[0] || 0;
+      await store.setJSON("trash", { what, at: new Date().toISOString(), saved });
+      return res.status(200).json({ ok: true, what, removed });
+    }
+    if (op === "undo-clear") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const trash = await store.get("trash", { type: "json" });
+      if (!trash || !trash.saved) return res.status(404).json({ error: "Нечего возвращать." });
+      await LOG.flush();
+      for (const [k, v] of Object.entries(trash.saved)) {
+        if (k === "log") { const now = (await store.get("log", { type: "json" })) || []; await store.setJSON("log", v.concat(now).slice(-require("../lib/activity-log.js").MAX)); }
+        else if (k === "reports") { const now = (await store.get("reports", { type: "json" })) || []; const ids = new Set(v.map(reportId)); await store.setJSON("reports", v.concat(now.filter((r) => !ids.has(reportId(r))))); }
+        else if (k === "log-stats") {
+          const now = ((await store.get("log-stats", { type: "json" })) || {}).days || {};
+          const days = { ...(v.days || {}) };
+          for (const [d, s] of Object.entries(now)) { const o = days[d] || { total: 0, ruInh: 0, inhRu: 0, empty: 0 }; for (const f of ["total", "ruInh", "inhRu", "empty"]) o[f] = (o[f] || 0) + (s[f] || 0); days[d] = o; }
+          await store.setJSON("log-stats", { days });
+        }
+      }
+      await store.setJSON("trash", {});
+      return res.status(200).json({ ok: true, what: trash.what });
+    }
+    if (op === "dict-delete") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const left = await removePhrase(body.id);
+      if (left === null) return res.status(404).json({ error: "Запись не найдена (может, уже удалена)." });
+      return res.status(200).json({ ok: true, count: left });
+    }
+    if (op === "report") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const list = (await store.get("reports", { type: "json" })) || [];
+      const r = list.find((x) => reportId(x) === body.id);
+      if (!r) return res.status(404).json({ error: "Жалоба не найдена (может, уже удалена)." });
+      if (body.handled) { r.handled = true; r.handledAt = new Date().toISOString(); } else { delete r.handled; delete r.handledAt; }
+      await store.setJSON("reports", list);
+      return res.status(200).json({ ok: true, id: body.id, handled: !!r.handled, handledAt: r.handledAt || null });
+    }
+    return res.status(400).json({ error: "Неизвестное действие" });
+  } catch (e) {
+    console.error("admin:", e.message);
+    return res.status(500).json({ error: "Не удалось загрузить данные. Попробуйте ещё раз." });
+  }
+}
+
+module.exports = async (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+  body = body || {};
+  if (req.method === "POST" && body.action === "admin") return adminAction(body, res);
+  // выбрано «ингушский → русский», а текст русский (и в ингушской базе его нет) — переводим с русского на ингушский
+  // и говорим об этом странице (switched), чтобы не выдавать «перевод» русских слов как ингушских
+  let switched = null;
+  if (req.method === "POST" && !body.action && body.source === "inh" && body.target === "ru" && typeof body.text === "string"
+    && body.text.length <= MAX_CHARS && looksRussian(body.text) && !resolveExact(fixPalochka(body.text).trim(), "inh", "ru", [])) {
+    switched = { source: "ru", target: "inh" };
+    body = { ...body, source: "ru", target: "inh" };
+    const json0 = res.json;
+    res.json = function (obj) {
+      if (obj && !obj.error) {
+        obj.switched = switched;
+        obj.model = "Текст на русском: перевод на ингушский · " + (obj.model || "");
+      }
+      return json0.call(this, obj);
+    };
+  }
+  // обычный перевод (без action): ответ записывается в журнал для /admin — только текст и перевод
+  if (req.method === "POST" && !body.action && res && typeof res.json === "function") {
+    const json = res.json;
+    // на Netlify / Vercel функция «засыпает» сразу после ответа: там журнал сохраняется до ответа,
+    // на обычном сервере (Railway, server.js) — пачкой в фоне, чтобы перевод не ждал хранилище
+    const serverless = !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY || process.env.VERCEL);
+    res.json = function (obj) {
+      try { LOG.add(body, obj); } catch (e) { console.error("log:", e.message); }
+      if (!serverless) return json.call(this, obj);
+      return LOG.flush().catch(() => {}).then(() => json.call(this, obj));
+    };
+  }
+  return handleRequest({ ...req, body }, res);
 };
 
 // для тестов
+// Прогрев: строит словарь, таблицу слов и всё, что иначе строится на первом переводе (несколько секунд).
+// Сервер (server.js) вызывает его сразу после запуска, чтобы первый человек не ждал.
+module.exports.warmup = () => {
+  const t0 = Date.now();
+  try {
+    RET.lookupWord("дом", "ru");
+    CHUNKS.translate("отвези еду маме", "ru");
+    CHUNKS.translate("Со цӀа вода", "inh");
+    RULES.translate("Это мой дом");
+    words();
+  } catch (e) { console.error("прогрев:", e.message); }
+  // и один настоящий запрос: база с исправлениями, проверки ответа — всё, что строится лениво
+  const fake = (body) => new Promise((resolve) => {
+    const res = { status() { return this; }, json() { resolve(); }, setHeader() {} };
+    Promise.resolve(module.exports({ method: "POST", body }, res)).catch(() => resolve());
+  });
+  return fake({ text: "куда отвезти еду", source: "ru", target: "inh", mode: "text", warmup: true })
+    .then(() => fake({ text: "Со цӀа вода", source: "inh", target: "ru", mode: "text", warmup: true }))
+    .then(() => Date.now() - t0);
+};
 module.exports._checkIngush = checkIngush;
+module.exports._log = LOG;
+module.exports._reportId = reportId;
 module.exports._setStore = (s) => { storeOverride = s; PHRASES = null; PHRASES_AT = 0; REVIEW = null; REVIEW_AT = 0; VERIFIED = []; };
 module.exports._attempts = attempts;
 module.exports._cool = { isCooling, coolDown };

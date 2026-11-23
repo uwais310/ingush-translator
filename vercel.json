@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "api/translate.js": {
+      "includeFiles": "{data,lib}/**",
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    { "src": "/(data|lib|scripts|test|netlify|supabase|docs|node_modules)(/.*)?", "status": 404, "dest": "/404.html" },
+    { "src": "/(server\\.js|package\\.json|netlify\\.toml|vercel\\.json|start\\.sh|start\\.bat|CLAUDE\\.md)", "status": 404, "dest": "/404.html" },
+    { "src": "/api/translate", "dest": "/api/translate" },
+    { "src": "/api/(.*)", "status": 404, "dest": "/404.html" },
+    { "src": "/review", "dest": "/review.html" },
+    { "src": "/rules", "dest": "/rules.html" },
+    { "src": "/admin", "dest": "/admin.html" },
+    { "src": "/(.*\\.html)?", "headers": { "Cache-Control": "no-cache" }, "continue": true },
+    { "handle": "filesystem" },
+    { "src": "/.*", "status": 404, "dest": "/404.html" }
+  ]
+}

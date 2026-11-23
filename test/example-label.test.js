@@ -1,0 +1,24 @@
+// Примеры из справочника не подписаны «проверенная фраза»: «проверено» — только носитель на /review.
+//   node test/example-label.test.js
+const assert = require("assert");
+global.fetch = async () => ({ ok: false, status: 404, json: async () => ({}), text: async () => "" });
+const T = require("../api/translate.js");
+const CORPUS = require("../lib/corpus.js");
+const mem = () => { const m = {}; return { get: async (k) => m[k] || null, setJSON: async (k, v) => { m[k] = v; } }; };
+T._setStore(mem());
+CORPUS._set({ store: mem(), fetch: global.fetch });
+const run = (body) => new Promise((resolve) => {
+  const res = { code: 200, setHeader() {}, status(c) { this.code = c; return this; }, json(o) { resolve({ code: this.code, data: o }); } };
+  T({ method: "POST", headers: {}, body: { noAi: true, ...body } }, res);
+});
+const tr = async (text, source = "ru", target = "inh") => (await run({ text, source, target })).data;
+
+(async () => {
+  for (const t of ["Он сказал", "Как дела?"]) {
+    const r = await tr(t);
+    assert.ok(!/провер/i.test(r.model || ""), `${t}: ${r.model}`);
+    assert.ok(!r.verified, `${t}: не verified`);
+  }
+  assert.ok(/справочник/.test((await tr("Он сказал")).model));
+  console.log("ok: пример из справочника — не «проверенная фраза»");
+})().catch((e) => { console.error(e); process.exit(1); });

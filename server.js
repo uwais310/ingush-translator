@@ -52,7 +52,7 @@ function fileStore(name) {
 
 // ---------- страницы и файлы сайта (только из этого списка) ----------
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png", ".webmanifest": "application/manifest+json; charset=utf-8" };
-const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/rules": "rules.html", "/rules.html": "rules.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
+const PAGES = { "/": "index.html", "/index.html": "index.html", "/review": "review.html", "/review.html": "review.html", "/rules": "rules.html", "/rules.html": "rules.html", "/admin": "admin.html", "/admin.html": "admin.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest" };
 for (const f of fs.readdirSync(ROOT)) if (f.endsWith(".png")) PAGES["/" + f] = f;
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
@@ -75,7 +75,8 @@ function readBody(req, limit = 200_000) {
 
 function createServer() {
   const handler = require("./api/translate.js");
-  handler._setStore(fileStore("phrases"));
+  // На хостинге (Railway и т.п.) с ключами Supabase исправления хранятся в Supabase, иначе в local-data/.
+  if (!require("./lib/supabase-store.js").supabaseStore()) handler._setStore(fileStore("phrases"));
   require("./lib/corpus.js")._set({ store: fileStore("corpus") });
 
   return http.createServer(async (req, res) => {
@@ -132,12 +133,33 @@ function start() {
     console.log(`  На этом компьютере:      http://localhost:${port}`);
     if (host === "0.0.0.0") for (const a of lanAddresses()) console.log(`  С телефона в том же Wi-Fi: http://${a}:${port}`);
     console.log(`  Проверка переводов:      http://localhost:${port}/review` + (process.env.EDITOR_CODE ? "" : "  (нужен EDITOR_CODE в .env)"));
+    console.log(`  Админка (переводы и жалобы): http://localhost:${port}/admin` + (process.env.ADMIN_CODE ? "" : "  (нужен ADMIN_CODE в .env)"));
     console.log("");
     if (keys.length) console.log("  ИИ: " + keys.map((k) => k.replace("_API_KEY", "")).join(", ") + ". Ключи взяты из " + (hasEnvFile ? ".env" : "переменных окружения") + ".");
     else console.log("  Ключа ИИ нет: работают только ответы из базы.\n  Чтобы переводил Gemini, скопируйте .env.example в .env и впишите GEMINI_API_KEY.");
     console.log("\n  Чтобы остановить, нажмите Ctrl+C.\n");
+    warmUp();
   });
   return server;
+}
+
+// Прогрев: словари, корпус и правила строят свои индексы при первом переводе (это 1–2 секунды).
+// Делаем это сразу после запуска, чтобы первый человек на сайте не ждал. Только база и правила, без ИИ.
+async function warmUp() {
+  if (process.env.NO_WARMUP) return;
+  const handler = require("./api/translate.js");
+  const t0 = Date.now();
+  const jobs = [
+    ["Доброе утро! Как у тебя дела?", "ru", "inh", "text"], ["Мой брат вчера ходил в магазин и купил хлеб", "ru", "inh", "text"],
+    ["маму", "ru", "inh", "word"], ["Сона хьо веза", "inh", "ru", "text"], ["нана", "inh", "ru", "word"],
+  ];
+  for (const [text, source, target, mode] of jobs) {
+    await new Promise((done) => {
+      const out = { status() { return this; }, json() { done(); } };
+      Promise.resolve(handler({ method: "POST", body: { text, source, target, mode, noAi: true, warmup: true } }, out)).catch(() => done()).finally(done);
+    });
+  }
+  console.log(`  Словари и правила загружены за ${((Date.now() - t0) / 1000).toFixed(1)} с: переводы будут быстрыми.\n`);
 }
 
 if (require.main === module) start();
