@@ -278,7 +278,7 @@
   .scene.is-night .stars { opacity: 1; }
   .scene.is-night .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
   /* заставка: башня из камней и солнце-знак; потом растворяется, а переводчик выезжает снизу */
-  .splash { position: fixed; inset: 0; z-index: 50; background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 70%);
+  .splash { position: fixed; inset: 0; z-index: 50; background: radial-gradient(ellipse 120% 90% at 50% 55%, #1b222c 0%, #0c1015 55%, #050608 100%);
     transition: opacity .8s ease, transform .9s cubic-bezier(.3, 0, .2, 1); cursor: pointer; }
   .splash canvas { width: 100%; height: 100%; display: block; }
   .splash.out { opacity: 0; transform: scale(1.12); pointer-events: none; }
@@ -353,29 +353,31 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 </script>
 <div class="splash" id="splash" aria-hidden="true" hidden><canvas></canvas></div>
 <script>
-// Заставка: ингушская боевая башня собирается из камней (снизу вверх, последней — ступенчатая крыша),
-// рядом восходит солнце — знак с флага, его лучи закручиваются. Держится, пока сайт не загрузится
-// (window load + горы нарисованы), но не меньше 2,4 с; потом растворяется. Тап — пропустить.
-// Один раз за визит; при «уменьшить движение» не показывается. Переводчик под заставкой уже работает.
+// Заставка: тёмный «кинозал», ингушская боевая башня собирается из камней, которые летят из глубины
+// на зрителя и кувыркаются (снизу вверх, последней — ступенчатая крыша), камера медленно наезжает.
+// Потом за башней восходит солнце — знак с флага, лучи закручиваются, появляется надпись.
+// Держится, пока сайт не загрузится (window load + горы нарисованы); потом растворяется в горы.
+// Тап — пропустить. Один раз за визит; при «уменьшить движение» не показывается.
 (() => {
   let show = false;
   try { show = !matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("splash"); sessionStorage.setItem("splash", "1"); } catch (e) {}
   if (!show) return;
   const box = document.getElementById("splash"), cv = box.querySelector("canvas"), ctx = cv.getContext("2d");
   box.hidden = false; document.body.classList.add("splashing");
-  const night = dayPhase() === "night";
-  const STONE = night ? { lit: [96, 108, 110], dark: [58, 68, 70] } : { lit: [222, 212, 194], dark: [160, 150, 134] };
+  const SUNC = SKY[dayPhase()].sun;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(",");
+  const GLOW = rgb(SUNC);
+  const STONE = { lit: [214, 203, 184], dark: [118, 110, 99] };
 
-  // ---- камни башни (единицы — как в tower(): основание y=10, верх крыши y=-124) ----
+  // ---- камни башни (единицы — как в tower(): основание y=10, верх крыши y=-126) ----
   const pieces = [];
-  const taperMain = (y) => 13 - (10 - y) / 106 * 4;            // полуширина боевой башни на высоте y
+  const taperMain = (y) => 13 - (10 - y) / 106 * 4;
   const add = (pts, lit) => {
     const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-    const k = 0.9 + Math.random() * 0.18;                       // у каждого камня свой оттенок
+    const k = 0.88 + Math.random() * 0.2;
     const c = (lit ? STONE.lit : STONE.dark).map((v) => Math.round(v * k));
-    pieces.push({ pts: pts.map(([x, y]) => [x - cx, y - cy]), cx, cy, col: `rgb(${c})`, y: cy });
+    pieces.push({ pts: pts.map(([x, y]) => [x - cx, y - cy]), cx, cy, col: `rgb(${c})`, lit, y: cy });
   };
-  // боевая башня: ряды по 9, через ряд 2 и 4 камня, чтобы швы шли вразбежку
   for (let r = 0; r < 12; r++) {
     const y0 = 10 - r * 8.83, y1 = y0 - 8.83, w0 = taperMain(y0), w1 = taperMain(y1);
     const cuts = r % 2 ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1];
@@ -384,7 +386,6 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       add([[a * w0, y0], [b * w0, y0], [b * w1, y1], [a * w1, y1]], b <= 0);
     }
   }
-  // жилая башня
   for (let r = 0; r < 6; r++) {
     const y0 = 10 - r * 8.67, y1 = y0 - 8.67, l0 = 12 + (r / 6) * 2, l1 = 12 + ((r + 1) / 6) * 2, rr0 = 46 - (r / 6) * 2, rr1 = 46 - ((r + 1) / 6) * 2;
     const cuts = r % 2 ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
@@ -393,8 +394,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       add([[X(a, l0, rr0), y0], [X(b, l0, rr0), y0], [X(b, l1, rr1), y1], [X(a, l1, rr1), y1]], b <= 0.5);
     }
   }
-  pieces.sort((p, q) => q.y - p.y);                             // снизу вверх
-  // крыша: карниз, две ступени и верх — всегда последними
+  pieces.sort((p, q) => q.y - p.y);
   const roof = [
     [[[-11, -96], [0, -96], [0, -100], [-11, -100]], true], [[[0, -96], [11, -96], [11, -100], [0, -100]], false],
     [[[-9, -100], [0, -100], [0, -108], [-7, -108]], true], [[[0, -100], [9, -100], [7, -108], [0, -108]], false],
@@ -403,74 +403,121 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   ];
   roof.forEach(([pts, lit]) => add(pts, lit));
 
-  const N = pieces.length, STAGGER = 1250 / N, FLY = 480;
+  const N = pieces.length, STAGGER = 1700 / N, FLY = 720;
   pieces.forEach((p, i) => {
-    const a = Math.random() * Math.PI * 2, d = 0.8 + Math.random() * 0.5;
-    p.sx = Math.cos(a) * d; p.sy = Math.sin(a) * d - 0.2;       // откуда летит (в долях экрана)
-    p.rot = (Math.random() - 0.5) * 3.2;
-    p.t0 = i * STAGGER + (i >= N - roof.length ? 120 : 0);
+    const a = Math.random() * Math.PI * 2;
+    p.z = 2.2 + Math.random() * 1.6;                              // летит из глубины: начальный масштаб
+    p.dx = Math.cos(a) * (0.35 + Math.random() * 0.4); p.dy = Math.sin(a) * (0.3 + Math.random() * 0.3) - 0.15;
+    p.rot = (Math.random() - 0.5) * 4; p.spin = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random() * 1.5) * Math.PI;
+    p.t0 = i * STAGGER + (i >= N - roof.length ? 180 : 0); p.landed = false;
   });
-  const BUILT = pieces[N - 1].t0 + FLY, SUN = 700, MIN = 2400;
+  const BUILT = pieces[N - 1].t0 + FLY, SUN = 900, TITLE = BUILT + 450, MIN = BUILT + SUN + 600;
 
-  // ---- солнце-знак: белый круг с красным знаком, как в шапке ----
+  // пыль: медленно парит в луче света; при приземлении камня — облачко
+  const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
+  const puffs = [];
+
   function sign(x, y, R, turn, grow, glow) {
     ctx.save(); ctx.translate(x, y);
-    ctx.shadowColor = night ? "rgba(255,255,255,.35)" : "rgba(255,236,190,.9)"; ctx.shadowBlur = R * (0.8 + glow);
+    const g = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * (3.2 + glow));
+    g.addColorStop(0, `rgba(${GLOW},.55)`); g.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * (3.2 + glow), 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
     const k = R / 24; ctx.scale(k, k); ctx.rotate(turn);
     ctx.strokeStyle = "#d3212c"; ctx.lineWidth = 3.6; ctx.lineCap = "round";
     ctx.beginPath(); ctx.arc(0, 0, 7.6 * Math.min(1, grow * 1.4), 0, Math.PI * 2); ctx.stroke();
+    const G = Math.max(0, Math.min(1, grow));
     for (let i = 0; i < 3; i++) {
       ctx.save(); ctx.rotate(i * 2 * Math.PI / 3);
       ctx.beginPath(); ctx.moveTo(0, -7.6);
-      const g = Math.max(0, Math.min(1, grow));
-      // луч: кривая из знака, длина растёт
-      ctx.bezierCurveTo(0, -7.6 - 6.8 * g, 4.6 * g, -7.6 - 10.8 * g, 11 * g, -7.6 - 10 * g);
+      ctx.bezierCurveTo(0, -7.6 - 6.8 * G, 4.6 * G, -7.6 - 10.8 * G, 11 * G, -7.6 - 10 * G);
       ctx.stroke(); ctx.restore();
     }
     ctx.restore();
   }
 
-  let W = 0, H = 0, dpr = 1, start = performance.now(), ready = false, leaving = 0, done = false;
+  let W = 0, H = 0, dpr = 1, start = performance.now(), ready = false, leaving = 0, done = false, last = start;
   function size() { dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; }
   size(); addEventListener("resize", size);
-  const ease = (t) => 1 - Math.pow(1 - t, 3), back = (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const ease = (t) => 1 - Math.pow(1 - t, 3), inout = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const back = (t) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
 
   function frame(now) {
     if (done) return;
-    const t = Math.max(0, now - start);
+    const t = Math.max(0, now - start), dt = Math.min(50, now - last); last = now;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    const s = Math.min(H * 0.42, W * 0.95) / 136, gx = W / 2 - 16 * s, gy = H * 0.62;
-    // тень-основание
-    ctx.fillStyle = night ? "rgba(0,0,0,.25)" : "rgba(40,50,60,.12)";
-    ctx.beginPath(); ctx.ellipse(gx + 16 * s, gy + 10 * s, 52 * s * Math.min(1, t / 600), 5 * s, 0, 0, Math.PI * 2); ctx.fill();
-    // солнце встаёт из-за башни справа
-    const ts = Math.max(0, Math.min(1, (t - BUILT + 80) / SUN));
+    // башня + солнце занимают по ширине -13..81 единиц, по высоте 136
+    const s = Math.min(H * 0.56 / 136, W * 0.86 / 96), gx = W / 2 - 34 * s, gy = H * 0.64;
+    // свет за башней разгорается
+    const lightR = Math.max(W, H) * 0.75, lg = ctx.createRadialGradient(gx + 16 * s, gy - 60 * s, 0, gx + 16 * s, gy - 60 * s, lightR);
+    const la = 0.1 + 0.16 * clamp(t / 1500) + 0.12 * ease(clamp((t - BUILT) / SUN));
+    lg.addColorStop(0, `rgba(${GLOW},${la})`); lg.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+    // пылинки
+    for (const m of motes) {
+      m.y -= m.v * dt / 1000; if (m.y < -0.02) m.y = 1.02;
+      ctx.fillStyle = `rgba(${GLOW},${m.a * clamp(t / 800)})`;
+      ctx.beginPath(); ctx.arc(m.x * W + Math.sin(t / 2000 + m.y * 9) * 8, m.y * H, m.r, 0, Math.PI * 2); ctx.fill();
+    }
+    // камера: медленный наезд
+    const cam = 1.1 - 0.1 * inout(clamp(t / (BUILT + SUN)));
+    ctx.translate(W / 2, gy - 50 * s); ctx.scale(cam, cam); ctx.translate(-W / 2, -(gy - 50 * s));
+    // линия горизонта
+    const hz = ease(clamp(t / 900));
+    const hg = ctx.createLinearGradient(W / 2 - W * 0.45 * hz, 0, W / 2 + W * 0.45 * hz, 0);
+    hg.addColorStop(0, `rgba(${GLOW},0)`); hg.addColorStop(0.5, `rgba(${GLOW},.7)`); hg.addColorStop(1, `rgba(${GLOW},0)`);
+    ctx.fillStyle = hg; ctx.fillRect(W / 2 - W * 0.45 * hz, gy + 10 * s, W * 0.9 * hz, Math.max(1, 0.4 * s));
+    // солнце встаёт из-за башни
+    const ts = clamp((t - BUILT + 100) / SUN);
     if (ts > 0) {
       const breath = ready || t < BUILT + SUN ? 0 : (Math.sin((t - BUILT - SUN) / 380) + 1) / 2;
-      const R = 17 * s * (1 + breath * 0.05);
-      sign(gx + 64 * s, gy - 6 * s - ease(ts) * 106 * s, R, (1 - ease(ts)) * -Math.PI * 1.6, ease(ts), breath);
+      sign(gx + 62 * s, gy - 4 * s - ease(ts) * 100 * s, 16 * s * (1 + breath * 0.05), (1 - ease(ts)) * -Math.PI * 1.8, ease(ts), breath);
     }
-    // камни
+    // камни: из глубины на место, кувыркаясь
     for (const p of pieces) {
-      const k = Math.max(0, Math.min(1, (t - p.t0) / FLY));
+      const k = clamp((t - p.t0) / FLY);
       if (k <= 0) continue;
-      const e = back(k), x = gx + p.cx * s + p.sx * W * (1 - ease(k)), y = gy + p.cy * s + p.sy * H * (1 - ease(k));
-      ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot * (1 - e));
-      ctx.globalAlpha = Math.min(1, k * 4);
-      ctx.fillStyle = p.col; ctx.beginPath(); p.pts.forEach(([px, py], j) => (j ? ctx.lineTo(px * s, py * s) : ctx.moveTo(px * s, py * s))); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = night ? "rgba(0,0,0,.35)" : "rgba(60,50,40,.18)"; ctx.lineWidth = Math.max(0.6, 0.35 * s); ctx.stroke();
+      const e = ease(k), b = back(k), z = 1 + (p.z - 1) * (1 - e);
+      const x = gx + p.cx * s + p.dx * W * (1 - e) * z, y = gy + p.cy * s + p.dy * H * (1 - e) * z;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot * (1 - b)); ctx.scale(z * Math.max(0.15, Math.abs(Math.cos(p.spin * (1 - e)))), z);
+      ctx.globalAlpha = clamp(k * 3);
+      const flip = Math.cos(p.spin * (1 - e)) < 0;                // «оборот» — тёмная сторона
+      ctx.fillStyle = flip ? "rgb(70,66,60)" : p.col;
+      ctx.beginPath(); p.pts.forEach(([px, py], j) => (j ? ctx.lineTo(px * s, py * s) : ctx.moveTo(px * s, py * s))); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(20,16,12,.45)"; ctx.lineWidth = Math.max(0.6, 0.3 * s / z); ctx.stroke();
       ctx.restore();
+      if (k >= 1 && !p.landed) {
+        p.landed = true;
+        for (let i = 0; i < 3; i++) puffs.push({ x: gx + p.cx * s, y: gy + p.cy * s + 3 * s, vx: (Math.random() - 0.5) * 40, vy: -10 - Math.random() * 20, t: 0 });
+      }
     }
-    // бойницы — когда башня собрана
-    const tw = Math.max(0, Math.min(1, (t - BUILT) / 300));
+    // облачка пыли от приземлений
+    for (let i = puffs.length - 1; i >= 0; i--) {
+      const q = puffs[i]; q.t += dt; if (q.t > 700) { puffs.splice(i, 1); continue; }
+      const f = q.t / 700; ctx.fillStyle = `rgba(${STONE.lit},${0.2 * (1 - f)})`;
+      ctx.beginPath(); ctx.arc(q.x + q.vx * f, q.y + q.vy * f, (1 + f * 3) * s * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
+    // бойницы загораются, когда башня собрана
+    const tw = clamp((t - BUILT) / 400);
     if (tw > 0) {
-      ctx.globalAlpha = tw; ctx.fillStyle = night ? "rgba(240,200,110,.95)" : "rgba(40,30,20,.6)";
+      ctx.globalAlpha = tw; ctx.fillStyle = "rgba(255,196,110,.95)"; ctx.shadowColor = "rgba(255,180,90,.9)"; ctx.shadowBlur = 3 * s;
       ctx.fillRect(gx - 1.5 * s, gy - 82 * s, 3 * s, 8 * s); ctx.fillRect(gx - 1.5 * s, gy - 54 * s, 3 * s, 7 * s); ctx.fillRect(gx + 27 * s, gy - 28 * s, 4 * s, 6 * s);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+    // надпись
+    const tt = clamp((t - TITLE) / 700);
+    if (tt > 0) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textAlign = "center";
+      const fs = Math.max(22, Math.min(44, W * 0.075));
+      ctx.globalAlpha = ease(tt); ctx.fillStyle = "#f4efe6";
+      ctx.font = `600 ${fs}px Georgia, "Times New Roman", serif`;
+      ctx.fillText("ГӀалгӀай мотт", W / 2, gy + 10 * s + fs * 1.9 + (1 - ease(tt)) * 14);
+      ctx.globalAlpha = ease(clamp((t - TITLE - 250) / 700)) * 0.7; ctx.font = `500 ${fs * 0.36}px system-ui, sans-serif`;
+      ctx.fillText("ИНГУШСКИЙ ПЕРЕВОДЧИК", W / 2, gy + 10 * s + fs * 2.9);
       ctx.globalAlpha = 1;
     }
-    if (!leaving && ready && t >= Math.max(MIN, BUILT + SUN)) leave();
+    if (!leaving && ready && t >= MIN) leave();
     requestAnimationFrame(frame);
   }
   function leave() {
@@ -478,12 +525,11 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     box.classList.add("out"); document.body.classList.add("splash-out"); document.body.classList.remove("splashing");
     setTimeout(() => { done = true; box.remove(); document.body.classList.remove("splash-out"); }, 900);
   }
-  // сайт готов: страница загружена и горы нарисованы
   let loaded = document.readyState === "complete", hills = false;
   const check = () => { ready = loaded && hills; };
   addEventListener("load", () => { loaded = true; check(); }, { once: true });
   addEventListener("mountains-ready", () => { hills = true; check(); }, { once: true });
-  setTimeout(() => { loaded = hills = true; check(); }, 8000);  // на всякий случай: заставка не висит вечно
+  setTimeout(() => { loaded = hills = true; check(); }, 9000);
   box.addEventListener("pointerdown", leave);
   requestAnimationFrame(frame);
 })();
