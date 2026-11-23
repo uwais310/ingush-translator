@@ -112,7 +112,96 @@ function call(body) {
   assert.strictEqual(L._howOf({ translation: "x", model: "Gemini" }), "ai");
   assert.strictEqual(L._howOf({ translation: "", base: true }), "none");
 
-  // 6. страница /admin отдаётся локальным сервером; скрипт страницы не вставляет чужой текст как HTML
+  // 6. исправить перевод из жалобы: сохраняется в словарь сайта, сайт сразу отвечает им, жалоба — обработана
+  const A = (b) => call({ action: "admin", code: "тайна-42", ...b });
+  r = await A({});
+  const rep = r.body.reports.find((x) => x.text === "Как дела?");
+  // перевод для теста — пара из базы проекта (data/phrases.json), не придуманная
+  const SEED = require("../data/phrases.json");
+  const pair = SEED.find((p) => p.kind === "phrase" && /^PaydaDosh/.test(p.source || "") && p.ru && p.inh && p.ru.length < 40);
+  r = await A({ op: "fix", reportId: rep.id, source: "ru", target: "inh", text: "Как дела?", translation: pair.inh });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.report.handled, true);
+  assert.ok(mem.reports.find((x) => x.text === "Как дела?").fixed, "в жалобе записано исправление");
+  assert.ok(mem.all.some((p) => p.text === "Как дела?" && p.source === "ru" && p.target === "inh"), "исправление в словаре сайта (ключ all, прежний формат)");
+  assert.deepStrictEqual(Object.keys(mem.all[mem.all.length - 1]).sort(), ["at", "source", "target", "text", "translation"], "формат записи словаря не изменился");
+  r = await call({ text: "Как дела?", source: "ru", target: "inh", mode: "text", noAi: true });
+  assert.ok(r.body.verified, "сайт отвечает исправлением как носитель: " + JSON.stringify(r.body).slice(0, 200));
+  r = await A({ op: "fix", source: "ru", target: "inh", text: "x", translation: "" });
+  assert.strictEqual(r.status, 400, "пустой перевод не сохраняется");
+  r = await A({ op: "fix", source: "xx", target: "inh", text: "x", translation: "y" });
+  assert.strictEqual(r.status, 400, "неизвестный язык");
+
+  // 7. словарь: виден в админке, правится и удаляется
+  r = await A({});
+  let d = r.body.dict.find((x) => x.text === "Как дела?");
+  assert.ok(d && /^[0-9a-f]{12}$/.test(d.id), "словарь с id в данных админки");
+  r = await A({ op: "dict-save", id: d.id, source: "ru", target: "inh", text: "Как твои дела?", translation: pair.inh });
+  assert.strictEqual(r.status, 200);
+  assert.ok(!mem.all.some((p) => p.text === "Как дела?"), "старая запись ушла при правке текста");
+  assert.ok(mem.all.some((p) => p.text === "Как твои дела?"));
+  r = await A({ op: "dict-delete", id: r.body.entry.id });
+  assert.strictEqual(r.status, 200);
+  assert.ok(!mem.all.some((p) => p.text === "Как твои дела?"), "удалено");
+  r = await A({ op: "dict-delete", id: "000000000000" });
+  assert.strictEqual(r.status, 404);
+  r = await call({ action: "admin", code: "неверно", op: "dict-delete", id: "x" });
+  assert.strictEqual(r.status, 403, "без кода словарь не меняется");
+
+  // 8. частые запросы и слова без перевода — из журнала
+  const INS = require("../lib/admin-insights.js");
+  const fake = [
+    { at: "2026-11-20T10:00:00Z", text: "Привет", source: "ru", target: "inh", translation: "a", how: "base" },
+    { at: "2026-11-20T11:00:00Z", text: "привет!", source: "ru", target: "inh", translation: "b", how: "base" },
+    { at: "2026-11-20T12:00:00Z", text: "один раз", source: "ru", target: "inh", translation: "c", how: "base" },
+    { at: "2026-11-20T13:00:00Z", text: "мой компьютер сломался", source: "ru", target: "inh", translation: "[компьютер] x", how: "chunks" },
+    { at: "2026-11-20T14:00:00Z", text: "компьютер", source: "ru", target: "inh", translation: "", how: "none" },
+    { at: "2026-11-20T15:00:00Z", text: "очень длинный запрос из многих слов", source: "ru", target: "inh", translation: "", how: "none" },
+  ];
+  const pop = INS.popular(fake);
+  assert.strictEqual(pop.length, 1, "в частых — только повторы");
+  assert.strictEqual(pop[0].count, 2);
+  assert.strictEqual(pop[0].translation, "b", "последний перевод");
+  const miss = INS.missed(fake);
+  assert.strictEqual(miss[0].word, "компьютер");
+  assert.strictEqual(miss[0].count, 2, "из [скобок] и из пустого ответа");
+  assert.ok(!miss.some((m) => m.word.includes("длинный")), "длинные тексты не считаются словом");
+  r = await A({});
+  assert.ok(Array.isArray(r.body.popular) && Array.isArray(r.body.missed));
+
+  // 9. резервная копия и очистка с возвратом
+  r = await A({ op: "backup" });
+  assert.strictEqual(r.body.kind, "ingush-translator-backup");
+  for (const k of ["corrections", "review", "reports", "log", "logStats"]) assert.ok(k in r.body, "в копии есть " + k);
+  const logBefore = mem.log.length;
+  assert.ok(logBefore > 0);
+  r = await A({ op: "clear", what: "log" });
+  assert.strictEqual(r.body.removed, logBefore);
+  assert.strictEqual(mem.log.length, 0, "журнал очищен");
+  assert.ok(mem["log-stats"].days[today].total > 0, "счётчики при очистке журнала остаются");
+  r = await A({});
+  assert.strictEqual(r.body.trash.what, "log");
+  r = await A({ op: "undo-clear" });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(mem.log.length, logBefore, "журнал вернулся");
+  r = await A({ op: "undo-clear" });
+  assert.strictEqual(r.status, 404, "второй раз возвращать нечего");
+  await A({ op: "report", id: r.body.id || (await A({})).body.reports[0].id, handled: true });
+  const nRep = mem.reports.length, nHandled = mem.reports.filter((x) => x.handled).length;
+  assert.ok(nHandled >= 1);
+  r = await A({ op: "clear", what: "reports-handled" });
+  assert.strictEqual(mem.reports.length, nRep - nHandled, "удалены только обработанные");
+  r = await A({ op: "clear", what: "stats" });
+  assert.deepStrictEqual(mem["log-stats"].days, {});
+  r = await A({ op: "undo-clear" });
+  assert.ok(mem["log-stats"].days[today].total > 0, "счётчики вернулись");
+  r = await A({ op: "clear", what: "all-the-things" });
+  assert.strictEqual(r.status, 400);
+  r = await call({ action: "admin", code: "неверно", op: "clear", what: "log" });
+  assert.strictEqual(r.status, 403, "без кода не очистить");
+  assert.ok(mem.all.length >= 0 && Array.isArray(mem.all), "словарь при очистках не тронут");
+
+  // 10. страница /admin отдаётся локальным сервером; скрипт страницы не вставляет чужой текст как HTML
   const html = require("fs").readFileSync(require("path").join(__dirname, "../admin.html"), "utf8");
   assert.ok(!/innerHTML/.test(html), "admin.html не использует innerHTML (тексты людей — только textContent)");
   assert.ok(/noindex/.test(html), "админка не индексируется");

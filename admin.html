@@ -123,6 +123,54 @@
   .empty { text-align: center; color: var(--stone); padding: 28px 12px; background: var(--mist); border-radius: 16px; }
   .more { justify-self: center; }
   .note { font-size: 13px; color: var(--stone); margin: 0; }
+  /* --- обзор, словарь, правка --- */
+  @media (max-width: 480px) {
+    .top .band-in { flex-wrap: wrap; row-gap: 10px; }
+    .top .tools { width: 100%; }
+    .top .tools button { flex: 1; }
+  }
+  .sub { white-space: nowrap; }
+  .tabs4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 560px) { .tabs4 { grid-template-columns: 1fr 1fr; } }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .card h2 { margin: 0; font-size: 16px; }
+  .card .hint { margin: -6px 0 0; font-size: 13px; color: var(--stone); }
+  .chart.small { height: 90px; }
+  .chart.weeks { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .col .r { background: var(--amber-ink); opacity: .75; }
+  .split { display: flex; height: 14px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--line) 45%, transparent); }
+  .split i { display: block; height: 100%; }
+  .hbars { display: grid; gap: 8px; }
+  .hbar { display: grid; grid-template-columns: 9.5em 1fr 3.5em; gap: 8px; align-items: center; font-size: 14px; }
+  .hbar .track { height: 10px; border-radius: 99px; background: color-mix(in srgb, var(--line) 45%, transparent); overflow: hidden; }
+  .hbar .track i { display: block; height: 100%; background: var(--green); border-radius: 99px; }
+  .hbar .track i.warn { background: var(--amber-ink); opacity: .75; }
+  .hbar b { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .rank { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .rank li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--snow); border-radius: 12px; padding: 8px 10px; }
+  .rank .cnt { font-variant-numeric: tabular-nums; font-weight: 750; color: var(--green-deep); min-width: 2.2em; text-align: center; }
+  .rank .body { min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.35; }
+  .rank .body small { display: block; color: var(--stone); font-size: 13px; }
+  .rank .btn { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+  .rank .tr { color: var(--green-deep); font-weight: 600; }
+  .rank .tr.none { color: var(--amber-ink); font-weight: 500; font-style: italic; }
+  .editor { display: grid; gap: 10px; background: var(--snow); border: 1.5px solid var(--green); border-radius: 14px; padding: 12px; }
+  .editor .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .editor .two { grid-template-columns: 1fr; } }
+  .editor textarea { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--snow); min-height: 70px; resize: vertical; font: inherit; font-size: 17px; outline: none; }
+  .editor textarea:focus { border-color: var(--green); }
+  .editor .with-pal { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: stretch; }
+  .editor .pal { min-width: 46px; font-size: 20px; color: var(--green-deep); }
+  .editor .err { color: var(--amber-ink); font-size: 14px; margin: 0; }
+  .editor .err:empty { display: none; }
+  .editor .note { margin: 0; }
+  .btn.danger { color: var(--red); }
+  .btn.danger.sure { background: var(--red); color: #fff; border-color: var(--red); }
+  .fixed { font-size: 14px; color: var(--green-deep); margin: 0; }
+  .addbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #14201a; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 15px; z-index: 9; max-width: calc(100% - 32px); }
+  @media (prefers-color-scheme: dark) { .toast { background: #e9f1ec; color: #14201a; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -142,6 +190,7 @@
       <p class="sub"><a href="/">Переводчик</a> · <a href="/review">Проверка</a></p>
     </div>
     <div class="tools" id="tools" hidden>
+      <button type="button" id="backup" title="Скачать резервную копию словаря, жалоб и журнала">Копия</button>
       <button type="button" id="refresh" title="Загрузить заново">Обновить</button>
       <button type="button" id="logout">Выйти</button>
     </div>
@@ -161,64 +210,120 @@
     <div class="wrap" style="padding:0">
       <div class="stats" id="stats"></div>
 
-      <section class="card" aria-label="Переводы по дням">
-        <div class="chart-head">
-          <h2>Переводы за 14 дней</h2>
-          <div class="legend"><span><i style="background:var(--green)"></i>рус → инг</span><span><i style="background:color-mix(in srgb, var(--green) 45%, var(--snow))"></i>инг → рус</span><span><i style="background:color-mix(in srgb, var(--stone) 35%, var(--snow))"></i>без перевода</span></div>
-        </div>
-        <div class="chart" id="chart"></div>
-      </section>
-
-      <div class="tabs" role="tablist">
-        <button class="tab" id="tab-reports" role="tab" aria-selected="true" type="button">Жалобы<span class="n" id="n-reports"></span></button>
-        <button class="tab" id="tab-log" role="tab" aria-selected="false" type="button">Что переводили</button>
+      <div class="tabs tabs4" role="tablist">
+        <button class="tab" id="tab-overview" role="tab" aria-selected="true" type="button">Обзор</button>
+        <button class="tab" id="tab-reports" role="tab" aria-selected="false" type="button">Жалобы<span class="n" id="n-reports"></span></button>
+        <button class="tab" id="tab-log" role="tab" aria-selected="false" type="button">Переводы</button>
+        <button class="tab" id="tab-dict" role="tab" aria-selected="false" type="button">Словарь<span class="n" id="n-dict" style="background:var(--leaf);color:var(--green-deep)"></span></button>
       </div>
 
-      <section class="card">
-        <div class="filters">
-          <input class="search" id="q" type="search" placeholder="Поиск по тексту и переводу" autocomplete="off" aria-label="Поиск">
-          <select id="dir" aria-label="Направление">
-            <option value="">рус ↔ инг</option>
-            <option value="ru>inh">рус → инг</option>
-            <option value="inh>ru">инг → рус</option>
-          </select>
-          <select id="period" aria-label="Период">
-            <option value="">За всё время</option>
-            <option value="1">Сегодня</option>
-            <option value="7">7 дней</option>
-            <option value="30">30 дней</option>
-          </select>
-          <select id="state" aria-label="Статус жалобы">
-            <option value="new">Новые</option>
-            <option value="done">Обработанные</option>
-            <option value="">Все жалобы</option>
-          </select>
-          <select id="how" aria-label="Откуда перевод" hidden>
-            <option value="">Любой ответ</option>
-            <option value="none">Без перевода</option>
-            <option value="chunks">По словам (черновик)</option>
-            <option value="rules">Правила грамматики</option>
-            <option value="base">Из базы</option>
-            <option value="verified">Проверено носителем</option>
-            <option value="ai">ИИ</option>
-          </select>
+      <!-- Обзор: графики, частые фразы, слова без перевода -->
+      <div id="overview" class="wrap" style="padding:0">
+        <section class="card" aria-label="Переводы по дням">
+          <div class="chart-head">
+            <h2>Переводы за 14 дней</h2>
+            <div class="legend"><span><i style="background:var(--green)"></i>рус → инг</span><span><i style="background:color-mix(in srgb, var(--green) 45%, var(--snow))"></i>инг → рус</span><span><i style="background:color-mix(in srgb, var(--stone) 35%, var(--snow))"></i>без перевода</span></div>
+          </div>
+          <div class="chart" id="chart"></div>
+        </section>
+
+        <div class="grid2">
+          <section class="card" aria-label="Переводы по неделям">
+            <h2>По неделям</h2>
+            <div class="chart small weeks" id="weeks"></div>
+          </section>
+          <section class="card" aria-label="Жалобы по дням">
+            <h2>Жалобы за 14 дней</h2>
+            <div class="chart small" id="rchart"></div>
+          </section>
         </div>
-        <div class="summary">
-          <span id="shown" aria-live="polite"></span>
-          <button class="btn" type="button" id="csv">Скачать CSV</button>
+
+        <div class="grid2">
+          <section class="card">
+            <h2>Направление</h2>
+            <div class="split" id="split"></div>
+            <div class="legend" id="split-legend"></div>
+          </section>
+          <section class="card">
+            <h2>Откуда ответ</h2>
+            <p class="hint">По последним переводам в журнале.</p>
+            <div class="hbars" id="sources"></div>
+          </section>
         </div>
-      </section>
+
+        <div class="grid2">
+          <section class="card">
+            <h2>Частые запросы</h2>
+            <p class="hint">Что переводят чаще всего. Плохой перевод можно сразу исправить.</p>
+            <ol class="rank" id="popular"></ol>
+          </section>
+          <section class="card">
+            <h2>Слова без перевода</h2>
+            <p class="hint">Чего нет в словаре: такие слова люди ищут, а сайт не знает. Нажмите «Добавить», чтобы внести перевод.</p>
+            <ol class="rank" id="missed"></ol>
+          </section>
+        </div>
+
+        <section class="card" aria-label="Очистка">
+          <h2>Очистка</h2>
+          <p class="hint">Перед очисткой сайт сам скачает резервную копию, а последнюю очистку можно вернуть. Словарь сайта здесь не трогается.</p>
+          <div class="row-actions" id="clear-actions"></div>
+          <p class="fixed" id="undo-row" hidden></p>
+        </section>
+      </div>
+
+      <!-- списки: жалобы, переводы, словарь -->
+      <div id="lists" class="wrap" style="padding:0" hidden>
+        <section class="card">
+          <div class="filters">
+            <input class="search" id="q" type="search" placeholder="Поиск по тексту и переводу" autocomplete="off" aria-label="Поиск">
+            <select id="dir" aria-label="Направление">
+              <option value="">рус ↔ инг</option>
+              <option value="ru>inh">рус → инг</option>
+              <option value="inh>ru">инг → рус</option>
+            </select>
+            <select id="period" aria-label="Период">
+              <option value="">За всё время</option>
+              <option value="1">Сегодня</option>
+              <option value="7">7 дней</option>
+              <option value="30">30 дней</option>
+            </select>
+            <select id="state" aria-label="Статус жалобы">
+              <option value="new">Новые</option>
+              <option value="done">Обработанные</option>
+              <option value="">Все жалобы</option>
+            </select>
+            <select id="how" aria-label="Откуда перевод" hidden>
+              <option value="">Любой ответ</option>
+              <option value="none">Без перевода</option>
+              <option value="chunks">По словам (черновик)</option>
+              <option value="rules">Правила грамматики</option>
+              <option value="base">Из базы</option>
+              <option value="verified">Проверено носителем</option>
+              <option value="ai">ИИ</option>
+            </select>
+          </div>
+          <div class="summary">
+            <span id="shown" aria-live="polite"></span>
+            <span class="addbar">
+              <button class="btn" type="button" id="add" hidden>+ Добавить слово или фразу</button>
+              <button class="btn" type="button" id="csv">Скачать CSV</button>
+            </span>
+          </div>
+        </section>
+        <div id="add-slot"></div>
+        <div class="list" id="list"></div>
+        <button class="btn more" type="button" id="more" hidden>Показать ещё</button>
+      </div>
 
       <p class="status error" id="app-status" aria-live="polite"></p>
-      <div class="list" id="list"></div>
-      <button class="btn more" type="button" id="more" hidden>Показать ещё</button>
       <p class="note" id="foot"></p>
     </div>
   </div>
 </div>
 
 <footer class="band bottom">
-  <div class="band-in"><p>Журнал хранит только текст и перевод: без IP-адресов и данных о людях.</p></div>
+  <div class="band-in"><p>Журнал хранит только текст и перевод: без IP-адресов и данных о людях. Исправления из админки сайт сразу использует как ответ носителя языка.</p></div>
 </footer>
 
 <script>
@@ -227,8 +332,8 @@ const $ = (id) => document.getElementById(id);
 const PAGE = 60;
 const KEY = "inh-admin-code";
 let code = "";
-let data = null;           // { reports, log, stats, storage, logging }
-let tab = "reports";
+let data = null;           // { reports, log, stats, dict, popular, missed, storage, logging }
+let tab = "overview";
 let limit = PAGE;
 
 function store(get, val) {
@@ -243,6 +348,16 @@ async function api(body) {
   if (!r.ok) throw Object.assign(new Error(j.error || "Ошибка " + r.status), { status: r.status });
   return j;
 }
+
+let toastTimer = null;
+function toast(text) {
+  let t = document.querySelector(".toast");
+  if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.append(t); }
+  t.textContent = text; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600);
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function button(text, cls, onClick) { const b = el("button", "btn" + (cls ? " " + cls : ""), text); b.type = "button"; if (onClick) b.addEventListener("click", onClick); return b; }
 
 // ---------- вход ----------
 $("login").addEventListener("submit", async (e) => {
@@ -267,14 +382,31 @@ $("logout").addEventListener("click", () => {
 });
 $("refresh").addEventListener("click", async () => {
   $("refresh").disabled = true;
-  try { await load(); } catch (err) { $("app-status").textContent = err.message; } finally { $("refresh").disabled = false; }
+  try { await load(); toast("Обновлено"); } catch (err) { $("app-status").textContent = err.message; } finally { $("refresh").disabled = false; }
+});
+$("backup").addEventListener("click", async () => {
+  $("backup").disabled = true;
+  try {
+    const b = await api({ op: "backup" });
+    download("ingush-backup-" + dayKey(new Date()) + ".json", JSON.stringify(b, null, 1), "application/json");
+    toast("Копия скачана: словарь " + (b.corrections || []).length + ", жалоб " + (b.reports || []).length + ", журнал " + (b.log || []).length);
+  } catch (err) { $("app-status").textContent = err.message; } finally { $("backup").disabled = false; }
 });
 
 async function load() {
   data = await api({ op: "data" });
   $("app-status").textContent = "";
   $("login").hidden = true; $("app").hidden = false; $("tools").hidden = false;
-  renderStats(); renderChart(); renderList();
+  renderAll();
+}
+function renderAll() { renderStats(); renderOverview(); renderClear(); renderList(); }
+
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
+  a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 // ---------- даты ----------
@@ -296,6 +428,8 @@ function when(iso) {
 }
 const inDays = (iso, days) => !days || (Date.now() - new Date(iso).getTime()) <= days * 864e5;
 const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
+const LANG = { ru: "рус", inh: "инг", en: "англ", ce: "чеч" };
+const dirName = (r) => (LANG[r.source] || r.source) + " → " + (LANG[r.target] || r.target);
 
 // ---------- цифры ----------
 function renderStats() {
@@ -304,91 +438,302 @@ function renderStats() {
   let week = 0;
   for (let i = 0; i < 7; i++) { const d = new Date(Date.now() - i * 864e5); week += (days[utcKey(d)] || {}).total || 0; }
   const fresh = data.reports.filter((r) => !r.handled).length;
-  const total = Object.values(days).reduce((s, d) => s + (d.total || 0), 0) || data.log.length;
   const cells = [
     [fmt((days[today] || {}).total || 0), "переводов сегодня"],
     [fmt(week), "за 7 дней"],
-    [fmt(total), "всего в журнале"],
+    [fmt((data.dict || []).length), "слов и фраз в словаре сайта"],
     [fmt(fresh), fresh === 1 ? "новая жалоба" : "новых жалоб", fresh > 0],
   ];
   const box = $("stats");
   box.textContent = "";
   for (const [n, label, alert] of cells) {
-    const el = document.createElement("div");
-    el.className = "stat" + (alert ? " alert" : "");
-    const b = document.createElement("b"); b.textContent = n;
-    const s = document.createElement("span"); s.textContent = label;
-    el.append(b, s); box.append(el);
+    const c = el("div", "stat" + (alert ? " alert" : ""));
+    c.append(el("b", "", n), el("span", "", label));
+    box.append(c);
   }
   $("n-reports").textContent = fresh ? String(fresh) : "";
+  $("n-dict").textContent = (data.dict || []).length ? String(data.dict.length) : "";
   const where = { supabase: "Supabase", netlify: "Netlify Blobs", local: "папка local-data", none: "нет хранилища — данные не сохраняются" }[data.storage] || data.storage;
   $("foot").textContent = "Хранилище: " + where + "." + (data.logging ? " Журнал хранит последние 3000 переводов, счётчики по дням — 4 месяца." : " Журнал переводов выключен (ADMIN_LOG=0).");
 }
 
-function renderChart() {
-  const days = data.stats || {};
-  const list = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 864e5);
-    list.push({ d, s: days[utcKey(d)] || { total: 0, ruInh: 0, inhRu: 0, empty: 0 } });
-  }
-  const max = Math.max(1, ...list.map((x) => x.s.total));
-  const box = $("chart");
+// ---------- графики ----------
+// columns: [{ label, title, today, parts: [[cls, n], ...] }]
+function bars(box, columns) {
   box.textContent = "";
-  list.forEach(({ d, s }, i) => {
-    const day = document.createElement("div");
-    day.className = "day" + (i === 13 ? " today" : "");
-    const other = Math.max(0, s.total - s.ruInh - s.inhRu);
-    day.title = d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ": " + s.total + " (рус→инг " + s.ruInh + ", инг→рус " + s.inhRu + (other ? ", другие " + other : "") + "; без перевода " + (s.empty || 0) + ")";
-    const col = document.createElement("div");
-    col.className = "col";
-    // доля без перевода показана отдельно, остальное — по направлениям
-    const empty = Math.min(s.empty || 0, s.total);
-    const scale = (n) => (n / max) * 100 + "%";
-    const ok = Math.max(0, s.total - empty);
-    const ru = s.total ? (s.ruInh / s.total) * ok : 0;
-    const inh = Math.max(0, ok - ru);
-    for (const [cls, n] of [["a", ru], ["b", inh], ["c", empty]]) {
+  const max = Math.max(1, ...columns.map((c) => c.parts.reduce((s, p) => s + p[1], 0)));
+  for (const c of columns) {
+    const day = el("div", "day" + (c.today ? " today" : ""));
+    day.title = c.title;
+    const col = el("div", "col");
+    for (const [cls, n] of c.parts) {
       if (n <= 0) continue;
-      const bar = document.createElement("i"); bar.className = cls; bar.style.height = scale(n); col.append(bar);
+      const bar = el("i", cls); bar.style.height = (n / max) * 100 + "%"; col.append(bar);
     }
-    const lab = document.createElement("small");
-    lab.textContent = i === 13 ? "сег." : String(d.getDate()); // полная дата — в подсказке столбика
-    day.append(col, lab); box.append(day);
-  });
+    day.append(col, el("small", "", c.label));
+    box.append(day);
+  }
 }
 
-// ---------- список ----------
+function renderOverview() {
+  const days = data.stats || {};
+  // 14 дней
+  const cols = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 864e5);
+    const s = days[utcKey(d)] || { total: 0, ruInh: 0, inhRu: 0, empty: 0 };
+    const empty = Math.min(s.empty || 0, s.total);
+    const ok = Math.max(0, s.total - empty);
+    const ru = s.total ? (s.ruInh / s.total) * ok : 0;
+    cols.push({
+      label: i === 0 ? "сег." : String(d.getDate()), today: i === 0,
+      title: d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ": " + s.total + " (рус→инг " + s.ruInh + ", инг→рус " + s.inhRu + "; без перевода " + (s.empty || 0) + ")",
+      parts: [["a", ru], ["b", Math.max(0, ok - ru)], ["c", empty]],
+    });
+  }
+  bars($("chart"), cols);
+
+  // 12 недель (неделя с понедельника)
+  const monday = (d) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x; };
+  const thisWeek = monday(new Date());
+  const weeks = [];
+  for (let i = 11; i >= 0; i--) { const start = new Date(thisWeek); start.setUTCDate(start.getUTCDate() - i * 7); weeks.push({ start, total: 0 }); }
+  for (const [k, s] of Object.entries(days)) {
+    const t = Date.parse(k + "T00:00:00Z");
+    for (let j = weeks.length - 1; j >= 0; j--) if (t >= weeks[j].start.getTime()) { if (t < weeks[j].start.getTime() + 7 * 864e5) weeks[j].total += s.total || 0; break; }
+  }
+  bars($("weeks"), weeks.map((w, i) => ({
+    label: i === 11 ? "эта" : w.start.getUTCDate() + "." + (w.start.getUTCMonth() + 1), today: i === 11,
+    title: "Неделя с " + w.start.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" }) + ": " + w.total,
+    parts: [["a", w.total]],
+  })));
+  [...$("weeks").querySelectorAll("small")].forEach((s, i) => { if (i % 2 && i !== 11 && window.innerWidth < 560) s.textContent = "\u00a0"; });
+
+  // жалобы за 14 дней
+  const rc = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 864e5);
+    const k = dayKey(d);
+    const n = data.reports.filter((r) => dayKey(new Date(r.at)) === k).length;
+    rc.push({ label: i === 0 ? "сег." : String(d.getDate()), today: i === 0, title: d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ": жалоб " + n, parts: [["r", n]] });
+  }
+  bars($("rchart"), rc);
+
+  // направление (за всё время по счётчикам)
+  let ru = 0, inh = 0, other = 0;
+  for (const s of Object.values(days)) { ru += s.ruInh || 0; inh += s.inhRu || 0; other += Math.max(0, (s.total || 0) - (s.ruInh || 0) - (s.inhRu || 0)); }
+  const all = ru + inh + other;
+  const split = $("split"); split.textContent = "";
+  const lg = $("split-legend"); lg.textContent = "";
+  for (const [n, color, name] of [[ru, "var(--green)", "рус → инг"], [inh, "color-mix(in srgb, var(--green) 45%, var(--snow))", "инг → рус"], [other, "color-mix(in srgb, var(--stone) 35%, var(--snow))", "другие"]]) {
+    if (!n && name === "другие") continue;
+    const i = el("i"); i.style.width = all ? (n / all) * 100 + "%" : "0"; i.style.background = color; split.append(i);
+    const s = el("span"); const dot = el("i"); dot.style.background = color; s.append(dot, name + ": " + fmt(n) + (all ? " (" + Math.round((n / all) * 100) + "%)" : "")); lg.append(s);
+  }
+
+  // откуда ответ
+  const HOWS = [["base", "Из базы"], ["verified", "Носитель языка"], ["rules", "Правила"], ["chunks", "По словам"], ["ai", "ИИ"], ["none", "Не нашлось"]];
+  const cnt = {};
+  for (const e of data.log) cnt[e.how || "none"] = (cnt[e.how || "none"] || 0) + 1;
+  const src = $("sources"); src.textContent = "";
+  const total = data.log.length || 1;
+  for (const [k, name] of HOWS) {
+    const n = cnt[k] || 0;
+    if (!n && (k === "ai" || k === "verified")) continue;
+    const row = el("div", "hbar");
+    const tr = el("div", "track"); const i = el("i", k === "none" || k === "chunks" ? "warn" : ""); i.style.width = (n / total) * 100 + "%"; tr.append(i);
+    row.append(el("span", "", name), tr, el("b", "", Math.round((n / total) * 100) + "%"));
+    row.title = fmt(n) + " из " + fmt(data.log.length);
+    src.append(row);
+  }
+
+  // частые запросы
+  const pop = $("popular"); pop.textContent = "";
+  if (!data.popular.length) pop.append(el("li", "", "Пока нет повторяющихся запросов."));
+  for (const p of data.popular.slice(0, 15)) {
+    const li = el("li");
+    const body = el("div", "body");
+    body.append(document.createTextNode(p.text));
+    const sm = el("small");
+    sm.append(dirName(p) + ": ");
+    sm.append(p.translation ? el("span", "tr", p.translation) : el("span", "tr none", "нет перевода"));
+    body.append(sm);
+    const fix = button(p.translation ? "Исправить" : "Добавить", "", () => {
+      if (li.nextElementSibling && li.nextElementSibling.classList.contains("ed")) { li.nextElementSibling.remove(); return; }
+      const wrap = el("li", "ed"); wrap.style.display = "block"; wrap.style.padding = "0"; wrap.style.background = "transparent";
+      wrap.append(editor({ source: p.source, target: p.target, text: p.text, translation: p.translation && p.how !== "chunks" ? p.translation : "", lockText: true,
+        onSave: async (v) => { await saveEntry(v); p.translation = v.translation; p.how = "verified"; renderOverview(); } , onCancel: () => wrap.remove() }));
+      li.after(wrap);
+    });
+    li.append(el("span", "cnt", "×" + p.count), body, fix);
+    pop.append(li);
+  }
+
+  // слова без перевода
+  const ms = $("missed"); ms.textContent = "";
+  if (!data.missed.length) ms.append(el("li", "", "Пока пусто — все слова нашлись."));
+  for (const m of data.missed.slice(0, 15)) {
+    const li = el("li");
+    const body = el("div", "body");
+    body.append(el("b", "", m.word));
+    body.append(el("small", "", (LANG[m.source] || m.source) + " · «" + m.example + "»"));
+    const add = button("Добавить", "", () => {
+      if (li.nextElementSibling && li.nextElementSibling.classList.contains("ed")) { li.nextElementSibling.remove(); return; }
+      const wrap = el("li", "ed"); wrap.style.display = "block"; wrap.style.padding = "0"; wrap.style.background = "transparent";
+      wrap.append(editor({ source: m.source, target: m.target || (m.source === "inh" ? "ru" : "inh"), text: m.word, translation: "",
+        onSave: async (v) => { await saveEntry(v); data.missed = data.missed.filter((x) => x !== m); renderOverview(); }, onCancel: () => wrap.remove() }));
+      li.after(wrap);
+    });
+    li.append(el("span", "cnt", "×" + m.count), body, add);
+    ms.append(li);
+  }
+}
+
+// ---------- очистка ----------
+const CLEAR = [
+  ["log", "Очистить журнал переводов", () => data.log.length],
+  ["reports-handled", "Удалить обработанные жалобы", () => data.reports.filter((r) => r.handled).length],
+  ["reports", "Удалить все жалобы", () => data.reports.length],
+  ["stats", "Сбросить графики и счётчики", () => Object.keys(data.stats || {}).length],
+];
+const CLEAR_NAME = { log: "журнал переводов", "reports-handled": "обработанные жалобы", reports: "все жалобы", stats: "графики и счётчики" };
+function renderClear() {
+  const box = $("clear-actions"); box.textContent = "";
+  for (const [what, label, count] of CLEAR) {
+    const n = count();
+    let sure = false, t = null;
+    const b = button(label + (what === "stats" ? "" : " (" + fmt(n) + ")"), "danger", async () => {
+      if (!sure) { sure = true; b.textContent = "Точно? Нажмите ещё раз"; b.classList.add("sure"); t = setTimeout(() => { sure = false; renderClear(); }, 5000); return; }
+      clearTimeout(t); b.disabled = true; b.textContent = "Сохраняю копию…";
+      try {
+        const copy = await api({ op: "backup" });
+        download("ingush-backup-" + dayKey(new Date()) + "-before-clear.json", JSON.stringify(copy, null, 1), "application/json");
+        const out = await api({ op: "clear", what });
+        toast("Очищено: " + CLEAR_NAME[what] + ". Копия скачана.");
+        await load();
+      } catch (e) { $("app-status").textContent = e.message; renderClear(); }
+    });
+    b.disabled = !n;
+    box.append(b);
+  }
+  const undo = $("undo-row"); undo.textContent = "";
+  undo.hidden = !data.trash;
+  if (data.trash) {
+    undo.append("Последняя очистка: " + (CLEAR_NAME[data.trash.what] || data.trash.what) + ", " + when(data.trash.at) + ". ");
+    const u = button("Вернуть", "", async () => {
+      u.disabled = true;
+      try { await api({ op: "undo-clear" }); toast("Вернул: " + (CLEAR_NAME[data.trash.what] || "")); await load(); }
+      catch (e) { $("app-status").textContent = e.message; u.disabled = false; }
+    });
+    u.style.minHeight = "34px"; u.style.padding = "4px 10px"; u.style.fontSize = "13px";
+    undo.append(u);
+  }
+}
+
+// ---------- форма правки ----------
+// { source, target, text, translation, lockText, id?, reportId?, onSave(v), onCancel() }
+function editor(o) {
+  const box = el("form", "editor");
+  const err = el("p", "err");
+  let dirSel = null;
+  if (!o.lockText) {
+    dirSel = el("select");
+    dirSel.setAttribute("aria-label", "Направление");
+    for (const [v, t] of [["ru>inh", "рус → инг"], ["inh>ru", "инг → рус"]]) { const op = el("option", "", t); op.value = v; dirSel.append(op); }
+    dirSel.value = (o.source === "inh" ? "inh>ru" : "ru>inh");
+  }
+  const tLabel = el("label", "", "");
+  const tIn = el("textarea"); tIn.value = o.text || ""; tIn.rows = 2; tIn.readOnly = !!o.lockText; tIn.required = true;
+  const trLabel = el("label", "", "");
+  const trIn = el("textarea"); trIn.value = o.translation || ""; trIn.rows = 2; trIn.required = true;
+  const isInh = (which) => { const [s, t] = (dirSel ? dirSel.value : o.source + ">" + o.target).split(">"); return (which === "text" ? s : t) === "inh"; };
+  const pal = (ta) => button("Ӏ", "pal", () => { const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText("Ӏ", a, b, "end"); ta.focus(); });
+  const labels = () => {
+    const [s, t] = (dirSel ? dirSel.value : o.source + ">" + o.target).split(">");
+    tLabel.firstChild.textContent = "Текст (" + (LANG[s] || s) + ")";
+    trLabel.firstChild.textContent = "Правильный перевод (" + (LANG[t] || t) + ")";
+    palT.hidden = !isInh("text") || !!o.lockText; palTr.hidden = !isInh("tr");
+  };
+  tLabel.textContent = " "; trLabel.textContent = " ";
+  const palT = pal(tIn), palTr = pal(trIn);
+  const rowT = el("div", "with-pal"); rowT.append(tIn, palT); tLabel.append(rowT);
+  const rowTr = el("div", "with-pal"); rowTr.append(trIn, palTr); trLabel.append(rowTr);
+  const two = el("div", "two"); two.append(tLabel, trLabel);
+  if (dirSel) { dirSel.addEventListener("change", labels); box.append(dirSel); }
+  box.append(two);
+  box.append(el("p", "note", "Сохранится в словарь сайта: на этот текст сайт будет отвечать вашим переводом. Пишите только то, в чём уверены."));
+  const save = button("Сохранить", "ok"); save.type = "submit";
+  const cancel = button("Отмена", "", () => o.onCancel && o.onCancel());
+  const act = el("div", "row-actions"); act.append(save, cancel);
+  box.append(act, err);
+  labels();
+  box.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const [source, target] = (dirSel ? dirSel.value : o.source + ">" + o.target).split(">");
+    const v = { source, target, text: tIn.value.trim(), translation: trIn.value.trim(), id: o.id, reportId: o.reportId };
+    if (!v.text || !v.translation) { err.textContent = "Нужны и текст, и перевод."; return; }
+    save.disabled = true; err.textContent = "";
+    try { await o.onSave(v); } catch (ex) { err.textContent = ex.message; save.disabled = false; }
+  });
+  setTimeout(() => (o.lockText ? trIn : tIn).focus(), 0);
+  return box;
+}
+
+// сохранить в словарь сайта; обновляет data.dict и, если это жалоба, саму жалобу
+async function saveEntry(v) {
+  const out = await api({ op: v.id ? "dict-save" : "fix", ...v });
+  if (v.id) data.dict = data.dict.filter((d) => d.id !== v.id);
+  data.dict = data.dict.filter((d) => d.id !== out.entry.id);
+  data.dict.unshift({ ...out.entry, at: new Date().toISOString() });
+  if (out.report) { const r = data.reports.find((x) => x.id === out.report.id); if (r) Object.assign(r, out.report); }
+  renderStats();
+  toast("Сохранено в словарь: «" + out.entry.text.slice(0, 40) + "»");
+  return out;
+}
+
+// ---------- вкладки ----------
+const TABS = ["overview", "reports", "log", "dict"];
 function setTab(t) {
   tab = t; limit = PAGE;
-  $("tab-reports").setAttribute("aria-selected", String(t === "reports"));
-  $("tab-log").setAttribute("aria-selected", String(t === "log"));
+  for (const x of TABS) $("tab-" + x).setAttribute("aria-selected", String(t === x));
+  $("overview").hidden = t !== "overview";
+  $("lists").hidden = t === "overview";
   $("state").hidden = t !== "reports";
   $("how").hidden = t !== "log";
+  $("period").hidden = t === "dict";
+  $("add").hidden = t !== "dict";
+  $("csv").hidden = false;
+  $("add-slot").textContent = "";
+  $("q").placeholder = t === "dict" ? "Поиск по словарю" : "Поиск по тексту и переводу";
   renderList();
 }
-$("tab-reports").addEventListener("click", () => setTab("reports"));
-$("tab-log").addEventListener("click", () => setTab("log"));
+for (const x of TABS) $("tab-" + x).addEventListener("click", () => setTab(x));
 for (const id of ["dir", "period", "state", "how"]) $(id).addEventListener("change", () => { limit = PAGE; renderList(); });
 let qTimer = null;
 $("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => { limit = PAGE; renderList(); }, 150); });
 $("more").addEventListener("click", () => { limit += PAGE; renderList(); });
+$("add").addEventListener("click", () => {
+  const slot = $("add-slot");
+  if (slot.firstChild) { slot.textContent = ""; return; }
+  slot.append(editor({ source: "ru", target: "inh", text: "", translation: "",
+    onSave: async (v) => { await saveEntry(v); slot.textContent = ""; renderList(); }, onCancel: () => (slot.textContent = "") }));
+});
 
 const norm = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/[1lI|]/g, "ӏ");
+function rowsOf() { return tab === "reports" ? data.reports : tab === "dict" ? data.dict : data.log; }
 function filtered() {
   if (!data) return [];
   const q = norm($("q").value.trim());
   const dir = $("dir").value;
-  const days = Number($("period").value) || 0;
-  const rows = tab === "reports" ? data.reports : data.log;
-  return rows.filter((r) => {
+  const days = tab === "dict" ? 0 : Number($("period").value) || 0;
+  return rowsOf().filter((r) => {
     if (dir && r.source + ">" + r.target !== dir) return false;
-    if (!inDays(r.at, days)) return false;
+    if (days && !inDays(r.at, days)) return false;
     if (tab === "reports") {
       const st = $("state").value;
       if (st === "new" && r.handled) return false;
       if (st === "done" && !r.handled) return false;
-    } else {
+    } else if (tab === "log") {
       const how = $("how").value;
       if (how && (r.how || "none") !== how) return false;
     }
@@ -398,62 +743,66 @@ function filtered() {
 }
 
 // подсветка найденного: только текстовые узлы, чужой текст никогда не становится разметкой
-function highlight(el, text) {
+function highlight(node, text) {
   const q = norm($("q").value.trim());
   const s = String(text || "");
-  if (!q) { el.textContent = s; return; }
+  if (!q) { node.textContent = s; return; }
   const low = norm(s);
   let i = 0, at;
   while ((at = low.indexOf(q, i)) !== -1) {
-    el.append(document.createTextNode(s.slice(i, at)));
-    const m = document.createElement("mark"); m.textContent = s.slice(at, at + q.length); el.append(m);
+    node.append(document.createTextNode(s.slice(i, at)));
+    node.append(el("mark", "", s.slice(at, at + q.length)));
     i = at + q.length;
   }
-  el.append(document.createTextNode(s.slice(i)));
+  node.append(document.createTextNode(s.slice(i)));
 }
 
-const LANG = { ru: "рус", inh: "инг", en: "англ", ce: "чеч" };
 const HOW = { none: ["без перевода", "warn"], chunks: ["по словам", "warn"], rules: ["правила", ""], base: ["из базы", ""], verified: ["проверено", ""], ai: ["ИИ", "grey"] };
+function chip(text, cls) { return el("span", "chip" + (cls ? " " + cls : ""), text); }
 
-function chip(text, cls) { const c = document.createElement("span"); c.className = "chip" + (cls ? " " + cls : ""); c.textContent = text; return c; }
-
-function pairBlock(r) {
-  const pair = document.createElement("div"); pair.className = "pair";
-  const left = document.createElement("div");
-  const lt = document.createElement("div"); lt.className = "tag"; lt.textContent = "Текст (" + (LANG[r.source] || r.source) + ")";
-  const lx = document.createElement("div"); lx.className = "txt"; highlight(lx, r.text);
-  left.append(lt, lx);
-  const right = document.createElement("div");
-  const rt = document.createElement("div"); rt.className = "tag"; rt.textContent = "Перевод (" + (LANG[r.target] || r.target) + ")";
-  const rx = document.createElement("div"); rx.className = "txt out";
+function pairBlock(r, outLabel) {
+  const pair = el("div", "pair");
+  const left = el("div");
+  const lx = el("div", "txt"); highlight(lx, r.text);
+  left.append(el("div", "tag", "Текст (" + (LANG[r.source] || r.source) + ")"), lx);
+  const right = el("div");
+  const rx = el("div", "txt out");
   if (r.translation) highlight(rx, r.translation); else { rx.classList.add("none"); rx.textContent = "— перевода не нашлось —"; }
-  right.append(rt, rx);
+  right.append(el("div", "tag", (outLabel || "Перевод") + " (" + (LANG[r.target] || r.target) + ")"), rx);
   pair.append(left, right);
   return pair;
 }
 
 function copyBtn(r) {
-  const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = "Копировать";
-  b.addEventListener("click", async () => {
+  const b = button("Копировать", "", async () => {
     try { await navigator.clipboard.writeText(r.text + "\n" + (r.translation || "")); b.textContent = "Скопировано"; } catch (e) { b.textContent = "Не вышло"; }
     setTimeout(() => (b.textContent = "Копировать"), 1500);
   });
   return b;
 }
+function meta(r, extra) {
+  const m = el("div", "meta");
+  m.append(chip(dirName(r)));
+  for (const x of extra || []) m.append(x);
+  if (r.at) { const t = el("span", "", when(r.at)); t.title = new Date(r.at).toLocaleString("ru-RU"); m.append(t); }
+  return m;
+}
+function toggleEditor(item, opts) {
+  const old = item.querySelector(".editor");
+  if (old) { old.remove(); return; }
+  item.append(editor({ ...opts, onCancel: () => { const e = item.querySelector(".editor"); if (e) e.remove(); } }));
+}
 
 function reportItem(r) {
-  const el = document.createElement("article");
-  el.className = "item " + (r.handled ? "done" : "new");
-  const meta = document.createElement("div"); meta.className = "meta";
-  meta.append(chip((LANG[r.source] || r.source) + " → " + (LANG[r.target] || r.target)));
-  meta.append(r.handled ? chip("обработано", "grey") : chip("новая", "warn"));
-  const t = document.createElement("span"); t.textContent = when(r.at); t.title = new Date(r.at).toLocaleString("ru-RU"); meta.append(t);
-  if (r.handled && r.handledAt) { const h = document.createElement("span"); h.textContent = "· отмечено " + when(r.handledAt); meta.append(h); }
-  const actions = document.createElement("div"); actions.className = "row-actions";
-  const mark = document.createElement("button"); mark.type = "button";
-  mark.className = "btn" + (r.handled ? "" : " ok");
-  mark.textContent = r.handled ? "Вернуть в новые" : "Обработано ✓";
-  mark.addEventListener("click", async () => {
+  const item = el("article", "item " + (r.handled ? "done" : "new"));
+  const extra = [r.handled ? chip("обработано", "grey") : chip("новая", "warn")];
+  if (r.handled && r.handledAt) extra.push(el("span", "", "· отмечено " + when(r.handledAt)));
+  item.append(meta(r, extra), pairBlock(r, "Перевод сайта"));
+  if (r.fixed) item.append(el("p", "fixed", "✓ Исправлено на: " + r.fixed));
+  const actions = el("div", "row-actions");
+  const fix = button("Исправить перевод", "", () => toggleEditor(item, { source: r.source, target: r.target, text: r.text, translation: r.fixed || "", lockText: true, reportId: r.id,
+    onSave: async (v) => { await saveEntry(v); renderList(); } }));
+  const mark = button(r.handled ? "Вернуть в новые" : "Обработано ✓", r.handled ? "" : "ok", async () => {
     mark.disabled = true;
     try {
       const out = await api({ op: "report", id: r.id, handled: !r.handled });
@@ -461,34 +810,58 @@ function reportItem(r) {
       renderStats(); renderList();
     } catch (e) { $("app-status").textContent = e.message; mark.disabled = false; }
   });
-  actions.append(mark, copyBtn(r));
-  el.append(meta, pairBlock(r), actions);
-  return el;
+  actions.append(fix, mark, copyBtn(r));
+  item.append(actions);
+  return item;
 }
 
 function logItem(r) {
-  const el = document.createElement("article"); el.className = "item";
-  const meta = document.createElement("div"); meta.className = "meta";
-  meta.append(chip((LANG[r.source] || r.source) + " → " + (LANG[r.target] || r.target)));
+  const item = el("article", "item");
   const how = HOW[r.how || "none"] || [r.how, "grey"];
-  const c = chip(how[0], how[1]); if (r.label) c.title = r.label; meta.append(c);
-  const t = document.createElement("span"); t.textContent = when(r.at); t.title = new Date(r.at).toLocaleString("ru-RU"); meta.append(t);
-  el.append(meta, pairBlock(r));
-  return el;
+  const c = chip(how[0], how[1]); if (r.label) c.title = r.label;
+  item.append(meta(r, [c]), pairBlock(r));
+  const actions = el("div", "row-actions");
+  actions.append(button(r.translation && r.how !== "chunks" ? "Исправить" : "Добавить перевод", "", () => toggleEditor(item, { source: r.source, target: r.target, text: r.text, translation: "", lockText: true,
+    onSave: async (v) => { await saveEntry(v); const e = item.querySelector(".editor"); if (e) e.remove(); } })));
+  item.append(actions);
+  return item;
+}
+
+function dictItem(r) {
+  const item = el("article", "item");
+  item.append(meta(r), pairBlock(r));
+  const actions = el("div", "row-actions");
+  const edit = button("Изменить", "", () => toggleEditor(item, { source: r.source, target: r.target, text: r.text, translation: r.translation, id: r.id,
+    onSave: async (v) => { await saveEntry(v); renderList(); } }));
+  let sure = false, t = null;
+  const del = button("Удалить", "danger", async () => {
+    if (!sure) { sure = true; del.textContent = "Точно удалить?"; del.classList.add("sure"); t = setTimeout(() => { sure = false; del.textContent = "Удалить"; del.classList.remove("sure"); }, 4000); return; }
+    clearTimeout(t); del.disabled = true;
+    try {
+      await api({ op: "dict-delete", id: r.id });
+      data.dict = data.dict.filter((d) => d.id !== r.id);
+      renderStats(); renderList(); toast("Удалено из словаря");
+    } catch (e) { $("app-status").textContent = e.message; del.disabled = false; }
+  });
+  actions.append(edit, del, copyBtn(r));
+  item.append(actions);
+  return item;
 }
 
 function renderList() {
-  if (!data) return;
+  if (!data || tab === "overview") return;
   const rows = filtered();
   const box = $("list");
   box.textContent = "";
   if (!rows.length) {
-    const e = document.createElement("div"); e.className = "empty";
-    const all = tab === "reports" ? data.reports.length : data.log.length;
-    e.textContent = all ? "Ничего не подходит под фильтры." : tab === "reports" ? "Жалоб пока нет. Они приходят с кнопки «Неправильный перевод?» под переводом." : "Журнал пока пуст: здесь появятся переводы, сделанные после запуска админки.";
-    box.append(e);
+    const all = rowsOf().length;
+    box.append(el("div", "empty", all ? "Ничего не подходит под фильтры."
+      : tab === "reports" ? "Жалоб пока нет. Они приходят с кнопки «Неправильный перевод?» под переводом."
+      : tab === "dict" ? "Словарь сайта пока пуст. Добавьте слово кнопкой выше или исправьте перевод из жалобы."
+      : "Журнал пока пуст: здесь появятся переводы, сделанные после запуска админки."));
   }
-  for (const r of rows.slice(0, limit)) box.append(tab === "reports" ? reportItem(r) : logItem(r));
+  const make = tab === "reports" ? reportItem : tab === "dict" ? dictItem : logItem;
+  for (const r of rows.slice(0, limit)) box.append(make(r));
   $("more").hidden = rows.length <= limit;
   $("more").textContent = "Показать ещё (" + fmt(rows.length - limit) + ")";
   $("shown").textContent = "Показано " + fmt(Math.min(limit, rows.length)) + " из " + fmt(rows.length);
@@ -497,14 +870,10 @@ function renderList() {
 // ---------- CSV ----------
 $("csv").addEventListener("click", () => {
   const rows = filtered();
-  const cols = tab === "reports" ? ["at", "source", "target", "text", "translation", "handled"] : ["at", "source", "target", "how", "text", "translation"];
+  const cols = tab === "reports" ? ["at", "source", "target", "text", "translation", "handled", "fixed"] : tab === "dict" ? ["source", "target", "text", "translation", "at"] : ["at", "source", "target", "how", "text", "translation"];
   const esc = (v) => { const s = v == null ? "" : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const csv = "﻿" + [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = (tab === "reports" ? "zhaloby-" : "perevody-") + dayKey(new Date()) + ".csv";
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  download({ reports: "zhaloby-", dict: "slovar-", log: "perevody-" }[tab] + dayKey(new Date()) + ".csv", csv, "text/csv");
 });
 
 // код помнится до закрытия вкладки

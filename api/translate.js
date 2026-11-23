@@ -1544,6 +1544,19 @@ async function handleRequest(req, res) {
 // ---------------- админка /admin: журнал переводов и жалобы «Неправильный перевод?» ----------------
 // Доступ — только по коду ADMIN_CODE (переменная окружения хостинга или .env). Без него админка выключена.
 const LOG = require("../lib/activity-log.js").createLog(() => phraseStore());
+const INSIGHTS = require("../lib/admin-insights.js");
+const phraseId = (p) => require("crypto").createHash("sha1").update(String(p.source) + ">" + String(p.target) + ">" + normKey(p.text)).digest("hex").slice(0, 12);
+// убрать исправление из словаря сайта; null — такой записи нет
+async function removePhrase(id) {
+  const store = phraseStore();
+  const list = await loadPhrases(true);
+  const kept = list.filter((p) => phraseId(p) !== id);
+  if (kept.length === list.length) return null;
+  await store.setJSON("all", kept);
+  PHRASES = kept; PHRASES_AT = Date.now();
+  CACHE.clear();
+  return kept.length;
+}
 const reportId = (r) => require("crypto").createHash("sha1").update(String(r.at || "") + "|" + String(r.text || "") + "|" + String(r.source || "")).digest("hex").slice(0, 12);
 function sameCode(given, code) {
   const crypto = require("crypto");
@@ -1571,7 +1584,89 @@ async function adminAction(body, res) {
         stats: log.stats,
         storage: store ? (process.env.SUPABASE_URL ? "supabase" : storeOverride ? "local" : "netlify") : "none",
         logging: process.env.ADMIN_LOG !== "0",
+        // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
+        dict: (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse(),
+        popular: INSIGHTS.popular(log.list),
+        missed: INSIGHTS.missed(log.list),
+        trash: await (async () => { try { const t = await store.get("trash", { type: "json" }); return t && t.what ? { what: t.what, at: t.at } : null; } catch { return null; } })(),
       });
+    }
+    // резервная копия: всё, что сайт хранит сам (база data/phrases.json и так лежит в git)
+    if (op === "backup") {
+      const get = async (k, d) => { if (!store) return d; try { const v = await store.get(k, { type: "json" }); return v == null ? d : v; } catch (e) { console.error("backup " + k + ":", e.message); return d; } };
+      await LOG.flush();
+      return res.status(200).json({
+        kind: "ingush-translator-backup", version: 1, at: new Date().toISOString(),
+        corrections: await get("all", []), review: await get("review", {}), reports: await get("reports", []),
+        distilled: await get("distilled", []), log: await get("log", []), logStats: await get("log-stats", {}),
+      });
+    }
+    // исправить перевод (из жалобы или словаря): сохраняется как исправление носителя — сайт сразу отвечает им
+    if (op === "fix" || op === "dict-save") {
+      const isLang = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(LANGS, c);
+      const { source, target } = body;
+      if (!isLang(source) || !isLang(target) || source === target) return res.status(400).json({ error: "Неверное направление" });
+      const text = (source === "inh" ? fixPalochka(body.text || "") : String(body.text || "")).trim();
+      const translation = (target === "inh" ? fixPalochka(body.translation || "") : String(body.translation || "")).trim();
+      if (!text || !translation) return res.status(400).json({ error: "Нужны и текст, и перевод" });
+      if (text.length > 500 || translation.length > 1000) return res.status(413).json({ error: "Слишком длинно" });
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      if (op === "dict-save" && body.id) await removePhrase(body.id); // правка: старая запись уходит
+      const count = await savePhrase({ source, target, text, translation, at: new Date().toISOString() });
+      let report = null;
+      if (body.reportId) {
+        const list = (await store.get("reports", { type: "json" })) || [];
+        const r = list.find((x) => reportId(x) === body.reportId);
+        if (r) { r.handled = true; r.handledAt = new Date().toISOString(); r.fixed = translation; await store.setJSON("reports", list); report = { id: body.reportId, handled: true, handledAt: r.handledAt, fixed: translation }; }
+      }
+      const entry = { source, target, text, translation };
+      return res.status(200).json({ ok: true, count, entry: { ...entry, id: phraseId(entry) }, report });
+    }
+    // очистка: прежние данные кладутся в "trash" (одна последняя очистка), их можно вернуть кнопкой «Вернуть»
+    if (op === "clear") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const what = body.what;
+      const get = async (k, d) => { const v = await store.get(k, { type: "json" }); return v == null ? d : v; };
+      await LOG.flush();
+      let saved = {};
+      if (what === "log") {
+        saved = { log: await get("log", []) };
+        await LOG.clear({ log: true });
+      } else if (what === "stats") {
+        saved = { "log-stats": await get("log-stats", {}) };
+        await LOG.clear({ log: false, stats: true });
+      } else if (what === "reports-handled" || what === "reports") {
+        const list = await get("reports", []);
+        saved = { reports: list };
+        await store.setJSON("reports", what === "reports" ? [] : list.filter((r) => !r.handled));
+      } else return res.status(400).json({ error: "Неизвестно, что очищать" });
+      const removed = Object.values(saved).map((v) => (Array.isArray(v) ? v.length : Object.keys(v.days || {}).length))[0] || 0;
+      await store.setJSON("trash", { what, at: new Date().toISOString(), saved });
+      return res.status(200).json({ ok: true, what, removed });
+    }
+    if (op === "undo-clear") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const trash = await store.get("trash", { type: "json" });
+      if (!trash || !trash.saved) return res.status(404).json({ error: "Нечего возвращать." });
+      await LOG.flush();
+      for (const [k, v] of Object.entries(trash.saved)) {
+        if (k === "log") { const now = (await store.get("log", { type: "json" })) || []; await store.setJSON("log", v.concat(now).slice(-require("../lib/activity-log.js").MAX)); }
+        else if (k === "reports") { const now = (await store.get("reports", { type: "json" })) || []; const ids = new Set(v.map(reportId)); await store.setJSON("reports", v.concat(now.filter((r) => !ids.has(reportId(r))))); }
+        else if (k === "log-stats") {
+          const now = ((await store.get("log-stats", { type: "json" })) || {}).days || {};
+          const days = { ...(v.days || {}) };
+          for (const [d, s] of Object.entries(now)) { const o = days[d] || { total: 0, ruInh: 0, inhRu: 0, empty: 0 }; for (const f of ["total", "ruInh", "inhRu", "empty"]) o[f] = (o[f] || 0) + (s[f] || 0); days[d] = o; }
+          await store.setJSON("log-stats", { days });
+        }
+      }
+      await store.setJSON("trash", {});
+      return res.status(200).json({ ok: true, what: trash.what });
+    }
+    if (op === "dict-delete") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const left = await removePhrase(body.id);
+      if (left === null) return res.status(404).json({ error: "Запись не найдена (может, уже удалена)." });
+      return res.status(200).json({ ok: true, count: left });
     }
     if (op === "report") {
       if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
