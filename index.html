@@ -269,16 +269,23 @@
   .scene .sky { position: absolute; inset: -30px; will-change: transform; }
   .scene .sunball { position: absolute; right: max(16%, 130px); top: 9vh; width: 74px; height: 74px; border-radius: 50%; background: var(--sunlight);
     box-shadow: 0 0 60px 26px color-mix(in srgb, var(--sunlight) 55%, transparent); }
-  .scene .stars { position: absolute; inset: 0; opacity: 0; }
-  @media (prefers-color-scheme: dark) {
-    .scene .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
-    .scene .stars { opacity: 1; background-image:
+  .scene .stars { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; background-image:
       radial-gradient(1.4px 1.4px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 27% 8%, #fff 50%, transparent 51%),
       radial-gradient(1.2px 1.2px at 41% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 58% 12%, #dfe9ff 50%, transparent 51%),
       radial-gradient(1.5px 1.5px at 69% 27%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 88% 9%, #fff 50%, transparent 51%),
       radial-gradient(1.2px 1.2px at 6% 33%, #dfe9ff 50%, transparent 51%), radial-gradient(1px 1px at 34% 31%, #fff 50%, transparent 51%),
       radial-gradient(1.3px 1.3px at 93% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 50% 4%, #fff 50%, transparent 51%); }
-  }
+  .scene.is-night .stars { opacity: 1; }
+  .scene.is-night .sunball { width: 46px; height: 46px; box-shadow: 0 0 40px 10px rgba(233, 238, 223, .18); }
+  /* вступление: туман рассеивается, горы поднимаются слоями, потом появляется переводчик */
+  .intro-fog { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+    background: radial-gradient(120% 80% at 50% 60%, var(--sky-low) 0%, color-mix(in srgb, var(--sky-low) 85%, var(--sky-top)) 100%); }
+  .intro .intro-fog { animation: fog-out 1.6s .15s cubic-bezier(.4, 0, .2, 1) both; }
+  .intro main, .intro .band.bottom { animation: card-in .8s 1.05s cubic-bezier(.2, .8, .2, 1) both; }
+  .intro .top .sign { animation: sign-in 1s .2s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes fog-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes card-in { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+  @keyframes sign-in { from { transform: rotate(-200deg) scale(.6); } to { transform: none; } }
   .band, main { position: relative; z-index: 1; }
   /* Карточки: главная — стеклянный лист над горами, остальное тише и прозрачнее, чтобы горы оставались главными. */
   :root { --card-soft: rgba(255, 255, 255, .68); --sheet-shadow: 0 26px 60px -24px rgba(8, 32, 44, .45); }
@@ -327,6 +334,13 @@
 </style>
 </head>
 <body>
+<script>
+// Вступление показываем один раз за посещение и не показываем при «уменьшить движение».
+try { if (!matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("intro")) {
+  document.body.classList.add("intro"); sessionStorage.setItem("intro", "1");
+  setTimeout(() => document.body.classList.remove("intro"), 2400);
+} } catch (e) {}
+</script>
 <div class="scene" id="scene" aria-hidden="true">
   <div class="sky" data-depth="0.12"><div class="stars"></div><div class="sunball"></div></div>
   <canvas class="layer" data-depth="0.2"></canvas>
@@ -335,6 +349,7 @@
   <canvas class="layer" data-depth="0.8"></canvas>
   <canvas class="layer" data-depth="1"></canvas>
 </div>
+<div class="intro-fog" aria-hidden="true"></div>
 <header class="band top">
   <div class="band-in">
     <div class="sign" aria-hidden="true">
@@ -1177,18 +1192,24 @@ if ("serviceWorker" in navigator) {
 // Горы нарисованы как иллюстрация: 5 слоёв (дальний хребет, снежные вершины, средний хребет, холмы с башнями,
 // ближний склон с елями). У каждой вершины освещённая и теневая грань, снег, в долинах туман.
 // Рисуется векторно в canvas за несколько миллисекунд, поэтому чётко на любом экране.
-function drawMountains(cvs, dark) {
+function drawMountains(cvs, phase) {
   let seed = 7;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-  const P = dark ? {
-    far: ["#2b3f52", "#34495d", "#5d7286", "#6c8296"], main: ["#2a3d51", "#3c5268", "#7d93aa", "#b7c7d6"],
-    mid: ["#1d3338", "#26413f"], hill: ["#142a22", "#1b3529"], near: ["#0b1a13", "#10241a"], pine: "#08140e",
-    mist: "rgba(30, 52, 70, ", stone: ["#2a3433", "#3c4846"], win: "rgba(240, 200, 110, .9)"
-  } : {
-    far: ["#a9bfcf", "#bdd0dc", "#dbe6ee", "#eef4f8"], main: ["#7b91a6", "#a3b6c6", "#c3d3e2", "#ffffff"],
-    mid: ["#5d7d78", "#79978c"], hill: ["#3b6849", "#4d7d57"], near: ["#21452e", "#2c5839"], pine: "#183722",
-    mist: "rgba(222, 236, 243, ", stone: ["#8a857b", "#d8d0c0"], win: "rgba(40, 30, 20, .55)"
+  const PAL = {
+    night: { far: ["#2b3f52", "#34495d", "#5d7286", "#6c8296"], main: ["#2a3d51", "#3c5268", "#7d93aa", "#b7c7d6"],
+      mid: ["#1d3338", "#26413f"], hill: ["#142a22", "#1b3529"], near: ["#0b1a13", "#10241a"], pine: "#08140e",
+      mist: "rgba(30, 52, 70, ", stone: ["#2a3433", "#3c4846"], win: "rgba(240, 200, 110, .9)" },
+    morning: { far: ["#a99fb8", "#cdb6c0", "#eadbe0", "#fbefee"], main: ["#837f9e", "#c6a2ab", "#d6cce0", "#ffe4d8"],
+      mid: ["#5d7276", "#8a907d"], hill: ["#3c6146", "#607f55"], near: ["#22412c", "#305637"], pine: "#1a3522",
+      mist: "rgba(246, 226, 226, ", stone: ["#8d8277", "#ecd0b6"], win: "rgba(40, 30, 20, .55)" },
+    day: { far: ["#a9bfcf", "#bdd0dc", "#dbe6ee", "#eef4f8"], main: ["#7b91a6", "#a3b6c6", "#c3d3e2", "#ffffff"],
+      mid: ["#5d7d78", "#79978c"], hill: ["#3b6849", "#4d7d57"], near: ["#21452e", "#2c5839"], pine: "#183722",
+      mist: "rgba(222, 236, 243, ", stone: ["#8a857b", "#d8d0c0"], win: "rgba(40, 30, 20, .55)" },
+    evening: { far: ["#86789a", "#ad8e9c", "#d6b6b8", "#f2d3c9"], main: ["#5b5679", "#c27e6f", "#a597b6", "#ffcfae"],
+      mid: ["#3e5360", "#6f6e69"], hill: ["#2c4939", "#526548"], near: ["#19311f", "#26432e"], pine: "#122819",
+      mist: "rgba(236, 192, 172, ", stone: ["#6f6259", "#e3b48d"], win: "rgba(255, 210, 120, .9)" },
   };
+  const P = PAL[phase] || PAL.day;
 
   // гребень: опорные вершины и седловины + мелкая «рваность» делением отрезков пополам
   function ridge(W, H, o) {
@@ -1332,23 +1353,41 @@ function drawMountains(cvs, dark) {
   });
 }
 
-// Рисуем горы, когда страница уже показана, и перерисовываем при повороте экрана и смене темы.
+// Время суток берём по часам посетителя: утро 5–10, день 10–17, вечер 17–21, ночь 21–5.
+// Небо, солнце или луна, звёзды и цвета гор меняются вместе; проверяем раз в 5 минут.
+const SKY = {
+  night:   { top: "#07111b", low: "#1a3140", sun: "#e9eedf", x: "18%", y: "9vh", size: 46 },
+  morning: { top: "#8fb0db", low: "#f8d8c3", sun: "#ffe3b3", x: "70%", y: "30vh", size: 90 },
+  day:     { top: "#8ec4ea", low: "#e4f2f8", sun: "#fff6cf", x: "16%", y: "9vh", size: 74 },
+  evening: { top: "#4c5d98", low: "#f4a87c", sun: "#ffb46c", x: "12%", y: "27vh", size: 96 },
+};
+function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60; return h >= 5 && h < 10 ? "morning" : h >= 10 && h < 17 ? "day" : h >= 17 && h < 21 ? "evening" : "night"; }
 (() => {
-  const cvs = [...document.querySelectorAll(".scene canvas.layer")];
+  const cvs = [...document.querySelectorAll(".scene canvas.layer")], scene = document.getElementById("scene");
   if (!cvs.length) return;
-  const darkQ = matchMedia("(prefers-color-scheme: dark)");
-  let lastW = 0;
+  const sun = scene.querySelector(".sunball"), root = document.documentElement;
+  let lastW = 0, phase = "";
+  function sky(ph) {
+    const k = SKY[ph];
+    root.style.setProperty("--sky-top", k.top); root.style.setProperty("--sky-low", k.low); root.style.setProperty("--sunlight", k.sun);
+    scene.classList.toggle("is-night", ph === "night");
+    Object.assign(sun.style, { right: k.x, top: k.y, width: k.size + "px", height: k.size + "px" });
+    const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (meta) meta.content = k.top;
+  }
   function render() {
-    lastW = innerWidth;
+    lastW = innerWidth; phase = dayPhase(); sky(phase);
     const dpr = Math.min(devicePixelRatio || 1, 2);
     cvs.forEach((c) => { const r = c.getBoundingClientRect(); c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr)); });
-    drawMountains(cvs, darkQ.matches);
+    drawMountains(cvs, phase);
     cvs.forEach((c) => c.classList.add("ready"));
+    window.dispatchEvent(new Event("mountains-ready"));
   }
+  sky(dayPhase());
   requestAnimationFrame(() => setTimeout(render, 0));
   let rt = 0;
   addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 40) render(); }, 250); });
-  darkQ.addEventListener ? darkQ.addEventListener("change", render) : darkQ.addListener(render);
+  setInterval(() => { if (dayPhase() !== phase) render(); }, 5 * 60 * 1000);
 })();
 </script>
 <script>
@@ -1362,21 +1401,32 @@ function drawMountains(cvs, dark) {
   const MAX_X = 64, MAX_Y = 38, SENS = 9;      // сдвиг ближнего слоя (px) и сколько градусов наклона дают полный сдвиг
   let tx = 0, ty = 0, x = 0, y = 0, sy = 0, raf = 0, base = null;
   const clamp = (v) => Math.max(-1, Math.min(1, v));
+  // вступление: слои поднимаются из тумана по очереди — сначала дальние, потом ближние
+  let introAt = 0;
+  const intro = document.body.classList.contains("intro");
+  const rise = (i, d) => {
+    if (!intro) return 0;
+    if (!introAt) return 60 + 200 * d;
+    const t = Math.max(0, Math.min(1, (performance.now() - introAt - i * 120) / 1100));
+    return (1 - (1 - Math.pow(1 - t, 3))) * (60 + 200 * d);
+  };
+  const introDone = () => !intro || (introAt && performance.now() - introAt > 1100 + layers.length * 120);
   function tick() {
     x += (tx - x) * 0.18; y += (ty - y) * 0.18;
     const sc = Math.min(scrollY, 400);
-    for (const { el, d } of layers) {
-      el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y - sc * d * 0.1).toFixed(2)}px, 0) scale(${(1 + d * 0.04).toFixed(3)})`;
-    }
+    layers.forEach(({ el, d }, i) => {
+      el.style.transform = `translate3d(${(-x * d * MAX_X).toFixed(2)}px, ${(-y * d * MAX_Y - sc * d * 0.1 + rise(i, d)).toFixed(2)}px, 0) scale(${(1 + d * 0.04).toFixed(3)})`;
+    });
     if (card) {
       // карточка смещается на целые пиксели и не поворачивается: так текст остаётся чётким
       card.style.transform = `translate(${Math.round(x * 8)}px, ${Math.round(y * 6)}px)`;
       card.style.setProperty("--gx", (50 + x * 45).toFixed(1) + "%");
       card.style.setProperty("--gy", (30 + y * 40).toFixed(1) + "%");
     }
-    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.0008 ? requestAnimationFrame(tick) : 0;
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.0008 || !introDone() ? requestAnimationFrame(tick) : 0;
   }
   const kick = () => { if (!raf && !document.hidden) raf = requestAnimationFrame(tick); };
+  if (intro) { addEventListener("mountains-ready", () => { introAt = performance.now(); kick(); }, { once: true }); kick(); }
   function aim(nx, ny) { tx = clamp(nx); ty = clamp(ny); kick(); }
 
   addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") aim(e.clientX / innerWidth * 2 - 1, e.clientY / innerHeight * 2 - 1); }, { passive: true });
