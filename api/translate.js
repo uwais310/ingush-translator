@@ -906,6 +906,39 @@ async function saveReview(id, decision, inh) {
   return Object.keys(data).length;
 }
 
+// Короткие вопросы разговорника по набору слов (без порядка): в русском порядок слов в вопросе свободный,
+// «как зовут тебя» = «тебя как зовут» = «Как тебя зовут?». Только вопросы (в базе со знаком «?»)
+// из 2–4 слов с вопросительным словом, только надёжные источники — так смысл не меняется.
+let REORDER_IDX = null;
+const bagKey = (ws) => ws.slice().sort().join(" ");
+function reorderedQuestion(text) {
+  const L = require("../lib/rules/lexicon.js");
+  const ws = RET.wordsOf(String(text).toLowerCase().replace(/ё/g, "е"));
+  if (ws.length < 2 || ws.length > 4 || !ws.some((w) => L.QUESTION_WORDS[w])) return null;
+  if (!REORDER_IDX) {
+    REORDER_IDX = new Map();
+    for (const p of SEED) {
+      if (p.kind !== "phrase" || p.rare || !/\?\s*$/.test(p.ru || "") || !/^(PaydaDosh|Справочник)/.test(p.source || "")) continue;
+      const pw = RET.wordsOf(String(p.ru).toLowerCase().replace(/ё/g, "е"));
+      if (pw.length < 2 || pw.length > 4) continue;
+      const k = bagKey(pw);
+      if (!REORDER_IDX.has(k)) REORDER_IDX.set(k, []);
+      REORDER_IDX.get(k).push(p);
+    }
+  }
+  const list = REORDER_IDX.get(bagKey(ws));
+  if (!list) return null;
+  const best = seedBest(list[0].ru, "ru") || list[0];
+  const r = seedResult(best, "ru");
+  const alts = list.filter((p) => p !== best).map((p) => ({ text: noStress(splitAlt(splitNote(p.inh).text)[0] || p.inh), meaning: "" }))
+    .filter((x, i, all) => x.text !== r.translation && all.findIndex((y) => y.text === x.text) === i);
+  if (alts.length) r.alternatives = (r.alternatives || []).concat(alts);
+  r.kind = "reorder";
+  r.label += ", тот же вопрос";
+  r.note = joinNotes(`В разговорнике: «${noParens(best.ru)}» — те же слова в другом порядке.`, r.note);
+  return r;
+}
+
 let SEED_IDX = null;
 function seedIndex() {
   if (SEED_IDX) return SEED_IDX;
@@ -1001,7 +1034,7 @@ function fromDictionary(text, src, tgt) {
 // Кроме фраз с вопросительным словом или «ли» («Как дела», «Где ты» пишут и без знака).
 function resolveExact(text, src, tgt, pool) {
   const r = resolveExact0(text, src, tgt, pool);
-  if (r && !r.verified && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
+  if (r && !r.verified && r.kind !== "reorder" && src === "ru" && tgt === "inh" && !/\?/.test(text) && /\?\s*$/.test(String(r.translation || ""))) {
     const ws = RET.wordsOf(String(text).toLowerCase());
     const L = require("../lib/rules/lexicon.js");
     if (ws.length >= 2 && !L.QUESTION_WORDS[ws[0]] && !ws.includes("ли")) return null;
@@ -1028,6 +1061,8 @@ function resolveExact0(text, src, tgt, pool) {
   // записи словаря остаются в вариантах
   if (p && pp === 5 && d && !d.lemma && d.prio >= 6) return seedResult(p, src, d.items || []);
   if (d && !d.lemma) return d;
+  // тот же вопрос с другим порядком слов: «как зовут тебя», «тебя как зовут» — «Как тебя зовут?» из разговорника
+  if (src === "ru") { const ro = reorderedQuestion(text); if (ro) return ro; }
   // предложение, которое можно собрать по правилам грамматики (в обе стороны, от двух слов)
   if (RET.wordsOf(text).length >= 2) {
     const rr = src === "ru" ? RULES.translate(text) : RULES.translateInh(text);
