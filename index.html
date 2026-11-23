@@ -880,7 +880,7 @@ function readInput() {
 
 async function translate() {
   if (busy) return;
-  const src = els.src.value, tgt = els.tgt.value;
+  let src = els.src.value, tgt = els.tgt.value; // let: сервер может сказать, что текст на другом языке (switched)
   const text = readInput();
   if (!text) { resetOutput("Сначала введите слово или текст"); els.input.focus(); return; }
 
@@ -901,6 +901,12 @@ async function translate() {
     const ready = useNoAi ? PREP.get(prepKey(src, tgt, text)) : null;
     const data = ready ? await ready.catch(() => api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal))
       : await api({ text, source: src, target: tgt, mode: isWord(text) ? "word" : "text", noAi: useNoAi }, controller.signal);
+    // текст на русском, а выбрано «ингушский → русский»: сервер перевёл с русского — переключаем языки на экране
+    if (data.switched && data.switched.source && data.switched.target) {
+      src = data.switched.source; tgt = data.switched.target;
+      els.src.value = src; els.tgt.value = tgt;
+      prev = { src, tgt }; rememberLangs();
+    }
     lastResult = fixT(String(data.translation || "").trim());
     lastInput = text; lastPair = { src, tgt };
     if (data.noAi) {
@@ -943,6 +949,7 @@ async function translate() {
     } else if (swapped) {
       note = "Чеченские формы заменены на ингушские: " + swapped + ".";
     }
+    if (data.switched && !note) note = "Похоже, текст на русском: перевёл с русского на ингушский.";
     setStatus(note, noteKind);
 
     addHistory(src, tgt, text, lastResult, { text: metaText, kind: metaKind });

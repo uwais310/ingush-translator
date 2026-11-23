@@ -1580,6 +1580,7 @@ async function handleRequest(req, res) {
 // Доступ — только по коду ADMIN_CODE (переменная окружения хостинга или .env). Без него админка выключена.
 const LOG = require("../lib/activity-log.js").createLog(() => phraseStore());
 const INSIGHTS = require("../lib/admin-insights.js");
+const looksRussian = require("../lib/lang-detect.js")({ POST });
 const phraseId = (p) => require("crypto").createHash("sha1").update(String(p.source) + ">" + String(p.target) + ">" + normKey(p.text)).digest("hex").slice(0, 12);
 // убрать исправление из словаря сайта; null — такой записи нет
 async function removePhrase(id) {
@@ -1724,6 +1725,22 @@ module.exports = async (req, res) => {
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
   body = body || {};
   if (req.method === "POST" && body.action === "admin") return adminAction(body, res);
+  // выбрано «ингушский → русский», а текст русский (и в ингушской базе его нет) — переводим с русского на ингушский
+  // и говорим об этом странице (switched), чтобы не выдавать «перевод» русских слов как ингушских
+  let switched = null;
+  if (req.method === "POST" && !body.action && body.source === "inh" && body.target === "ru" && typeof body.text === "string"
+    && body.text.length <= MAX_CHARS && looksRussian(body.text) && !resolveExact(fixPalochka(body.text).trim(), "inh", "ru", [])) {
+    switched = { source: "ru", target: "inh" };
+    body = { ...body, source: "ru", target: "inh" };
+    const json0 = res.json;
+    res.json = function (obj) {
+      if (obj && !obj.error) {
+        obj.switched = switched;
+        obj.model = "Текст на русском: перевод на ингушский · " + (obj.model || "");
+      }
+      return json0.call(this, obj);
+    };
+  }
   // обычный перевод (без action): ответ записывается в журнал для /admin — только текст и перевод
   if (req.method === "POST" && !body.action && res && typeof res.json === "function") {
     const json = res.json;
