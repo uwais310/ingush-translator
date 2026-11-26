@@ -453,7 +453,8 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   later.forEach((p, i) => { p.t0 = START + SPAN * Math.pow(i / later.length, 0.9); p.landed = false; });
   const N = pieces.length;
   const BUILT = START + SPAN + FLY;
-  const RISE = 500, SPIN = 1000, TITLE = BUILT + RISE - 200, MIN = BUILT + RISE + SPIN + 800;
+  const CAM0 = 1100, CAM1 = 5200;                       // камера: ~1 с смотрим в окно, потом ~4 с плавно отлетаем
+  const ORB = CAM1 - 500, RISE = 500, SPIN = 900, TITLE = ORB + RISE - 200, MIN = ORB + RISE + SPIN + 700;
   const L = norm([-0.3, 0.5, -0.8]);                   // свет с той стороны, куда смотрит камера в конце: одна сторона светлая, другая в тени
   const LIGHT = MOON ? [0.78, 0.86, 1.05] : [1.06, 0.98, 0.86];
   const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
@@ -602,13 +603,13 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   // и сквозь заднее окно наружу; не разворачиваясь, отлетает и видит башню целиком (горы — за ней)
   const smooth = (x) => x * x * (3 - 2 * x);
   function camera(t) {
-    const p = inout(clamp((t - 1100) / (BUILT - 1000)));   // ~1 с смотрим в окно, потом плавно пятимся
+    const p = (1 - Math.cos(Math.PI * clamp((t - CAM0) / (CAM1 - CAM0)))) / 2;   // мягкий разгон и торможение
     const o = smooth(clamp((p - 0.03) / 0.97)), lk = smooth(clamp((p - 0.03) / 0.45));
-    const pos = [13 * o, WY + 4 * o, 0.4 - 58 * p];
+    const pos = [11 * o, WY + 3.5 * o, 0.4 - 48 * p];
     const ahead = [pos[0], pos[1], pos[2] + 100], twr = [0, 12.5, 0];
     const fw = norm(sub([ahead[0] + (twr[0] - ahead[0]) * lk, ahead[1] + (twr[1] - ahead[1]) * lk, ahead[2] + (twr[2] - ahead[2]) * lk], pos));
     const rt = norm(cross(fw, [0, 1, 0])), up = cross(rt, fw);
-    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.14 * o), cy = H * (0.5 + 0.12 * o);   // к концу башня левее и ниже: стоит за ближним склоном
+    const f = Math.min(H * 1.2, W * 1.9) * (1 - 0.17 * o), cx = W * (0.5 - 0.14 * o), cy = H * (0.5 + 0.12 * o);   // к концу башня левее и ниже: стоит за ближним склоном
     return { pos, fw, rt, up, f, cx, cy, o, cs(v) { const d = sub(v, pos); return [dot(d, rt), dot(d, up), dot(d, fw)]; },
       proj(v) { const d = sub(v, pos), z = dot(d, fw); return [cx + f * dot(d, rt) / z, cy - f * dot(d, up) / z, z]; } };
   }
@@ -635,11 +636,11 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     if (!pano) return;
     const z = 1.1 - 0.1 * cam.o, ox = (W - W * z) / 2 - cam.o * W * 0.03, oy = (H - H * z) / 2;     // лёгкий параллакс при отлёте
     for (let i = 0; i < 4; i++) ctx.drawImage(pano[i], ox, oy, W * z, H * z);
-    const fg = smooth(clamp((cam.o - 0.2) / 0.35));
+    const fg = smooth(clamp((cam.o - 0.3) / 0.2));
     if (fg < 1) { ctx.globalAlpha = 1 - fg; ctx.drawImage(pano[4], ox, oy, W * z, H * z); ctx.globalAlpha = 1; }
   }
   function foreground(cam) {                                 // ближний склон с елями — перед подножием башни
-    const fg = smooth(clamp((cam.o - 0.2) / 0.35));
+    const fg = smooth(clamp((cam.o - 0.3) / 0.2));
     if (!pano || fg <= 0) return;
     ctx.globalAlpha = fg; ctx.drawImage(pano[4], 0, H * 0.02, W, H); ctx.globalAlpha = 1;
   }
@@ -653,7 +654,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     // свет за башней разгорается, когда встаёт светило
     const lx = base[0] + W * 0.25, ly = topP[1], lightR = Math.max(W, H) * 0.7;
     const lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lightR);
-    const la = 0.28 * ease(clamp((t - BUILT) / RISE));
+    const la = 0.28 * ease(clamp((t - ORB) / RISE));
     lg.addColorStop(0, `rgba(${GLOW},${la})`); lg.addColorStop(1, `rgba(${GLOW},0)`);
     ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
     // камни: собрать видимые грани, отсортировать от дальних к ближним, нарисовать
@@ -719,11 +720,11 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     }
     foreground(cam);
     // светило встаёт справа от башни, растёт и крутится, останавливается гербом
-    const tr = clamp((t - BUILT + 100) / RISE), tsp = clamp((t - BUILT - RISE + 150) / SPIN);
+    const tr = clamp((t - ORB + 100) / RISE), tsp = clamp((t - ORB - RISE + 150) / SPIN);
     if (tr > 0) {
       const anchor = cam.proj([0, TOP * 0.78, 0]), sc = Math.abs(base[1] - topP[1]) / TOP;
       const settle = ease(tsp), spin = settle * Math.PI * 3;
-      const breath = ready || tsp < 1 ? 0 : (Math.sin((t - BUILT - RISE - SPIN) / 380) + 1) / 2;
+      const breath = ready || tsp < 1 ? 0 : (Math.sin((t - ORB - RISE - SPIN) / 380) + 1) / 2;
       const R = Math.min(W * 0.18, sc * (3.4 + 2.4 * inout(tsp))) * (1 + breath * 0.03);
       const ox = Math.min(W - R - 10, anchor[0] + Math.max(W * 0.36, sc * 12));
       orb(ox, anchor[1] + (1 - ease(tr)) * sc * 9, R, spin, (1 - ease(tr)) * -Math.PI * 1.8, breath + (1 - Math.abs(Math.cos(spin))) * 0.8);
