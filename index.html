@@ -392,15 +392,15 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       return dot(cross(sub(verts[f[1]], verts[f[0]]), sub(verts[f[2]], verts[f[0]])), sub(fc, c)) < 0 ? f.slice().reverse() : f; });
     pieces.push({ loc: verts.map((v) => sub(v, c)), c, faces, col, out: norm(out), kind });
   }
-  const stone = (k = 1) => { const v = 0.78 + Math.random() * 0.3, w = Math.random() * 18 - 6; return [(184 + w) * v * k, (176 + w * 0.5) * v * k, (162 - w * 0.2) * v * k]; }; // серо-бежевый камень, каждый свой
+  const stone = (k = 1) => { const v = (0.95 + Math.random() * 0.1) * k; return [v, v, v]; };   // цвет — из палитры при рисовании, у камня лишь чуть свой тон
   // стены: каждый ряд обходит башню по кругу (как спираль у иглу), швы через ряд смещены
   // В ряду WR спереди и сзади — настоящие проёмы узких окон: через них камера смотрит на горы и уходит назад.
-  const WR = 6, WY = WR * RH + RH / 2, GAP = 0.085;
-  const jit = () => (Math.random() - 0.5) * 0.07;       // камень тёсаный вручную: углы чуть неровные
+  const WR = 6, WY = WR * RH + RH, GAP = 0.2;          // окно: ряды WR и WR+1, около 1,6 × 3,1 м
+  const jit = () => 0;
   for (let r = 0; r < ROWS; r++) {
     const y0 = r * RH, y1 = y0 + RH, cuts = r % 2 ? [-1, -0.62, -0.2, 0.22, 0.6, 1] : [-1, -0.42, 0.02, 0.44, 1];
     for (let s = 0; s < 4; s++) {
-      const segs = r === WR && s % 2 === 0 ? [[-1, -0.55], [-0.55, -GAP], [GAP, 0.55], [0.55, 1]] : cuts.slice(0, -1).map((a, j) => [a, cuts[j + 1]]);
+      const segs = (r === WR || r === WR + 1) && s % 2 === 0 ? [[-1, -0.55], [-0.55, -GAP], [GAP, 0.55], [0.55, 1]] : cuts.slice(0, -1).map((a, j) => [a, cuts[j + 1]]);
       for (const [a, b] of segs) {
         const g = 0.03, v = [], ja = a === -GAP || a === GAP ? 0 : 1, jb = b === -GAP || b === GAP ? 0 : 1;
         for (const [y, w, jy] of [[y0, half(y0), r ? jit() : 0], [y1, half(y1), jit()]]) {
@@ -413,9 +413,9 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     }
   }
   // внутри — ярус с деревянным полом и потолком (видны изнутри и в проёмы окон)
-  for (const [y0, y1] of [[WR * RH - 0.28, WR * RH], [WR * RH + 3.1, WR * RH + 3.4]]) {
+  for (const [y0, y1] of [[WR * RH - 0.28, WR * RH], [WR * RH + 3.4, WR * RH + 3.7]]) {
     const w = half(y1) - TH + 0.02;
-    piece([[-w, y0, w], [w, y0, w], [w, y0, -w], [-w, y0, -w], [-w, y1, w], [w, y1, w], [w, y1, -w], [-w, y1, -w]], BOXF, [118, 86, 58], [0, 1, 0], "slab");
+    piece([[-w, y0, w], [w, y0, w], [w, y0, -w], [-w, y0, -w], [-w, y1, w], [w, y1, w], [w, y1, -w], [-w, y1, -w]], BOXF, [1, 1, 1], [0, 1, 0], "slab");
   }
   // машикули: навесной балкончик на консолях под крышей, с каждой стороны
   const box3 = (s, u0, u1, n0, n1, y0, y1) => [P(s, u0, n1, y0), P(s, u1, n1, y0), P(s, u1, n0, y0), P(s, u0, n0, y0), P(s, u0, n1, y1), P(s, u1, n1, y1), P(s, u1, n0, y1), P(s, u0, n0, y1)];
@@ -441,8 +441,8 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 
   // как иглу: ярус с окнами уже стоит (камера внутри), остальное достраивается кольцами вверх и вниз,
   // пока камера отлетает: камни подлетают по дуге с поворотом и садятся; машикули, потом крыша
-  const FLY = 500, SPAN = 1800, START = 1500;
-  const order = (p) => p.kind === "slab" ? -1 : p.kind === "wall" ? (p.row >= 3 && p.row <= 9 ? -1 : Math.abs(p.row - WR) + (p.row < WR ? 0.5 : 0)) : p.kind === "mach" ? 20 : 30;
+  const FLY = 450, SPAN = 1400, START = 800;
+  const order = (p) => p.kind === "slab" ? -1 : p.kind === "wall" ? (p.row >= 4 && p.row <= 9 ? -1 : Math.abs(p.row - WR) + (p.row < WR ? 0.5 : 0)) : p.kind === "mach" ? 20 : 30;
   const later = pieces.filter((p) => order(p) >= 0).sort((p, q) => order(p) - order(q) || Math.random() - 0.5);
   pieces.forEach((p) => {
     const up = p.kind === "roof" ? 9 : p.row < WR ? 2 : 5;
@@ -453,30 +453,27 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   later.forEach((p, i) => { p.t0 = START + SPAN * Math.pow(i / later.length, 0.9); p.landed = false; });
   const N = pieces.length;
   const BUILT = START + SPAN + FLY;
-  const RISE = 500, SPIN = 1000, TITLE = BUILT + RISE, MIN = BUILT + RISE + SPIN + 800;
-  const L = norm([0.35, 0.7, -0.75]);                  // свет сверху, со стороны камеры в конце пролёта
+  const RISE = 400, SPIN = 850, TITLE = BUILT + RISE - 200, MIN = BUILT + RISE + SPIN + 650;
+  const L = norm([-0.3, 0.5, -0.8]);                   // свет с той стороны, куда смотрит камера в конце: одна сторона светлая, другая в тени
   const LIGHT = MOON ? [0.78, 0.86, 1.05] : [1.06, 0.98, 0.86];
   const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
-  const stars = MOON ? Array.from({ length: 140 }, () => ({ az: Math.random() * Math.PI * 2, el: 0.04 + Math.random() * 0.9, r: 0.4 + Math.random() * 0.9, p: Math.random() * 6 })) : [];
+  const stars = MOON ? Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random() * 0.45, r: 0.4 + Math.random() * 0.9, p: Math.random() * 6 })) : [];
   // небо и горы по времени суток (как на сайте); вид в окно — на большую снежную вершину
   const PH = MOON ? "night" : dayPhase() === "night" ? "day" : dayPhase();
-  const LAND = {
-    day:     { far: "#8fa9c4", snow: "#f4f7fb", mid: "#5f7d74", near: "#3f5a43", ground: ["#55704f", "#2c3d2c"] },
-    morning: { far: "#a7b3cf", snow: "#fff1e6", mid: "#6f8473", near: "#475c48", ground: ["#62735a", "#2f3b2d"] },
-    evening: { far: "#9a86a8", snow: "#ffd9c2", mid: "#6b5a6e", near: "#3f3a45", ground: ["#4d4552", "#221f27"] },
-    night:   { far: "#2a3a52", snow: "#9fb0c8", mid: "#1d2a38", near: "#141e26", ground: ["#16212a", "#0a0f14"] },
+  // плоская тёплая палитра башни (две стороны: на свету и в тени, как грани гор на сайте)
+  const TONE = {
+    day:     { lit: [222, 192, 146], shade: [150, 118, 86], top: [236, 212, 170], room: [60, 44, 32], wood: [96, 66, 42], seam: "rgba(90,62,38,.35)" },
+    morning: { lit: [236, 196, 160], shade: [150, 112, 98], top: [246, 214, 184], room: [62, 44, 38], wood: [98, 64, 46], seam: "rgba(96,60,46,.35)" },
+    evening: { lit: [238, 172, 122], shade: [128, 86, 78], top: [246, 196, 150], room: [58, 38, 32], wood: [92, 58, 40], seam: "rgba(90,50,40,.35)" },
+    night:   { lit: [118, 128, 150], shade: [64, 72, 92], top: [138, 148, 170], room: [26, 28, 36], wood: [44, 38, 40], seam: "rgba(20,24,36,.4)" },
   }[PH];
-  const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-  const mix = (a, b, k) => { const A = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16)), B = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
-    return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * k))})`; };
-  const RANGES = [
-    { D: 4200, col: LAND.far, snow: true, haze: 0.55, h: (a) => 560 + 300 * Math.sin(3 * a + 1) + 170 * Math.sin(7 * a + 2) + 90 * Math.sin(13 * a) + 1100 * Math.exp(-Math.pow(wrapA(a - 0.1) / 0.13, 2)) },
-    { D: 2000, col: LAND.mid, haze: 0.4, h: (a) => 210 + 120 * Math.sin(5 * a + 0.5) + 60 * Math.sin(11 * a + 1.3) },
-    { D: 800, col: LAND.near, haze: 0.2, h: (a) => 48 + 34 * Math.sin(9 * a + 2) + 16 * Math.sin(17 * a) },
-  ];
-  // стена изнутри башни с узким окном (камни — один раз)
-  const inner = [];
-  for (let r = -14; r < 14; r++) for (let c = -8; c < 8; c++) { const off = r % 2 ? 0.5 : 0; inner.push([(c + off) * 0.26, r * 0.11, 0.6 + Math.random() * 0.4]); }
+  // фон — те же горы, что на сайте (drawMountains), рисуются один раз в размер экрана
+  let pano = null;
+  function buildPano() {
+    if (typeof drawMountains !== "function") return;
+    pano = [0, 1, 2, 3, 4].map(() => { const c = document.createElement("canvas"); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); return c; });
+    drawMountains(pano, PH);
+  }
   const puffs = [];
 
   // ---- лицевая сторона: солнце (знак с флага) или луна ----
@@ -589,7 +586,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 
   let W = 0, H = 0, dpr = 1, start = performance.now(), ready = false, leaving = 0, done = false, last = start;
   function size() { dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; }
-  size(); addEventListener("resize", size);
+  size(); addEventListener("resize", () => { size(); pano = null; });
   const clamp = (v) => Math.max(0, Math.min(1, v));
   const ease = (t) => 1 - Math.pow(1 - t, 3), inout = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const back = (t) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
@@ -605,14 +602,14 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   // и сквозь заднее окно наружу; не разворачиваясь, отлетает и видит башню целиком (горы — за ней)
   const smooth = (x) => x * x * (3 - 2 * x);
   function camera(t) {
-    const p = inout(clamp((t - 500) / (BUILT - 200)));
-    const o = smooth(clamp((p - 0.08) / 0.92)), lk = smooth(clamp((p - 0.08) / 0.5));
-    const pos = [15 * o, WY + 5.5 * o, 0.9 - 59 * p];
+    const p = inout(clamp((t - 350) / (BUILT - 350)));
+    const o = smooth(clamp((p - 0.03) / 0.97)), lk = smooth(clamp((p - 0.03) / 0.45));
+    const pos = [13 * o, WY + 4 * o, 0.4 - 58 * p];
     const ahead = [pos[0], pos[1], pos[2] + 100], twr = [0, 12.5, 0];
     const fw = norm(sub([ahead[0] + (twr[0] - ahead[0]) * lk, ahead[1] + (twr[1] - ahead[1]) * lk, ahead[2] + (twr[2] - ahead[2]) * lk], pos));
     const rt = norm(cross(fw, [0, 1, 0])), up = cross(rt, fw);
-    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.15 * o), cy = H * 0.47;   // к концу башня левее, справа место светилу
-    return { pos, fw, rt, up, f, cx, cy, cs(v) { const d = sub(v, pos); return [dot(d, rt), dot(d, up), dot(d, fw)]; },
+    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.14 * o), cy = H * (0.5 + 0.12 * o);   // к концу башня левее и ниже: стоит за ближним склоном
+    return { pos, fw, rt, up, f, cx, cy, o, cs(v) { const d = sub(v, pos); return [dot(d, rt), dot(d, up), dot(d, fw)]; },
       proj(v) { const d = sub(v, pos), z = dot(d, fw); return [cx + f * dot(d, rt) / z, cy - f * dot(d, up) / z, z]; } };
   }
   // отсечь многоугольник ближней плоскостью (камера проходит сквозь окно вплотную к камням)
@@ -626,38 +623,25 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     return out;
   }
   const FWIN = [0, WY, half(WY) - TH];                       // переднее окно изнутри — оттуда свет в комнату
-  function landscape(cam, t) {
-    const hf = [cam.fw[0], 0, cam.fw[2]], hl = Math.hypot(hf[0], hf[2]);
-    const hp = cam.proj([cam.pos[0] + hf[0] / hl * 1e5, cam.pos[1], cam.pos[2] + hf[2] / hl * 1e5]), hy = hp[1];
-    const sk = SKY[PH], g = ctx.createLinearGradient(0, Math.min(0, hy - H), 0, hy);
+  function sky(cam, t) {
+    const sk = SKY[PH], g = ctx.createLinearGradient(0, 0, 0, H * 0.75);
     g.addColorStop(0, sk.top); g.addColorStop(1, sk.low);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, Math.max(0, hy + 1));
-    const gg = ctx.createLinearGradient(0, hy, 0, H); gg.addColorStop(0, LAND.ground[0]); gg.addColorStop(1, LAND.ground[1]);
-    ctx.fillStyle = gg; ctx.fillRect(0, hy, W, H - hy);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     for (const st of stars) {
-      const d = [Math.sin(st.az) * Math.cos(st.el), Math.sin(st.el), Math.cos(st.az) * Math.cos(st.el)];
-      const q = cam.proj([cam.pos[0] + d[0] * 1e4, cam.pos[1] + d[1] * 1e4, cam.pos[2] + d[2] * 1e4]);
-      if (q[2] < 1 || q[0] < 0 || q[0] > W || q[1] > hy) continue;
       ctx.fillStyle = `rgba(230,236,255,${0.45 + 0.35 * Math.sin(t / 600 + st.p)})`;
-      ctx.beginPath(); ctx.arc(q[0], q[1], st.r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2); ctx.fill();
     }
-    const psi = Math.atan2(hf[0], hf[2]);
-    for (const R of RANGES) {
-      ctx.beginPath(); let top = H, first = true;
-      for (let i = 0; i <= 96; i++) {
-        const az = psi - 1.3 + 2.6 * i / 96, q = cam.proj([cam.pos[0] + Math.sin(az) * R.D, R.h(az), cam.pos[2] + Math.cos(az) * R.D]);
-        if (q[2] < 1) continue;
-        if (first) { ctx.moveTo(q[0], hy + 2); first = false; }
-        ctx.lineTo(q[0], q[1]); top = Math.min(top, q[1]);
-        if (i === 96) ctx.lineTo(q[0], hy + 2);
-      }
-      ctx.closePath();
-      const sg = ctx.createLinearGradient(0, top, 0, hy), hz = mix(R.col, sk.low, R.haze);
-      if (R.snow) { sg.addColorStop(0, LAND.snow); sg.addColorStop(0.22, mix(LAND.snow, R.col, 0.6)); sg.addColorStop(0.4, R.col); }
-      else sg.addColorStop(0, R.col);
-      sg.addColorStop(1, hz); ctx.fillStyle = sg;
-      ctx.fill();
-    }
+    if (!pano) buildPano();
+    if (!pano) return;
+    const z = 1.1 - 0.1 * cam.o, ox = (W - W * z) / 2 - cam.o * W * 0.03, oy = (H - H * z) / 2;     // лёгкий параллакс при отлёте
+    for (let i = 0; i < 4; i++) ctx.drawImage(pano[i], ox, oy, W * z, H * z);
+    const fg = smooth(clamp((cam.o - 0.2) / 0.35));
+    if (fg < 1) { ctx.globalAlpha = 1 - fg; ctx.drawImage(pano[4], ox, oy, W * z, H * z); ctx.globalAlpha = 1; }
+  }
+  function foreground(cam) {                                 // ближний склон с елями — перед подножием башни
+    const fg = smooth(clamp((cam.o - 0.2) / 0.35));
+    if (!pano || fg <= 0) return;
+    ctx.globalAlpha = fg; ctx.drawImage(pano[4], 0, H * 0.02, W, H); ctx.globalAlpha = 1;
   }
   function frame(now) {
     if (done) return;
@@ -665,22 +649,13 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const cam = camera(t);
     const base = cam.proj([0, 0, 0]), topP = cam.proj([0, TOP, 0]);
-    landscape(cam, t);
+    sky(cam, t);
     // свет за башней разгорается, когда встаёт светило
     const lx = base[0] + W * 0.25, ly = topP[1], lightR = Math.max(W, H) * 0.7;
     const lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lightR);
     const la = 0.28 * ease(clamp((t - BUILT) / RISE));
     lg.addColorStop(0, `rgba(${GLOW},${la})`); lg.addColorStop(1, `rgba(${GLOW},0)`);
     ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
-    // земля: тень под башней и светлая линия горизонта
-    if (base[2] > 2) {
-      const e1 = cam.proj([9, 0, 0]), e2 = cam.proj([0, 0, 9]);
-      const rx = Math.max(Math.hypot(e1[0] - base[0], e1[1] - base[1]), Math.hypot(e2[0] - base[0], e2[1] - base[1]));
-      const sg = ctx.createRadialGradient(base[0], base[1], 0, base[0], base[1], rx);
-      sg.addColorStop(0, "rgba(0,0,0,.55)"); sg.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.save(); ctx.translate(base[0], base[1]); ctx.scale(1, 0.28); ctx.translate(-base[0], -base[1]);
-      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(base[0], base[1], rx, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    }
     // камни: собрать видимые грани, отсортировать от дальних к ближним, нарисовать
     const polys = [];
     for (const p of pieces) {
@@ -699,9 +674,13 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
         const fc = f.reduce((s, i) => [s[0] + w[i][0] / f.length, s[1] + w[i][1] / f.length, s[2] + w[i][2] / f.length], [0, 0, 0]);
         const inside = p.kind === "slab" || (dot(n, [fc[0], 0, fc[2]]) < -0.3 && Math.max(Math.abs(fc[0]), Math.abs(fc[2])) < half(fc[1]) - TH + 0.05);
         const win = Math.exp(-Math.hypot(fc[0] - FWIN[0], fc[1] - FWIN[1], fc[2] - FWIN[2]) / 2.4);
-        const lit = inside ? 0.1 + 0.06 * Math.max(0, dot(n, L)) + 1.0 * win * (0.35 + 0.65 * Math.max(0, n[2] * 0.6 + n[1] * 0.5 + 0.3))
-                           : 0.42 + 0.68 * Math.max(0, dot(n, L)) + 0.1 * Math.max(0, n[1]);
-        const col = p.col.map((v, j) => Math.min(255, Math.round(v * lit * LIGHT[j])));
+        let base3, k3 = p.col[0];
+        if (inside) {                                          // комната: тёмная, у окна светлее
+          const lw = Math.min(1, win * (0.5 + 0.5 * Math.max(0, n[2] * 0.7 + n[1] * 0.4 + 0.3)) * 1.6);
+          const from = p.kind === "slab" ? TONE.wood : TONE.room;
+          base3 = from.map((v, j) => v + (TONE.lit[j] * 0.75 - v) * lw * (p.kind === "slab" ? 0.6 : 1));
+        } else base3 = n[1] > 0.6 ? TONE.top : dot(n, L) > 0.15 ? TONE.lit : TONE.shade;   // две стороны и верх — плоско
+        const col = base3.map((v) => Math.min(255, Math.round(v * k3)));
         polys.push({ pr, z: Math.hypot(...sub(fc, cam.pos)) + (p.kind === "slab" ? 1000 : 0), col, alpha });
       }
       if (k >= 1 && !p.landed) {
@@ -729,7 +708,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       }
       ctx.globalAlpha = q.alpha;
       ctx.fillStyle = `rgb(${q.col})`; ctx.fill();
-      ctx.strokeStyle = "rgba(30,24,18,.5)"; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.strokeStyle = TONE.seam; ctx.lineWidth = 0.6; ctx.stroke();
     }
     ctx.globalAlpha = 1;
     for (let i = puffs.length - 1; i >= 0; i--) {             // облачка пыли
@@ -738,6 +717,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       const f = q.t / 650; ctx.fillStyle = `rgba(214,203,184,${0.18 * (1 - f)})`;
       ctx.beginPath(); ctx.arc(pp[0] + q.vx * f, pp[1] + q.vy * f, (2 + f * 6) * Math.min(3, 60 / pp[2]), 0, Math.PI * 2); ctx.fill();
     }
+    foreground(cam);
     // светило встаёт справа от башни, растёт и крутится, останавливается гербом
     const tr = clamp((t - BUILT + 100) / RISE), tsp = clamp((t - BUILT - RISE + 150) / SPIN);
     if (tr > 0) {
