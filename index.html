@@ -662,10 +662,11 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     ctx.beginPath(); ctx.ellipse(-0.6 * u, -0.55 * u, 0.5 * u, 0.25 * u, -0.6, 0, Math.PI * 2); ctx.fill();   // ухо
     ctx.restore(); ctx.restore();
   }
-  function foreground(cam) {                                 // ели перед подножием башни: проявляются поверх неё, на том же месте
-    const fg = smooth(clamp((cam.o - 0.25) / 0.3));
-    if (!pano || fg <= 0) return;
-    ctx.globalAlpha = fg; ctx.drawImage(pano[4], view[0], view[1], W * view[2], H * view[2]); ctx.globalAlpha = 1;
+  // ели перед подножием башни: всегда непрозрачные, как только камера вышла из окна наружу
+  // (без растворения), чтобы деревья нигде не просвечивали и не пропадали
+  function foreground(cam) {
+    if (!pano || -cam.pos[2] < half(WY) + 0.05) return;
+    ctx.drawImage(pano[4], view[0], view[1], W * view[2], H * view[2]);
   }
   function frame(now) {
     if (done) return;
@@ -687,8 +688,9 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       if (k <= 0) continue;
       const e = ease(k), b = back(k), arc = Math.sin(Math.PI * k) * 2.5 * (1 - e);
       const c = [p.c[0] + p.off[0] * (1 - e), p.c[1] + p.off[1] * (1 - e) * (1 - e) + arc, p.c[2] + p.off[2] * (1 - e)];
-      const w = p.loc.map((v) => { const r = rot(v, p.rx * (1 - b), p.ry * (1 - b), p.rz * (1 - b)); return [r[0] + c[0], r[1] + c[1], r[2] + c[2]]; });
-      const alpha = clamp(k * 5);
+      const gs = 0.15 + 0.85 * ease(clamp(k * 4));          // камень не просвечивает, а быстро вырастает из точки
+      const w = p.loc.map((v) => { const r = rot(v, p.rx * (1 - b), p.ry * (1 - b), p.rz * (1 - b)); return [r[0] * gs + c[0], r[1] * gs + c[1], r[2] * gs + c[2]]; });
+      const alpha = 1;
       for (const f of p.faces) {
         const n = norm(cross(sub(w[f[1]], w[f[0]]), sub(w[f[2]], w[f[0]])));
         if (dot(n, sub(cam.pos, w[f[0]])) <= 0) continue;
@@ -696,7 +698,8 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
         if (c3.length < 3) continue;
         const pr = c3.map(([x, y, z]) => [cam.cx + cam.f * x / z, cam.cy - cam.f * y / z]);
         const fc = f.reduce((s, i) => [s[0] + w[i][0] / f.length, s[1] + w[i][1] / f.length, s[2] + w[i][2] / f.length], [0, 0, 0]);
-        const inside = p.kind === "slab" || (dot(n, [fc[0], 0, fc[2]]) < -0.3 && Math.max(Math.abs(fc[0]), Math.abs(fc[2])) < half(fc[1]) - TH + 0.05);
+        const inside = p.kind === "slab" || (dot(n, [fc[0], 0, fc[2]]) < -0.3 && Math.max(Math.abs(fc[0]), Math.abs(fc[2])) < half(fc[1]) - TH + 0.05)
+          || (Math.abs(n[1]) > 0.6 && Math.max(Math.abs(cam.pos[0]), Math.abs(cam.pos[2])) < half(cam.pos[1]) - TH);   // уступы кладки изнутри — тёмные
         const win = Math.exp(-Math.hypot(fc[0] - FWIN[0], fc[1] - FWIN[1], fc[2] - FWIN[2]) / 2.4);
         let base3, k3 = p.col[0];
         if (inside) {                                          // комната: тёмная, у окна светлее
@@ -737,7 +740,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     ctx.globalAlpha = 1;
     for (let i = puffs.length - 1; i >= 0; i--) {             // облачка пыли
       const q = puffs[i]; q.t += dt; if (q.t > 650) { puffs.splice(i, 1); continue; }
-      const pp = cam.proj(q.w); if (pp[2] < 1) continue;
+      const pp = cam.proj(q.w); if (pp[2] < 10) continue;
       const f = q.t / 650; ctx.fillStyle = `rgba(214,203,184,${0.18 * (1 - f)})`;
       ctx.beginPath(); ctx.arc(pp[0] + q.vx * f, pp[1] + q.vy * f, (2 + f * 6) * Math.min(3, 60 / pp[2]), 0, Math.PI * 2); ctx.fill();
     }
