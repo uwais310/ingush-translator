@@ -353,13 +353,13 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 </script>
 <div class="splash" id="splash" aria-hidden="true" hidden><canvas></canvas></div>
 <script>
-// Заставка: тёмный «кинозал», ингушская боевая башня складывается из камней, как иглу из блоков:
-// камень за камнем, ряд за рядом (направление чередуется, как по спирали), каждый садится на место
-// с лёгким «присестом» и облачком пыли; потом машикуль (навесной балкончик) и ступенчатая крыша.
-// Затем рядом встаёт светило — днём солнце со знаком с флага, ночью луна (по часам посетителя:
-// у большинства это Алматы). Оно крутится как монета и открывает герб Ингушетии (упрощённый рисунок).
-// Держится, пока сайт не загрузится (window load + горы нарисованы); потом растворяется в горы.
-// Тап — пропустить. Один раз за визит; при «уменьшить движение» не показывается.
+// Заставка: камера начинается внутри ингушской боевой башни и пятится наружу, а башня вокруг
+// складывается из камней, как иглу: камни подлетают по дуге с поворотом и садятся, ряд за рядом
+// по кругу; потом машикули и ступенчатая пирамидальная крыша. Одна башня, в объёме (свой простой 3D
+// на canvas, без библиотек). Затем встаёт светило — днём солнце со знаком с флага, ночью луна
+// (по часам посетителя: у большинства это Алматы), крутится как монета и открывает герб Ингушетии
+// (упрощённый рисунок). Держится, пока сайт не загрузится; потом растворяется в горы.
+// Тап — пропустить. Один раз за визит; при «уменьшить движение» не показывается. ?splash=sun|moon — показать снова.
 (() => {
   let show = false;
   try { show = !matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("splash"); sessionStorage.setItem("splash", "1"); } catch (e) {}
@@ -374,58 +374,72 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   const GLOW = rgb(SUNC);
   const STONE = { lit: [214, 203, 184], dark: [118, 110, 99] };
 
-  // ---- камни башни (единицы — как в tower(): основание y=10, верх стены y=-96, верх крыши y=-131) ----
+  // ---- одна башня в объёме (метры): квадратная, стены сужаются кверху, 15 рядов камня,
+  // машикули на все четыре стороны, ступенчатая пирамидальная крыша с острым камнем наверху ----
+  const HT = 25, ROWS = 16, RH = HT / ROWS, B0 = 4.4, B1 = 3.3, TH = 0.9;
+  const half = (y) => B0 - (B0 - B1) * y / HT;
+  const SIDES = [[[1, 0, 0], [0, 0, 1]], [[0, 0, -1], [1, 0, 0]], [[-1, 0, 0], [0, 0, -1]], [[0, 0, 1], [-1, 0, 0]]]; // [вдоль стены, наружу]
+  const P = (s, u, n, y) => { const [U, N] = SIDES[s]; return [U[0] * u + N[0] * n, y, U[2] * u + N[2] * n]; };
+  const BOXF = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
   const pieces = [];
-  const taperMain = (y) => 13 - (10 - y) / 106 * 4;
-  const add = (pts, lit, order, kind) => {
-    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-    const k = 0.88 + Math.random() * 0.2;
-    const c = (lit ? STONE.lit : STONE.dark).map((v) => Math.round(v * k));
-    pieces.push({ pts: pts.map(([x, y]) => [x - cx, y - cy]), cx, cy, col: `rgb(${c})`, lit, order, kind });
-  };
-  // главная башня: 12 рядов; жилая башня рядом: 6 рядов. Ряды кладутся снизу вверх, оба здания вместе.
-  for (let r = 0; r < 12; r++) {
-    const y0 = 10 - r * 8.83, y1 = y0 - 8.83, w0 = taperMain(y0), w1 = taperMain(y1);
-    const cuts = r % 2 ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1];
-    for (let j = 0; j < cuts.length - 1; j++) {
-      const a = cuts[j], b = cuts[j + 1];
-      add([[a * w0, y0], [b * w0, y0], [b * w1, y1], [a * w1, y1]], b <= 0, r * 10 + (r % 2 ? 3 - j : j), "wall");
+  function piece(verts, faces, col, out, kind) {
+    const c = verts.reduce((s, v) => [s[0] + v[0] / verts.length, s[1] + v[1] / verts.length, s[2] + v[2] / verts.length], [0, 0, 0]);
+    // порядок обхода граней — наружу от центра камня (нужно для отсечения невидимых граней)
+    faces = faces.map((f) => { const fc = f.reduce((s, i) => [s[0] + verts[i][0], s[1] + verts[i][1], s[2] + verts[i][2]], [0, 0, 0]).map((v) => v / f.length);
+      return dot(cross(sub(verts[f[1]], verts[f[0]]), sub(verts[f[2]], verts[f[0]])), sub(fc, c)) < 0 ? f.slice().reverse() : f; });
+    pieces.push({ loc: verts.map((v) => sub(v, c)), c, faces, col, out: norm(out), kind });
+  }
+  const stone = (k = 1) => { const v = 0.78 + Math.random() * 0.3, w = Math.random() * 18 - 6; return [(184 + w) * v * k, (176 + w * 0.5) * v * k, (162 - w * 0.2) * v * k]; }; // серо-бежевый камень, каждый свой
+  // стены: каждый ряд обходит башню по кругу (как спираль у иглу), швы через ряд смещены
+  for (let r = 0; r < ROWS; r++) {
+    const y0 = r * RH, y1 = y0 + RH, cuts = r % 2 ? [-1, -0.62, -0.2, 0.22, 0.6, 1] : [-1, -0.42, 0.02, 0.44, 1];
+    for (let s = 0; s < 4; s++) for (let j = 0; j < cuts.length - 1; j++) {
+      const a = cuts[j], b = cuts[j + 1], g = 0.03;
+      const v = [];
+      for (const [y, w] of [[y0, half(y0)], [y1, half(y1)]]) {
+        const wi = w - TH;
+        v.push(P(s, a * w + g, w, y), P(s, b * w - g, w, y), P(s, b * wi, wi, y), P(s, a * wi, wi, y));
+      }
+      piece(v, BOXF, stone(1 - 0.12 * (1 - r / ROWS)), P(s, 0, 1, 0), "wall");
     }
   }
-  for (let r = 0; r < 6; r++) {
-    const y0 = 10 - r * 8.67, y1 = y0 - 8.67, l0 = 12 + (r / 6) * 2, l1 = 12 + ((r + 1) / 6) * 2, rr0 = 46 - (r / 6) * 2, rr1 = 46 - ((r + 1) / 6) * 2;
-    const cuts = r % 2 ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
-    for (let j = 0; j < cuts.length - 1; j++) {
-      const a = cuts[j], b = cuts[j + 1], X = (t, l, R) => l + (R - l) * t;
-      add([[X(a, l0, rr0), y0], [X(b, l0, rr0), y0], [X(b, l1, rr1), y1], [X(a, l1, rr1), y1]], b <= 0.5, r * 10 + 5 + (r % 2 ? j : 3 - j), "wall");
-    }
+  // машикули: навесной балкончик на консолях под крышей, с каждой стороны
+  const box3 = (s, u0, u1, n0, n1, y0, y1) => [P(s, u0, n1, y0), P(s, u1, n1, y0), P(s, u1, n0, y0), P(s, u0, n0, y0), P(s, u0, n1, y1), P(s, u1, n1, y1), P(s, u1, n0, y1), P(s, u0, n0, y1)];
+  const wm = half(HT - 3);
+  for (let s = 0; s < 4; s++) {
+    for (const u of [-1.0, 1.0]) piece(box3(s, u - 0.22, u + 0.22, wm - 0.1, wm + 1.0, HT - 4.6, HT - 3.6), BOXF, stone(0.9), P(s, 0, 1, 0), "mach");
+    piece(box3(s, -1.35, 1.35, wm - 0.1, wm + 1.0, HT - 3.6, HT - 1.6), BOXF, stone(1), P(s, 0, 1, 0), "mach");
   }
-  // машикуль: навесной балкончик-бойница под крышей, на консолях
-  add([[-6.5, -78], [6.5, -78], [6.5, -86], [-6.5, -86]], true, 121, "mach");
-  add([[-6, -78], [-3.5, -78], [-4.75, -74.5]], false, 120, "mach");
-  add([[3.5, -78], [6, -78], [4.75, -74.5]], false, 120.5, "mach");
-  // ступенчатая пирамидальная крыша, наверху — острый камень
-  const roof = [];
-  [[11, -96, -100], [9.5, -100, -106], [8, -106, -112], [6.5, -112, -117], [5, -117, -121], [3.5, -121, -124]].forEach(([w, y0, y1]) => {
-    roof.push([[[-w, y0], [0, y0], [0, y1], [-w, y1]], true], [[[0, y0], [w, y0], [w, y1], [0, y1]], false]);
+  // крыша: плиты-ступени уменьшаются кверху, на вершине — острый камень
+  let yR = HT;
+  [0, 1, 2, 3, 4, 5, 6].map((i) => [(B1 + 0.5) * (1 - i / 7.6), i ? 0.55 : 0.45]).forEach(([w, h]) => {
+    const v = [[-w, yR, w], [w, yR, w], [w, yR, -w], [-w, yR, -w], [-w, yR + h, w], [w, yR + h, w], [w, yR + h, -w], [-w, yR + h, -w]];
+    piece(v, BOXF, stone(0.95), [0, 1, 0], "roof"); yR += h;
   });
-  roof.push([[[-2.2, -124], [0, -124], [0, -131]], true], [[[0, -124], [2.2, -124], [0, -131]], false]);
-  roof.forEach(([pts, lit], i) => add(pts, lit, 130 + i, "roof"));
-  pieces.sort((p, q) => p.order - q.order);
+  piece([[-0.55, yR, 0.55], [0.55, yR, 0.55], [0.55, yR, -0.55], [-0.55, yR, -0.55], [0, yR + 2.2, 0]], [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], stone(1.02), [0, 1, 0], "roof");
+  const TOP = yR + 2.2;
+  // окна-бойницы и вход (дверь на втором ярусе): тёмные проёмы, когда башня собрана — тёплый свет
+  const windows = [];
+  for (let s = 0; s < 4; s++) for (const [u, y, w, h] of s === 0 ? [[0, 4.2, 0.6, 1.9], [0, 10.5, 0.28, 1.1], [0, 16, 0.28, 1.1]] : [[0, 8, 0.28, 1.1], [s === 2 ? 0 : 1.2, 13.5, 0.28, 1.1], [0, 18.4, 0.28, 1]]) {
+    const n = (y2) => half(y2) + 0.04;
+    windows.push({ pts: [P(s, u - w, n(y), y), P(s, u + w, n(y), y), P(s, u + w, n(y + h), y + h), P(s, u - w, n(y + h), y + h)], out: P(s, 0, 1, 0) });
+  }
 
-  // как иглу: каждый камень подносится сбоку-сверху по дуге и садится на место; темп ускоряется
-  const N = pieces.length, FLY = 430;
-  let tAcc = 0;
+  // как иглу: камни подлетают по дуге с поворотом и садятся; темп ряд за рядом
+  const N = pieces.length, FLY = 520, SPAN = 1650;
   pieces.forEach((p, i) => {
-    const from = p.cx < 0 ? -1 : p.cx > 24 ? 1 : (i % 2 ? 1 : -1);
-    p.dx = from * (26 + Math.random() * 18); p.dy = -(30 + Math.random() * 20);
-    p.rot = from * (0.5 + Math.random() * 0.6);
-    p.t0 = tAcc; tAcc += p.kind === "wall" ? 44 - 24 * (i / N) : p.kind === "mach" ? 80 : 90;
-    p.landed = false;
+    const up = p.kind === "roof" ? 9 : 5;
+    p.off = [p.out[0] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4, up + Math.random() * 6, p.out[2] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4];
+    p.rx = (Math.random() - 0.5) * 3.2; p.ry = (Math.random() - 0.5) * 3.2; p.rz = (Math.random() - 0.5) * 2;
+    p.t0 = SPAN * Math.pow(i / N, 0.92); p.landed = false;
   });
   const BUILT = pieces[N - 1].t0 + FLY;
-  const RISE = 800, SPIN = 1300, TITLE = BUILT + RISE + 300, MIN = BUILT + RISE + SPIN + 1200;
-
+  const RISE = 600, SPIN = 1100, TITLE = BUILT + RISE, MIN = BUILT + RISE + SPIN + 900;
+  const L = norm([-0.55, 0.75, 0.6]);                  // свет сверху-слева-спереди
+  const LIGHT = MOON ? [0.78, 0.86, 1.05] : [1.06, 0.98, 0.86];
   const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
   const stars = MOON ? Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random() * 0.6, r: 0.4 + Math.random() * 0.9, p: Math.random() * 6 })) : [];
   const puffs = [];
@@ -544,84 +558,131 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   const clamp = (v) => Math.max(0, Math.min(1, v));
   const ease = (t) => 1 - Math.pow(1 - t, 3), inout = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const back = (t) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
+  const rot = (v, ax, ay, az) => {
+    let [x, y, z] = v, c, s;
+    c = Math.cos(ax); s = Math.sin(ax); [y, z] = [y * c - z * s, y * s + z * c];
+    c = Math.cos(ay); s = Math.sin(ay); [x, z] = [x * c + z * s, -x * s + z * c];
+    c = Math.cos(az); s = Math.sin(az); [x, y] = [x * c - y * s, x * s + y * c];
+    return [x, y, z];
+  };
+
+  // камера: начинается внутри башни, пятится наружу над растущей стеной и облетает её на три четверти
+  function camera(t) {
+    const k = clamp(t / (BUILT + 250)), m = inout(k);
+    const dist = 1 + 50 * m, th = -1.15 + 1.6 * ease(k), ph = -0.06 + 0.2 * m;
+    const tgt = [0, 7.5 + 6 * m, 0];
+    const dir = [Math.sin(th) * Math.cos(ph), Math.sin(ph), Math.cos(th) * Math.cos(ph)];
+    const pos = [tgt[0] + dir[0] * dist, tgt[1] + dir[1] * dist, tgt[2] + dir[2] * dist];
+    const fw = [-dir[0], -dir[1], -dir[2]], rt = norm(cross(fw, [0, 1, 0])), up = cross(rt, fw);
+    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.15 * m), cy = H * 0.47;   // к концу башня левее, справа место светилу
+    return { pos, proj(v) { const d = sub(v, pos), z = dot(d, fw); return [cx + f * dot(d, rt) / z, cy - f * dot(d, up) / z, z]; } };
+  }
 
   function frame(now) {
     if (done) return;
     const t = Math.max(0, now - start), dt = Math.min(50, now - last); last = now;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    // башня + светило занимают по ширине -13..84 единиц, по высоте 136
-    const s = Math.min(H * 0.56 / 136, W * 0.84 / 100), gx = W / 2 - 34 * s, gy = H * 0.64;
+    const cam = camera(t);
+    const base = cam.proj([0, 0, 0]), topP = cam.proj([0, TOP, 0]);
     // свет за башней разгорается
-    const lightR = Math.max(W, H) * 0.75, lg = ctx.createRadialGradient(gx + 16 * s, gy - 60 * s, 0, gx + 16 * s, gy - 60 * s, lightR);
-    const la = 0.1 + 0.16 * clamp(t / 1500) + 0.12 * ease(clamp((t - BUILT) / RISE));
+    const lx = base[0] + W * 0.12, ly = (base[1] + topP[1]) / 2, lightR = Math.max(W, H) * 0.8;
+    const lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lightR);
+    const la = 0.1 + 0.14 * clamp(t / 1200) + 0.12 * ease(clamp((t - BUILT) / RISE));
     lg.addColorStop(0, `rgba(${GLOW},${la * (MOON ? 0.6 : 1)})`); lg.addColorStop(1, `rgba(${GLOW},0)`);
     ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
-    for (const st of stars) {                                  // ночью — звёзды
+    for (const st of stars) {
       ctx.fillStyle = `rgba(230,236,255,${(0.4 + 0.4 * Math.sin(t / 600 + st.p)) * clamp(t / 1200)})`;
       ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2); ctx.fill();
     }
-    for (const m of motes) {                                   // пылинки
+    for (const m of motes) {
       m.y -= m.v * dt / 1000; if (m.y < -0.02) m.y = 1.02;
       ctx.fillStyle = `rgba(${GLOW},${m.a * clamp(t / 800)})`;
       ctx.beginPath(); ctx.arc(m.x * W + Math.sin(t / 2000 + m.y * 9) * 8, m.y * H, m.r, 0, Math.PI * 2); ctx.fill();
     }
-    // камера: медленный наезд
-    const cam = 1.08 - 0.08 * inout(clamp(t / (BUILT + RISE)));
-    ctx.translate(W / 2, gy - 50 * s); ctx.scale(cam, cam); ctx.translate(-W / 2, -(gy - 50 * s));
-    // линия земли
-    const hz = ease(clamp(t / 700));
-    const hg = ctx.createLinearGradient(W / 2 - W * 0.45 * hz, 0, W / 2 + W * 0.45 * hz, 0);
-    hg.addColorStop(0, `rgba(${GLOW},0)`); hg.addColorStop(0.5, `rgba(${GLOW},.7)`); hg.addColorStop(1, `rgba(${GLOW},0)`);
-    ctx.fillStyle = hg; ctx.fillRect(W / 2 - W * 0.45 * hz, gy + 10 * s, W * 0.9 * hz, Math.max(1, 0.4 * s));
-    // светило встаёт, растёт и крутится
-    const tr = clamp((t - BUILT + 100) / RISE), tsp = clamp((t - BUILT - RISE + 150) / SPIN);
-    if (tr > 0) {
-      const settle = ease(tsp), spin = settle * Math.PI * 3;           // полтора оборота → гербом к нам
-      const breath = ready || tsp < 1 ? 0 : (Math.sin((t - BUILT - RISE - SPIN) / 380) + 1) / 2;
-      const R = s * (15 + 9 * inout(tsp)) * (1 + breath * 0.03);
-      orb(gx + 63 * s, gy - 6 * s - ease(tr) * 96 * s, R, spin, (1 - ease(tr)) * -Math.PI * 1.8, breath + (1 - Math.abs(Math.cos(spin))) * 0.8);
+    // земля: тень под башней и светлая линия горизонта
+    if (base[2] > 2) {
+      const e1 = cam.proj([9, 0, 0]), e2 = cam.proj([0, 0, 9]);
+      const rx = Math.max(Math.hypot(e1[0] - base[0], e1[1] - base[1]), Math.hypot(e2[0] - base[0], e2[1] - base[1]));
+      const sg = ctx.createRadialGradient(base[0], base[1], 0, base[0], base[1], rx);
+      sg.addColorStop(0, "rgba(0,0,0,.55)"); sg.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.save(); ctx.translate(base[0], base[1]); ctx.scale(1, 0.28); ctx.translate(-base[0], -base[1]);
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(base[0], base[1], rx, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      const hz = ease(clamp(t / 900));
+      const hg = ctx.createLinearGradient(W / 2 - W * 0.45 * hz, 0, W / 2 + W * 0.45 * hz, 0);
+      hg.addColorStop(0, `rgba(${GLOW},0)`); hg.addColorStop(0.5, `rgba(${GLOW},.45)`); hg.addColorStop(1, `rgba(${GLOW},0)`);
+      ctx.fillStyle = hg; ctx.fillRect(W / 2 - W * 0.45 * hz, base[1], W * 0.9 * hz, 1);
     }
-    // камни: подносятся по дуге и садятся на место
+    // камни: собрать видимые грани, отсортировать от дальних к ближним, нарисовать
+    const polys = [];
     for (const p of pieces) {
       const k = clamp((t - p.t0) / FLY);
       if (k <= 0) continue;
-      const e = ease(k), arc = Math.sin(Math.PI * Math.min(1, k * 1.1)) * 10 * s * (1 - e);
-      const x = gx + (p.cx + p.dx * (1 - e)) * s, y = gy + (p.cy + p.dy * Math.pow(1 - k, 2)) * s - arc;
-      const land = clamp((t - p.t0 - FLY) / 160), squash = k < 1 ? 1 : 1 - 0.12 * Math.sin(Math.PI * land);
-      ctx.save(); ctx.translate(x, y + (1 - squash) * 4 * s); ctx.rotate(p.rot * (1 - back(k))); ctx.scale(2 - squash, squash);
-      ctx.globalAlpha = clamp(k * 4);
-      ctx.fillStyle = p.col;
-      ctx.beginPath(); p.pts.forEach(([px, py], j) => (j ? ctx.lineTo(px * s, py * s) : ctx.moveTo(px * s, py * s))); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = "rgba(20,16,12,.45)"; ctx.lineWidth = Math.max(0.6, 0.3 * s); ctx.stroke();
-      ctx.restore();
+      const e = ease(k), b = back(k), arc = Math.sin(Math.PI * k) * 2.5 * (1 - e);
+      const c = [p.c[0] + p.off[0] * (1 - e), p.c[1] + p.off[1] * (1 - e) * (1 - e) + arc, p.c[2] + p.off[2] * (1 - e)];
+      const w = p.loc.map((v) => { const r = rot(v, p.rx * (1 - b), p.ry * (1 - b), p.rz * (1 - b)); return [r[0] + c[0], r[1] + c[1], r[2] + c[2]]; });
+      const alpha = clamp(k * 5);
+      for (const f of p.faces) {
+        const n = norm(cross(sub(w[f[1]], w[f[0]]), sub(w[f[2]], w[f[0]])));
+        if (dot(n, sub(cam.pos, w[f[0]])) <= 0) continue;
+        const pr = f.map((i) => cam.proj(w[i]));
+        if (pr.some((q) => q[2] < 0.4)) continue;
+        const lit = 0.42 + 0.68 * Math.max(0, dot(n, L)) + 0.1 * Math.max(0, n[1]);
+        const col = p.col.map((v, j) => Math.min(255, Math.round(v * lit * LIGHT[j])));
+        polys.push({ pr, z: pr.reduce((s, q) => s + q[2], 0) / pr.length, col, alpha });
+      }
       if (k >= 1 && !p.landed) {
         p.landed = true;
-        for (let i = 0; i < 2; i++) puffs.push({ x: gx + p.cx * s, y: gy + p.cy * s + 3 * s, vx: (Math.random() - 0.5) * 36, vy: -8 - Math.random() * 16, t: 0 });
+        if (Math.random() < 0.5) puffs.push({ w: [p.c[0] + p.out[0] * 0.6, p.c[1] - RH / 2, p.c[2] + p.out[2] * 0.6], vx: (Math.random() - 0.5) * 30, vy: -8 - Math.random() * 14, t: 0 });
       }
     }
+    // окна — на ту же сортировку, загораются, когда башня собрана
+    const tw = clamp((t - BUILT + 150) / 450);
+    for (const wd of windows) {
+      if (t < BUILT - 300 || dot(wd.out, sub(cam.pos, wd.pts[0])) <= 0) continue;
+      const pr = wd.pts.map((v) => cam.proj(v));
+      if (pr.some((q) => q[2] < 0.4)) continue;
+      polys.push({ pr, z: pr.reduce((s, q) => s + q[2], 0) / 4 - 0.3, win: true, alpha: 1 });
+    }
+    polys.sort((a, b) => b.z - a.z);
+    ctx.lineJoin = "round";
+    for (const q of polys) {
+      ctx.beginPath(); q.pr.forEach(([x, y], j) => (j ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+      if (q.win) {
+        ctx.fillStyle = "#1d1710"; ctx.fill();
+        if (tw > 0) { ctx.save(); ctx.globalAlpha = tw; ctx.shadowColor = "rgba(255,170,80,.95)"; ctx.shadowBlur = 10; ctx.fillStyle = "rgb(255,192,110)"; ctx.fill(); ctx.restore(); }
+        continue;
+      }
+      ctx.globalAlpha = q.alpha;
+      ctx.fillStyle = `rgb(${q.col})`; ctx.fill();
+      ctx.strokeStyle = "rgba(30,24,18,.5)"; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     for (let i = puffs.length - 1; i >= 0; i--) {             // облачка пыли
       const q = puffs[i]; q.t += dt; if (q.t > 650) { puffs.splice(i, 1); continue; }
-      const f = q.t / 650; ctx.fillStyle = `rgba(${STONE.lit},${0.2 * (1 - f)})`;
-      ctx.beginPath(); ctx.arc(q.x + q.vx * f, q.y + q.vy * f, (1 + f * 3) * s * 0.6, 0, Math.PI * 2); ctx.fill();
+      const pp = cam.proj(q.w); if (pp[2] < 1) continue;
+      const f = q.t / 650; ctx.fillStyle = `rgba(214,203,184,${0.18 * (1 - f)})`;
+      ctx.beginPath(); ctx.arc(pp[0] + q.vx * f, pp[1] + q.vy * f, (2 + f * 6) * Math.min(3, 60 / pp[2]), 0, Math.PI * 2); ctx.fill();
     }
-    // бойницы загораются, когда башня собрана
-    const tw = clamp((t - BUILT) / 400);
-    if (tw > 0) {
-      ctx.globalAlpha = tw; ctx.fillStyle = "rgba(255,196,110,.95)"; ctx.shadowColor = "rgba(255,180,90,.9)"; ctx.shadowBlur = 3 * s;
-      ctx.fillRect(gx - 1.5 * s, gy - 68 * s, 3 * s, 7 * s); ctx.fillRect(gx - 1.5 * s, gy - 44 * s, 3 * s, 7 * s); ctx.fillRect(gx + 27 * s, gy - 28 * s, 4 * s, 6 * s);
-      ctx.fillRect(gx - 3.5 * s, gy - 84 * s, 2 * s, 3 * s); ctx.fillRect(gx + 1.5 * s, gy - 84 * s, 2 * s, 3 * s);
-      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    // светило встаёт справа от башни, растёт и крутится, останавливается гербом
+    const tr = clamp((t - BUILT + 100) / RISE), tsp = clamp((t - BUILT - RISE + 150) / SPIN);
+    if (tr > 0) {
+      const anchor = cam.proj([0, TOP * 0.78, 0]), sc = Math.abs(base[1] - topP[1]) / TOP;
+      const settle = ease(tsp), spin = settle * Math.PI * 3;
+      const breath = ready || tsp < 1 ? 0 : (Math.sin((t - BUILT - RISE - SPIN) / 380) + 1) / 2;
+      const R = Math.min(W * 0.18, sc * (3.4 + 2.4 * inout(tsp))) * (1 + breath * 0.03);
+      const ox = Math.min(W - R - 10, anchor[0] + Math.max(W * 0.36, sc * 12));
+      orb(ox, anchor[1] + (1 - ease(tr)) * sc * 9, R, spin, (1 - ease(tr)) * -Math.PI * 1.8, breath + (1 - Math.abs(Math.cos(spin))) * 0.8);
     }
     // надпись
-    const tt = clamp((t - TITLE) / 700);
+    const tt = clamp((t - TITLE) / 600);
     if (tt > 0) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-      const fs = Math.max(22, Math.min(44, W * 0.075));
+      const fs = Math.max(22, Math.min(44, W * 0.075)), ty = Math.min(H - fs * 1.6, base[1] + fs * 2.7);
       ctx.globalAlpha = ease(tt); ctx.fillStyle = "#f4efe6";
       ctx.font = `600 ${fs}px Georgia, "Times New Roman", serif`;
-      ctx.fillText("ГӀалгӀай мотт", W / 2, gy + 10 * s + fs * 1.9 + (1 - ease(tt)) * 14);
-      ctx.globalAlpha = ease(clamp((t - TITLE - 250) / 700)) * 0.7; ctx.font = `500 ${fs * 0.36}px system-ui, sans-serif`;
-      ctx.fillText("ИНГУШСКИЙ ПЕРЕВОДЧИК", W / 2, gy + 10 * s + fs * 2.9);
+      ctx.fillText("ГӀалгӀай мотт", W / 2, ty + (1 - ease(tt)) * 14);
+      ctx.globalAlpha = ease(clamp((t - TITLE - 200) / 600)) * 0.7; ctx.font = `500 ${fs * 0.36}px system-ui, sans-serif`;
+      ctx.fillText("ИНГУШСКИЙ ПЕРЕВОДЧИК", W / 2, ty + fs);
       ctx.globalAlpha = 1;
     }
     if (!leaving && ready && t >= MIN) leave();
