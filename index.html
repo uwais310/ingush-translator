@@ -632,17 +632,40 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       ctx.fillStyle = `rgba(230,236,255,${0.45 + 0.35 * Math.sin(t / 600 + st.p)})`;
       ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2); ctx.fill();
     }
-    if (!pano) buildPano();
+    if (!pano) { buildPano(); sheepY = null; }
     if (!pano) return;
-    const z = 1.1 - 0.1 * cam.o, ox = (W - W * z) / 2 - cam.o * W * 0.03, oy = (H - H * z) / 2;     // лёгкий параллакс при отлёте
-    for (let i = 0; i < 4; i++) ctx.drawImage(pano[i], ox, oy, W * z, H * z);
-    const fg = smooth(clamp((cam.o - 0.3) / 0.2));
-    if (fg < 1) { ctx.globalAlpha = 1 - fg; ctx.drawImage(pano[4], ox, oy, W * z, H * z); ctx.globalAlpha = 1; }
+    const z = 1.1 - 0.06 * cam.o, ox = (W - W * z) / 2 - cam.o * W * 0.015, oy = (H - H * z) / 2;   // картинка всегда шире экрана — без щелей по краям     // лёгкий параллакс при отлёте
+    for (let i = 0; i < 4; i++) { ctx.drawImage(pano[i], ox, oy, W * z, H * z); if (i === 3) sheep(t, ox, oy, z); }
+    ctx.drawImage(pano[4], ox, oy, W * z, H * z);            // ели видны всё время
+    view = [ox, oy, z];
   }
-  function foreground(cam) {                                 // ближний склон с елями — перед подножием башни
-    const fg = smooth(clamp((cam.o - 0.3) / 0.2));
+  // барашек пасётся на холме: голова опущена к траве, жуёт, иногда поднимает голову
+  let sheepY = null, view = [0, 0, 1];
+  function sheep(t, ox, oy, z) {
+    const sx = 0.79;
+    if (sheepY == null) {                                     // где у холма трава в этом месте
+      const c = pano[3], x = Math.round(c.width * sx), d = c.getContext("2d").getImageData(x, 0, 1, c.height).data;
+      sheepY = 0.7; for (let y = Math.round(c.height * 0.45); y < c.height; y++) if (d[y * 4 + 3] > 200) { sheepY = (y + 2) / c.height; break; }
+    }
+    const u = Math.min(W, H * 0.6) * 0.014 * z, X = ox + sx * W * z, Y = oy + sheepY * H * z;
+    const wool = PH === "night" ? "#b9c0cc" : "#f6f1e6", dark = PH === "night" ? "#2b2f38" : "#3a332d";
+    const cyc = (t / 1000) % 4, up = cyc > 3 ? Math.sin((cyc - 3) * Math.PI) : 0, chew = Math.sin(t / 140) * 0.25 * (1 - up);
+    ctx.save(); ctx.translate(X, Y);
+    ctx.fillStyle = dark;                                     // ножки
+    for (const lx of [-2.2, -1, 1.2, 2.3]) ctx.fillRect(lx * u, -1.6 * u, 0.55 * u, 1.6 * u);
+    ctx.fillStyle = wool;                                     // шерсть — облачко
+    for (const [cx, cy, r] of [[-1.8, -2.6, 1.3], [-0.5, -3.1, 1.5], [0.9, -3.0, 1.4], [2.1, -2.5, 1.2], [0.2, -2.1, 1.5], [-1.2, -1.9, 1.1], [1.5, -1.9, 1.1]]) {
+      ctx.beginPath(); ctx.arc(cx * u, cy * u, r * u, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.save(); ctx.translate(-2.8 * u, -2.6 * u); ctx.rotate(-0.95 + up * 0.9 + chew * 0.15);   // голова к траве
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(-1.2 * u, 0, 1.25 * u, 0.7 * u, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-0.6 * u, -0.55 * u, 0.5 * u, 0.25 * u, -0.6, 0, Math.PI * 2); ctx.fill();   // ухо
+    ctx.restore(); ctx.restore();
+  }
+  function foreground(cam) {                                 // ели перед подножием башни: проявляются поверх неё, на том же месте
+    const fg = smooth(clamp((cam.o - 0.25) / 0.3));
     if (!pano || fg <= 0) return;
-    ctx.globalAlpha = fg; ctx.drawImage(pano[4], 0, H * 0.02, W, H); ctx.globalAlpha = 1;
+    ctx.globalAlpha = fg; ctx.drawImage(pano[4], view[0], view[1], W * view[2], H * view[2]); ctx.globalAlpha = 1;
   }
   function frame(now) {
     if (done) return;
