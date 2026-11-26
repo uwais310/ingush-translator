@@ -394,17 +394,28 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   }
   const stone = (k = 1) => { const v = 0.78 + Math.random() * 0.3, w = Math.random() * 18 - 6; return [(184 + w) * v * k, (176 + w * 0.5) * v * k, (162 - w * 0.2) * v * k]; }; // серо-бежевый камень, каждый свой
   // стены: каждый ряд обходит башню по кругу (как спираль у иглу), швы через ряд смещены
+  // В ряду WR спереди и сзади — настоящие проёмы узких окон: через них камера смотрит на горы и уходит назад.
+  const WR = 6, WY = WR * RH + RH / 2, GAP = 0.085;
+  const jit = () => (Math.random() - 0.5) * 0.07;       // камень тёсаный вручную: углы чуть неровные
   for (let r = 0; r < ROWS; r++) {
     const y0 = r * RH, y1 = y0 + RH, cuts = r % 2 ? [-1, -0.62, -0.2, 0.22, 0.6, 1] : [-1, -0.42, 0.02, 0.44, 1];
-    for (let s = 0; s < 4; s++) for (let j = 0; j < cuts.length - 1; j++) {
-      const a = cuts[j], b = cuts[j + 1], g = 0.03;
-      const v = [];
-      for (const [y, w] of [[y0, half(y0)], [y1, half(y1)]]) {
-        const wi = w - TH;
-        v.push(P(s, a * w + g, w, y), P(s, b * w - g, w, y), P(s, b * wi, wi, y), P(s, a * wi, wi, y));
+    for (let s = 0; s < 4; s++) {
+      const segs = r === WR && s % 2 === 0 ? [[-1, -0.55], [-0.55, -GAP], [GAP, 0.55], [0.55, 1]] : cuts.slice(0, -1).map((a, j) => [a, cuts[j + 1]]);
+      for (const [a, b] of segs) {
+        const g = 0.03, v = [], ja = a === -GAP || a === GAP ? 0 : 1, jb = b === -GAP || b === GAP ? 0 : 1;
+        for (const [y, w, jy] of [[y0, half(y0), r ? jit() : 0], [y1, half(y1), jit()]]) {
+          const wi = w - TH;
+          v.push(P(s, a * w + g + jit() * ja, w, y + jy), P(s, b * w - g + jit() * jb, w, y + jy), P(s, b * wi, wi, y), P(s, a * wi, wi, y));
+        }
+        piece(v, BOXF, stone(1 - 0.12 * (1 - r / ROWS)), P(s, 0, 1, 0), "wall");
+        pieces[pieces.length - 1].row = r;
       }
-      piece(v, BOXF, stone(1 - 0.12 * (1 - r / ROWS)), P(s, 0, 1, 0), "wall");
     }
+  }
+  // внутри — ярус с деревянным полом и потолком (видны изнутри и в проёмы окон)
+  for (const [y0, y1] of [[WR * RH - 0.28, WR * RH], [WR * RH + 3.1, WR * RH + 3.4]]) {
+    const w = half(y1) - TH + 0.02;
+    piece([[-w, y0, w], [w, y0, w], [w, y0, -w], [-w, y0, -w], [-w, y1, w], [w, y1, w], [w, y1, -w], [-w, y1, -w]], BOXF, [118, 86, 58], [0, 1, 0], "slab");
   }
   // машикули: навесной балкончик на консолях под крышей, с каждой стороны
   const box3 = (s, u0, u1, n0, n1, y0, y1) => [P(s, u0, n1, y0), P(s, u1, n1, y0), P(s, u1, n0, y0), P(s, u0, n0, y0), P(s, u0, n1, y1), P(s, u1, n1, y1), P(s, u1, n0, y1), P(s, u0, n0, y1)];
@@ -423,22 +434,27 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   const TOP = yR + 2.2;
   // окна-бойницы и вход (дверь на втором ярусе): тёмные проёмы, когда башня собрана — тёплый свет
   const windows = [];
-  for (let s = 0; s < 4; s++) for (const [u, y, w, h] of s === 0 ? [[0, 4.2, 0.6, 1.9], [0, 10.5, 0.28, 1.1], [0, 16, 0.28, 1.1]] : [[0, 8, 0.28, 1.1], [s === 2 ? 0 : 1.2, 13.5, 0.28, 1.1], [0, 18.4, 0.28, 1]]) {
+  for (let s = 0; s < 4; s++) for (const [u, y, w, h] of s === 0 ? [[0, 4.2, 0.6, 1.9], [0, 16, 0.28, 1.1]] : [[0, s === 2 ? 5.2 : 8, 0.28, 1.1], [s === 2 ? 0 : 1.2, 13.5, 0.28, 1.1], [0, 18.4, 0.28, 1]]) {
     const n = (y2) => half(y2) + 0.04;
     windows.push({ pts: [P(s, u - w, n(y), y), P(s, u + w, n(y), y), P(s, u + w, n(y + h), y + h), P(s, u - w, n(y + h), y + h)], out: P(s, 0, 1, 0) });
   }
 
-  // как иглу: камни подлетают по дуге с поворотом и садятся; темп ряд за рядом
-  const N = pieces.length, FLY = 480, SPAN = 1350, START = 1100, OUT = 1200;   // OUT — сколько камера внутри
-  pieces.forEach((p, i) => {
-    const up = p.kind === "roof" ? 9 : 5;
-    p.off = [p.out[0] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4, up + Math.random() * 6, p.out[2] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4];
+  // как иглу: ярус с окнами уже стоит (камера внутри), остальное достраивается кольцами вверх и вниз,
+  // пока камера отлетает: камни подлетают по дуге с поворотом и садятся; машикули, потом крыша
+  const FLY = 500, SPAN = 1800, START = 1500;
+  const order = (p) => p.kind === "slab" ? -1 : p.kind === "wall" ? (p.row >= 3 && p.row <= 9 ? -1 : Math.abs(p.row - WR) + (p.row < WR ? 0.5 : 0)) : p.kind === "mach" ? 20 : 30;
+  const later = pieces.filter((p) => order(p) >= 0).sort((p, q) => order(p) - order(q) || Math.random() - 0.5);
+  pieces.forEach((p) => {
+    const up = p.kind === "roof" ? 9 : p.row < WR ? 2 : 5;
+    p.off = [p.out[0] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4, up + Math.random() * 5, p.out[2] * (6 + Math.random() * 6) + (Math.random() - 0.5) * 4];
     p.rx = (Math.random() - 0.5) * 3.2; p.ry = (Math.random() - 0.5) * 3.2; p.rz = (Math.random() - 0.5) * 2;
-    p.t0 = START + SPAN * Math.pow(i / N, 0.92); p.landed = false;
+    p.t0 = -FLY; p.landed = true;
   });
-  const BUILT = pieces[N - 1].t0 + FLY;
+  later.forEach((p, i) => { p.t0 = START + SPAN * Math.pow(i / later.length, 0.9); p.landed = false; });
+  const N = pieces.length;
+  const BUILT = START + SPAN + FLY;
   const RISE = 500, SPIN = 1000, TITLE = BUILT + RISE, MIN = BUILT + RISE + SPIN + 800;
-  const L = norm([-0.55, 0.75, 0.6]);                  // свет сверху-слева-спереди
+  const L = norm([0.35, 0.7, -0.75]);                  // свет сверху, со стороны камеры в конце пролёта
   const LIGHT = MOON ? [0.78, 0.86, 1.05] : [1.06, 0.98, 0.86];
   const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
   const stars = MOON ? Array.from({ length: 140 }, () => ({ az: Math.random() * Math.PI * 2, el: 0.04 + Math.random() * 0.9, r: 0.4 + Math.random() * 0.9, p: Math.random() * 6 })) : [];
@@ -451,10 +467,12 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     night:   { far: "#2a3a52", snow: "#9fb0c8", mid: "#1d2a38", near: "#141e26", ground: ["#16212a", "#0a0f14"] },
   }[PH];
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const mix = (a, b, k) => { const A = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16)), B = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+    return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * k))})`; };
   const RANGES = [
-    { D: 4200, col: LAND.far, snow: true, h: (a) => 560 + 300 * Math.sin(3 * a + 1) + 170 * Math.sin(7 * a + 2) + 90 * Math.sin(13 * a) + 1100 * Math.exp(-Math.pow(wrapA(a - 0.1) / 0.13, 2)) },
-    { D: 2000, col: LAND.mid, h: (a) => 210 + 120 * Math.sin(5 * a + 0.5) + 60 * Math.sin(11 * a + 1.3) },
-    { D: 800, col: LAND.near, h: (a) => 48 + 34 * Math.sin(9 * a + 2) + 16 * Math.sin(17 * a) },
+    { D: 4200, col: LAND.far, snow: true, haze: 0.55, h: (a) => 560 + 300 * Math.sin(3 * a + 1) + 170 * Math.sin(7 * a + 2) + 90 * Math.sin(13 * a) + 1100 * Math.exp(-Math.pow(wrapA(a - 0.1) / 0.13, 2)) },
+    { D: 2000, col: LAND.mid, haze: 0.4, h: (a) => 210 + 120 * Math.sin(5 * a + 0.5) + 60 * Math.sin(11 * a + 1.3) },
+    { D: 800, col: LAND.near, haze: 0.2, h: (a) => 48 + 34 * Math.sin(9 * a + 2) + 16 * Math.sin(17 * a) },
   ];
   // стена изнутри башни с узким окном (камни — один раз)
   const inner = [];
@@ -583,19 +601,31 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     return [x, y, z];
   };
 
-  // камера: сначала внутри башни у окна, смотрит на горы; вылетает в окно, разворачивается
-  // и, отлетая, смотрит, как башня собирается; в конце облёт на три четверти
+  // камера: внутри яруса смотрит в переднее окно на горы, потом пятится назад — через комнату
+  // и сквозь заднее окно наружу; не разворачиваясь, отлетает и видит башню целиком (горы — за ней)
+  const smooth = (x) => x * x * (3 - 2 * x);
   function camera(t) {
-    const a = clamp(t / OUT), k = clamp((t - OUT * 0.8) / (BUILT - OUT * 0.8 + 250)), m = inout(k);
-    const th = 0.45 * ease(k), ph = 0.16 * m, dist = 1.5 + 3.6 * ease(a) + 45 * m;
-    const tgt = [0, 11.1 + 2.2 * m, 0];
-    const dir = [Math.sin(th) * Math.cos(ph), Math.sin(ph), Math.cos(th) * Math.cos(ph)];
-    const pos = [tgt[0] + dir[0] * dist, tgt[1] + dir[1] * dist, tgt[2] + dir[2] * dist];
-    const turn = inout(clamp((t - OUT * 0.9) / 1300)), psi = th + Math.PI * turn, pitch = -ph * turn;
-    const fw = [Math.sin(psi) * Math.cos(pitch), Math.sin(pitch), Math.cos(psi) * Math.cos(pitch)], rt = norm(cross(fw, [0, 1, 0])), up = cross(rt, fw);
-    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.15 * m), cy = H * 0.47;   // к концу башня левее, справа место светилу
-    return { pos, fw, f, proj(v) { const d = sub(v, pos), z = dot(d, fw); return [cx + f * dot(d, rt) / z, cy - f * dot(d, up) / z, z]; } };
+    const p = inout(clamp((t - 500) / (BUILT - 200)));
+    const o = smooth(clamp((p - 0.08) / 0.92)), lk = smooth(clamp((p - 0.08) / 0.5));
+    const pos = [15 * o, WY + 5.5 * o, 0.9 - 59 * p];
+    const ahead = [pos[0], pos[1], pos[2] + 100], twr = [0, 12.5, 0];
+    const fw = norm(sub([ahead[0] + (twr[0] - ahead[0]) * lk, ahead[1] + (twr[1] - ahead[1]) * lk, ahead[2] + (twr[2] - ahead[2]) * lk], pos));
+    const rt = norm(cross(fw, [0, 1, 0])), up = cross(rt, fw);
+    const f = Math.min(H * 1.2, W * 1.9), cx = W * (0.5 - 0.15 * o), cy = H * 0.47;   // к концу башня левее, справа место светилу
+    return { pos, fw, rt, up, f, cx, cy, cs(v) { const d = sub(v, pos); return [dot(d, rt), dot(d, up), dot(d, fw)]; },
+      proj(v) { const d = sub(v, pos), z = dot(d, fw); return [cx + f * dot(d, rt) / z, cy - f * dot(d, up) / z, z]; } };
   }
+  // отсечь многоугольник ближней плоскостью (камера проходит сквозь окно вплотную к камням)
+  function clipNear(pts) {
+    const NZ = 0.05, out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], ia = a[2] >= NZ, ib = b[2] >= NZ;
+      if (ia) out.push(a);
+      if (ia !== ib) { const k = (NZ - a[2]) / (b[2] - a[2]); out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, NZ]); }
+    }
+    return out;
+  }
+  const FWIN = [0, WY, half(WY) - TH];                       // переднее окно изнутри — оттуда свет в комнату
   function landscape(cam, t) {
     const hf = [cam.fw[0], 0, cam.fw[2]], hl = Math.hypot(hf[0], hf[2]);
     const hp = cam.proj([cam.pos[0] + hf[0] / hl * 1e5, cam.pos[1], cam.pos[2] + hf[2] / hl * 1e5]), hy = hp[1];
@@ -622,29 +652,13 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
         if (i === 96) ctx.lineTo(q[0], hy + 2);
       }
       ctx.closePath();
-      if (R.snow) { const sg = ctx.createLinearGradient(0, top, 0, hy); sg.addColorStop(0, LAND.snow); sg.addColorStop(0.28, R.col); sg.addColorStop(1, R.col); ctx.fillStyle = sg; }
-      else ctx.fillStyle = R.col;
+      const sg = ctx.createLinearGradient(0, top, 0, hy), hz = mix(R.col, sk.low, R.haze);
+      if (R.snow) { sg.addColorStop(0, LAND.snow); sg.addColorStop(0.22, mix(LAND.snow, R.col, 0.6)); sg.addColorStop(0.4, R.col); }
+      else sg.addColorStop(0, R.col);
+      sg.addColorStop(1, hz); ctx.fillStyle = sg;
       ctx.fill();
     }
   }
-  function insideWall(t) {
-    const a = clamp(t / OUT); if (a >= 1) return;
-    const zoom = 1 + 46 * Math.pow(Math.max(0, (a - 0.3) / 0.7), 2.6), cx = W / 2, cy = H * 0.47, u = Math.min(W, H * 0.62);
-    const hw = u * 0.075, hh = hw * 3.4;
-    ctx.save(); ctx.globalAlpha = a > 0.8 ? (1 - a) / 0.2 : 1; ctx.translate(cx, cy); ctx.scale(zoom, zoom);
-    ctx.beginPath(); ctx.rect(-W, -H, 2 * W, 2 * H); ctx.rect(hw, -hh, -2 * hw, 2 * hh); ctx.clip("evenodd");
-    ctx.fillStyle = "#17120d"; ctx.fillRect(-W, -H, 2 * W, 2 * H);
-    for (const [x, y, v] of inner) {                       // камни кладки, освещены светом из окна
-      const X = x * u * 1.6, Y = y * u * 1.6, d = Math.hypot(X / (u * 0.9), Y / (u * 1.4)), l = v * (0.28 + 0.72 * Math.exp(-d * 1.6));
-      ctx.fillStyle = `rgb(${150 * l | 0},${136 * l | 0},${114 * l | 0})`; ctx.fillRect(X + 1, Y + 1, u * 0.416 - 2, u * 0.176 - 2);
-    }
-    ctx.fillStyle = "rgba(200,184,150,.5)";                  // откосы окна — светлые, расширяются внутрь
-    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * hw, -hh); ctx.lineTo(sx * hw * 2.1, -hh * 1.18); ctx.lineTo(sx * hw * 2.1, hh * 1.12); ctx.lineTo(sx * hw, hh); ctx.fill(); }
-    ctx.fillStyle = "rgba(230,214,180,.55)"; ctx.beginPath(); ctx.moveTo(-hw, hh); ctx.lineTo(hw, hh); ctx.lineTo(hw * 2.1, hh * 1.12); ctx.lineTo(-hw * 2.1, hh * 1.12); ctx.fill();
-    ctx.fillStyle = "rgba(60,48,36,.9)"; ctx.fillRect(-hw * 2.3, -hh * 1.3, hw * 4.6, hh * 0.13);   // каменная перемычка
-    ctx.restore();
-  }
-
   function frame(now) {
     if (done) return;
     const t = Math.max(0, now - start), dt = Math.min(50, now - last); last = now;
@@ -679,11 +693,16 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       for (const f of p.faces) {
         const n = norm(cross(sub(w[f[1]], w[f[0]]), sub(w[f[2]], w[f[0]])));
         if (dot(n, sub(cam.pos, w[f[0]])) <= 0) continue;
-        const pr = f.map((i) => cam.proj(w[i]));
-        if (pr.some((q) => q[2] < 0.4)) continue;
-        const lit = 0.42 + 0.68 * Math.max(0, dot(n, L)) + 0.1 * Math.max(0, n[1]);
+        const c3 = clipNear(f.map((i) => cam.cs(w[i])));
+        if (c3.length < 3) continue;
+        const pr = c3.map(([x, y, z]) => [cam.cx + cam.f * x / z, cam.cy - cam.f * y / z]);
+        const fc = f.reduce((s, i) => [s[0] + w[i][0] / f.length, s[1] + w[i][1] / f.length, s[2] + w[i][2] / f.length], [0, 0, 0]);
+        const inside = p.kind === "slab" || (dot(n, [fc[0], 0, fc[2]]) < -0.3 && Math.max(Math.abs(fc[0]), Math.abs(fc[2])) < half(fc[1]) - TH + 0.05);
+        const win = Math.exp(-Math.hypot(fc[0] - FWIN[0], fc[1] - FWIN[1], fc[2] - FWIN[2]) / 2.4);
+        const lit = inside ? 0.1 + 0.06 * Math.max(0, dot(n, L)) + 1.0 * win * (0.35 + 0.65 * Math.max(0, n[2] * 0.6 + n[1] * 0.5 + 0.3))
+                           : 0.42 + 0.68 * Math.max(0, dot(n, L)) + 0.1 * Math.max(0, n[1]);
         const col = p.col.map((v, j) => Math.min(255, Math.round(v * lit * LIGHT[j])));
-        polys.push({ pr, z: pr.reduce((s, q) => s + q[2], 0) / pr.length, col, alpha });
+        polys.push({ pr, z: Math.hypot(...sub(fc, cam.pos)) + (p.kind === "slab" ? 1000 : 0), col, alpha });
       }
       if (k >= 1 && !p.landed) {
         p.landed = true;
@@ -696,7 +715,8 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       if (t < BUILT - 300 || dot(wd.out, sub(cam.pos, wd.pts[0])) <= 0) continue;
       const pr = wd.pts.map((v) => cam.proj(v));
       if (pr.some((q) => q[2] < 0.4)) continue;
-      polys.push({ pr, z: pr.reduce((s, q) => s + q[2], 0) / 4 - 0.3, win: true, alpha: 1 });
+      const fc = wd.pts.reduce((s, v) => [s[0] + v[0] / 4, s[1] + v[1] / 4, s[2] + v[2] / 4], [0, 0, 0]);
+      polys.push({ pr, z: Math.hypot(...sub(fc, cam.pos)) - 0.3, win: true, alpha: 1 });
     }
     polys.sort((a, b) => b.z - a.z);
     ctx.lineJoin = "round";
@@ -718,7 +738,6 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       const f = q.t / 650; ctx.fillStyle = `rgba(214,203,184,${0.18 * (1 - f)})`;
       ctx.beginPath(); ctx.arc(pp[0] + q.vx * f, pp[1] + q.vy * f, (2 + f * 6) * Math.min(3, 60 / pp[2]), 0, Math.PI * 2); ctx.fill();
     }
-    insideWall(t);
     // светило встаёт справа от башни, растёт и крутится, останавливается гербом
     const tr = clamp((t - BUILT + 100) / RISE), tsp = clamp((t - BUILT - RISE + 150) / SPIN);
     if (tr > 0) {
