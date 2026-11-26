@@ -662,12 +662,6 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     ctx.beginPath(); ctx.ellipse(-0.6 * u, -0.55 * u, 0.5 * u, 0.25 * u, -0.6, 0, Math.PI * 2); ctx.fill();   // ухо
     ctx.restore(); ctx.restore();
   }
-  // ели перед подножием башни: всегда непрозрачные, как только камера вышла из окна наружу
-  // (без растворения), чтобы деревья нигде не просвечивали и не пропадали
-  function foreground(cam) {
-    if (!pano || -cam.pos[2] < half(WY) + 0.05) return;
-    ctx.drawImage(pano[4], view[0], view[1], W * view[2], H * view[2]);
-  }
   function frame(now) {
     if (done) return;
     const t = Math.max(0, now - start), dt = Math.min(50, now - last); last = now;
@@ -744,7 +738,6 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
       const f = q.t / 650; ctx.fillStyle = `rgba(214,203,184,${0.18 * (1 - f)})`;
       ctx.beginPath(); ctx.arc(pp[0] + q.vx * f, pp[1] + q.vy * f, (2 + f * 6) * Math.min(3, 60 / pp[2]), 0, Math.PI * 2); ctx.fill();
     }
-    foreground(cam);
     // светило встаёт справа от башни, растёт и крутится, останавливается гербом
     const tr = clamp((t - ORB + 100) / RISE), tsp = clamp((t - ORB - RISE + 150) / SPIN);
     if (tr > 0) {
