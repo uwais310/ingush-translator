@@ -441,7 +441,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 
   // как иглу: ярус с окнами уже стоит (камера внутри), остальное достраивается кольцами вверх и вниз,
   // пока камера отлетает: камни подлетают по дуге с поворотом и садятся; машикули, потом крыша
-  const FLY = 450, SPAN = 1400, START = 800;
+  const FLY = 550, SPAN = 1800, START = 1500;
   const order = (p) => p.kind === "slab" ? -1 : p.kind === "wall" ? (p.row >= 4 && p.row <= 9 ? -1 : Math.abs(p.row - WR) + (p.row < WR ? 0.5 : 0)) : p.kind === "mach" ? 20 : 30;
   const later = pieces.filter((p) => order(p) >= 0).sort((p, q) => order(p) - order(q) || Math.random() - 0.5);
   pieces.forEach((p) => {
@@ -453,7 +453,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   later.forEach((p, i) => { p.t0 = START + SPAN * Math.pow(i / later.length, 0.9); p.landed = false; });
   const N = pieces.length;
   const BUILT = START + SPAN + FLY;
-  const RISE = 400, SPIN = 850, TITLE = BUILT + RISE - 200, MIN = BUILT + RISE + SPIN + 650;
+  const RISE = 500, SPIN = 1000, TITLE = BUILT + RISE - 200, MIN = BUILT + RISE + SPIN + 800;
   const L = norm([-0.3, 0.5, -0.8]);                   // свет с той стороны, куда смотрит камера в конце: одна сторона светлая, другая в тени
   const LIGHT = MOON ? [0.78, 0.86, 1.05] : [1.06, 0.98, 0.86];
   const motes = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.4, v: 0.004 + Math.random() * 0.01, a: 0.15 + Math.random() * 0.35 }));
@@ -602,7 +602,7 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
   // и сквозь заднее окно наружу; не разворачиваясь, отлетает и видит башню целиком (горы — за ней)
   const smooth = (x) => x * x * (3 - 2 * x);
   function camera(t) {
-    const p = inout(clamp((t - 350) / (BUILT - 350)));
+    const p = inout(clamp((t - 1100) / (BUILT - 1000)));   // ~1 с смотрим в окно, потом плавно пятимся
     const o = smooth(clamp((p - 0.03) / 0.97)), lk = smooth(clamp((p - 0.03) / 0.45));
     const pos = [13 * o, WY + 4 * o, 0.4 - 58 * p];
     const ahead = [pos[0], pos[1], pos[2] + 100], twr = [0, 12.5, 0];
