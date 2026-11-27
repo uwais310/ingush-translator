@@ -190,10 +190,11 @@
   .heat span { text-align: center; line-height: 1.6; white-space: nowrap; overflow: visible; }
   .heat .wd { text-align: left; font-size: 11px; align-self: center; }
   .heat i { display: block; aspect-ratio: 1; border-radius: 3px; background: color-mix(in srgb, var(--line) 45%, transparent); min-width: 0; }
-  .heat i.l1 { background: color-mix(in srgb, var(--green) 22%, var(--snow)); }
-  .heat i.l2 { background: color-mix(in srgb, var(--green) 45%, var(--snow)); }
-  .heat i.l3 { background: color-mix(in srgb, var(--green) 70%, var(--snow)); }
-  .heat i.l4 { background: var(--green); }
+  .heat-legend i { background: color-mix(in srgb, var(--line) 45%, transparent); }
+  .heat i.l1, .heat-legend i.l1 { background: color-mix(in srgb, var(--green) 22%, var(--snow)); }
+  .heat i.l2, .heat-legend i.l2 { background: color-mix(in srgb, var(--green) 45%, var(--snow)); }
+  .heat i.l3, .heat-legend i.l3 { background: color-mix(in srgb, var(--green) 70%, var(--snow)); }
+  .heat i.l4, .heat-legend i.l4 { background: var(--green); }
   @media (min-width: 700px) { .heat i { aspect-ratio: auto; height: 20px; } }
   .grid2 > .card { align-content: start; }
   .heat-legend { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--stone); justify-content: flex-end; }
@@ -213,6 +214,8 @@
   .restore { display: grid; gap: 10px; background: var(--snow); border: 1.5px solid var(--green); border-radius: 14px; padding: 12px; }
   .restore ul { margin: 0; padding-left: 20px; font-size: 15px; }
   .file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
+  .file-btn:focus-within { outline: 3px solid color-mix(in srgb, var(--green) 55%, transparent); outline-offset: 2px; border-color: var(--green); }
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; min-height: 0; padding: 0; }
   .conflict { border-left: 4px solid var(--amber-ink); }
   #add-slot:empty, #restore-box:empty { display: none; }
@@ -276,7 +279,8 @@
             <button class="btn" type="button" id="live-toggle" aria-pressed="false" title="Обновлять каждые 20 секунд">Живой режим</button>
           </div>
           <p class="hint" id="live-hour"></p>
-          <ol class="rank live" id="live" aria-live="polite"></ol>
+          <ol class="rank live" id="live"></ol>
+          <p class="sr" id="live-status" role="status" aria-live="polite"></p>
         </section>
 
         <section class="card" aria-label="Переводы по дням">
@@ -345,7 +349,7 @@
 
         <section class="card" aria-label="Копия">
           <h2>Копия</h2>
-          <p class="hint">Скачайте копию словаря, жалоб и журнала. Из файла копии можно вернуть то, чего сейчас нет: ничего не удаляется и не перезаписывается.</p>
+          <p class="hint">Скачайте копию словаря, жалоб и журнала. Из файла копии можно вернуть то, чего сейчас нет: ничего не удаляется и не перезаписывается, а то, что не помещается в лимиты хранилища, пропускается.</p>
           <div class="row-actions">
             <button class="btn" type="button" id="backup2">Скачать копию</button>
             <span class="btn file-btn">Восстановить из файла<input type="file" id="restore-file" accept=".json,application/json" aria-label="Восстановить из файла копии"></span>
@@ -471,12 +475,15 @@ $("login").addEventListener("submit", async (e) => {
     $("login-status").textContent = err.message;
   } finally { $("enter").disabled = false; }
 });
-$("logout").addEventListener("click", () => {
-  setLive(false);
+function signOut(msg) {
+  setLive(false, false);
   store(false, ""); code = ""; data = null;
   $("app").hidden = true; $("tools").hidden = true; $("login").hidden = false;
-  $("code").value = ""; $("login-status").textContent = "";
-});
+  $("code").value = "";
+  $("login-status").className = msg ? "status error" : "status";
+  $("login-status").textContent = msg || "";
+}
+$("logout").addEventListener("click", () => signOut(""));
 $("refresh").addEventListener("click", async () => {
   $("refresh").disabled = true;
   try { await load(); toast("Обновлено"); } catch (err) { $("app-status").textContent = err.message; } finally { $("refresh").disabled = false; }
@@ -731,24 +738,35 @@ function shortTime(iso) {
   if (dayKey(d) === dayKey(new Date())) return pad(d.getHours()) + ":" + pad(d.getMinutes());
   return pad(d.getDate()) + "." + pad(d.getMonth() + 1);
 }
+let liveSeq = 0, liveBusy = false;
 async function pollLive() {
-  if (!liveOn || document.hidden || !code) return;
+  if (!liveOn || document.hidden || !code || !data || liveBusy) return;
+  liveBusy = true;
+  const seq = ++liveSeq, myCode = code;
   try {
     const out = await api({ op: "live" });
-    const old = new Set((liveRows || data.log).slice(0, 20).map(logKey));
-    const fresh = new Set(out.log.map(logKey).filter((k) => !old.has(k)));
+    if (seq !== liveSeq || !liveOn || !data || !code || code !== myCode) return; // устаревший ответ — пропускаем
+    // новые записи (по at+text) — и в список «Переводы», без повторов и в прежнем порядке (новые сверху)
+    const have = new Set(data.log.map(logKey));
+    const add = out.log.filter((e) => !have.has(logKey(e)));
     liveRows = out.log; liveHour = out.hour;
-    // новые записи — и в список «Переводы»
-    if (fresh.size) { const add = out.log.filter((e) => fresh.has(logKey(e))); data.log = add.concat(data.log); }
-    renderLive(liveRows && old.size ? fresh : null);
-  } catch (e) { $("app-status").textContent = e.message; }
+    if (add.length) data.log = add.concat(data.log);
+    renderLive(new Set(add.map(logKey)));
+    if (add.length) $("live-status").textContent = add.length >= out.log.length && out.log.length >= 20
+      ? "Новых переводов больше 20 — нажмите «Обновить», чтобы увидеть все."
+      : "Новых переводов: " + add.length;
+  } catch (e) {
+    if (e.status === 403) { signOut("Код больше не подходит — войдите снова."); return; }
+    $("app-status").textContent = e.message;
+  } finally { liveBusy = false; }
 }
-function setLive(on) {
+function setLive(on, remember) {
   liveOn = on;
+  liveSeq++; // ответы прежних опросов больше не нужны
   clearInterval(liveTimer); liveTimer = null;
   $("live-toggle").setAttribute("aria-pressed", String(on));
   if (on) { liveTimer = setInterval(pollLive, 20000); pollLive(); }
-  try { localStorage.setItem("inh-admin-live", on ? "1" : ""); } catch (e) {}
+  if (remember !== false) try { localStorage.setItem("inh-admin-live", on ? "1" : ""); } catch (e) {}
   if (data) renderLive();
 }
 $("live-toggle").addEventListener("click", () => setLive(!liveOn));
@@ -801,8 +819,6 @@ function renderHeat() {
   lg.append("меньше");
   for (const l of ["", "l1", "l2", "l3", "l4"]) { const i = el("i", l); lg.append(i); }
   lg.append("больше");
-  // у легенды те же цвета, что у клеток
-  [...lg.querySelectorAll("i")].forEach((i) => { const probe = el("i", i.className); box.append(probe); i.style.background = getComputedStyle(probe).backgroundColor; probe.remove(); });
   $("heat-hint").textContent = "По последним " + fmt(n) + " переводам журнала, ваше местное время.";
 }
 
@@ -827,7 +843,7 @@ function renderRecords() {
   tile(best ? fmt(best.n) : "—", best ? "лучший день · " + new Date(best.k + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" }) : "лучший день");
   tile(cur + " " + dayWord(cur), "серия сейчас", "Дней подряд с переводами, до сегодня или вчера");
   tile(longest + " " + dayWord(longest), "самая длинная серия");
-  tile(fmt(total), "всего переводов", "По счётчикам по дням: они хранятся 4 месяца");
+  tile(fmt(total), "переводов за 4 месяца", "По счётчикам по дням: они хранятся 4 месяца, поэтому это не «за всё время»");
   // следующая цель
   const goal = $("goal"); goal.textContent = "";
   const next = MILESTONES.find((m) => m > total) || total;
@@ -841,7 +857,10 @@ function renderRecords() {
   // перешли рубеж за последние 7 дней — маленький праздник
   let week = 0;
   for (let i = 0; i < 7; i++) week += (days[utcKey(new Date(Date.now() - i * 864e5))] || {}).total || 0;
-  const crossed = MILESTONES.filter((m) => total - week < m && m <= total).pop();
+  // только пока окно счётчиков не заполнено: иначе старые дни выпадают, сумма проседает и «рубеж» мог бы засчитаться повторно
+  const oldest = Object.keys(days).sort()[0];
+  const windowFull = oldest && Date.parse(oldest + "T00:00:00Z") <= Date.now() - (120 - 8) * 864e5;
+  const crossed = week > 0 && !windowFull ? MILESTONES.filter((m) => total - week < m && m <= total).pop() : null;
   if (crossed) goal.append(el("p", "cheer", "★ На этой неделе — " + fmt(crossed) + " переводов! Спасибо всем, кто пользуется."));
 }
 
@@ -887,15 +906,19 @@ function restoreParts(b) {
   return parts;
 }
 const RESTORE_NAMES = [["corrections", "Словарь сайта (слова и фразы)"], ["reports", "Жалобы"], ["review", "Решения проверки (/review)"], ["log", "Записи журнала"], ["logStats", "Дни в счётчиках"]];
+// added / skipped по разделам. В предпросмотре (dry) сервер ещё ничего не записал, поэтому каждой следующей части
+// сообщаем, сколько места уже заняли прежние (used), — итог совпадает с тем, что добавится на самом деле.
 async function restoreRun(parts, dry, onStep) {
-  const sum = { corrections: 0, reports: 0, review: 0, log: 0, logStats: 0 };
+  const zero = () => ({ corrections: 0, reports: 0, review: 0, log: 0, logStats: 0 });
+  const added = zero(), skipped = zero();
   for (let i = 0; i < parts.length; i++) {
     if (onStep) onStep(i + 1, parts.length);
-    const out = await api({ op: "restore", dry, backup: parts[i] });
-    for (const k in sum) sum[k] += out.added[k] || 0;
+    const out = await api({ op: "restore", dry, backup: parts[i], used: dry ? added : undefined });
+    for (const k in added) { added[k] += (out.added || {})[k] || 0; skipped[k] += (out.skipped || {})[k] || 0; }
   }
-  return sum;
+  return { added, skipped };
 }
+const SKIP_WHY = "не помещается в лимиты хранилища (словарь — 3000, жалобы — 2000, журнал — 3000 записей, счётчики — 4 месяца) или запись неверная";
 $("restore-file").addEventListener("change", async (ev) => {
   const input = ev.target;
   const file = input.files && input.files[0];
@@ -909,27 +932,29 @@ $("restore-file").addEventListener("change", async (ev) => {
   let b;
   try { b = JSON.parse(await file.text()); } catch (e) { say("Не получилось прочитать файл: это не JSON."); return; }
   if (!b || b.kind !== "ingush-translator-backup") { say("Это не файл резервной копии переводчика (нужен файл, скачанный кнопкой «Копия»)."); return; }
+  if (b.version !== 1) { say("Неизвестная версия копии (" + String(b.version).slice(0, 20) + "): эта админка умеет только версию 1."); return; }
   const parts = restoreParts(b);
   say("Проверяю, чего из копии сейчас нет…");
-  let sum;
-  try { sum = await restoreRun(parts, true, (i, n) => n > 1 && say("Проверяю, чего из копии сейчас нет… " + i + "/" + n)); }
+  let plan;
+  try { plan = await restoreRun(parts, true, (i, n) => n > 1 && say("Проверяю, чего из копии сейчас нет… " + i + "/" + n)); }
   catch (e) { say(e.message); return; }
   panel.textContent = "";
-  const total = Object.values(sum).reduce((a, x) => a + x, 0);
+  const count = (o) => Object.values(o).reduce((a, x) => a + x, 0);
+  const total = count(plan.added), skipped = count(plan.skipped);
   panel.append(el("b", "", "Копия от " + (b.at ? new Date(b.at).toLocaleString("ru-RU") : "неизвестной даты")));
-  if (!total) { panel.append(el("p", "note", "Всё из этой копии уже есть — добавлять нечего.")); panel.append(button("Закрыть", "", () => (box.textContent = ""))); return; }
-  panel.append(el("p", "note", "Будет добавлено (то, что уже есть, не меняется):"));
-  const ul = el("ul");
-  for (const [k, name] of RESTORE_NAMES) if (sum[k]) ul.append(el("li", "", name + ": " + fmt(sum[k])));
-  panel.append(ul);
+  const list = (o) => { const ul = el("ul"); for (const [k, name] of RESTORE_NAMES) if (o[k]) ul.append(el("li", "", name + ": " + fmt(o[k]))); return ul; };
+  if (total) { panel.append(el("p", "note", "Будет добавлено (то, что уже есть, не меняется):"), list(plan.added)); }
+  else panel.append(el("p", "note", skipped ? "Добавить нечего: всё остальное из копии уже есть." : "Всё из этой копии уже есть — добавлять нечего."));
+  if (skipped) panel.append(el("p", "note", "Не будет добавлено — " + SKIP_WHY + ":"), list(plan.skipped));
+  if (!total) { panel.append(button("Закрыть", "", () => (box.textContent = ""))); return; }
   const act = el("div", "row-actions");
   const go = button("Восстановить", "ok", async () => {
     go.disabled = true; cancel.disabled = true;
     try {
       const done = await restoreRun(parts, false, (i, n) => (go.textContent = n > 1 ? "Восстанавливаю… " + i + "/" + n : "Восстанавливаю…"));
-      const added = Object.values(done).reduce((a, x) => a + x, 0);
       box.textContent = "";
-      toast("Восстановлено записей: " + fmt(added));
+      const sk = count(done.skipped);
+      toast("Восстановлено записей: " + fmt(count(done.added)) + (sk ? ", пропущено: " + fmt(sk) : ""));
       await load();
     } catch (e) { go.disabled = false; cancel.disabled = false; go.textContent = "Восстановить"; $("app-status").textContent = e.message; }
   });
