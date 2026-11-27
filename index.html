@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ГӀалгӀай">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Ингушский переводчик</title>
 <style>
   /* Дизайн повторяет флаг Ингушетии: белое поле между двумя зелёными полосами и красный солнечный знак.
@@ -293,6 +294,17 @@
   .work { background: var(--card); border: 1px solid var(--card-line); border-radius: 28px; padding: 12px; box-shadow: var(--sheet-shadow);
     -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
   .work { position: relative; }
+  /* «Добавить на экран»: маленькая карточка над переводчиком, пока приложение не установлено */
+  .install { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; background: var(--card); border: 1px solid var(--card-line);
+    border-radius: 18px; box-shadow: var(--sheet-shadow); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); font-size: 14px; line-height: 1.35; }
+  .install img { width: 36px; height: 36px; border-radius: 9px; flex: none; }
+  .install .txt { flex: 1; min-width: 0; }
+  .install b { display: block; font-size: 15px; }
+  .install .how { color: var(--stone); }
+  .install .how svg { width: 15px; height: 15px; vertical-align: -2px; }
+  .install .go-in { flex: none; min-height: 40px; padding: 0 14px; border: 0; border-radius: 20px; background: var(--green); color: #fff; font-weight: 600; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { .install .go-in { color: #08301c; } }
+  .install .x { flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: var(--stone); font-size: 22px; line-height: 1; cursor: pointer; }
   .work::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
     background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, .22), transparent 50%); mix-blend-mode: soft-light; }
   @media (prefers-color-scheme: dark) { .work::after { background: radial-gradient(circle at var(--gx, 50%) var(--gy, 30%), rgba(255, 255, 255, .10), transparent 55%); mix-blend-mode: normal; } }
@@ -360,9 +372,16 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
 // (по часам посетителя: у большинства это Алматы), крутится как монета и открывает герб Ингушетии
 // (упрощённый рисунок). Держится, пока сайт не загрузится; потом растворяется в горы.
 // Тап — пропустить. Один раз за визит; при «уменьшить движение» не показывается. ?splash=sun|moon — показать снова.
+// С домашнего экрана каждый запуск — новый «визит», поэтому там заставка не чаще раза в 12 часов: приложение открывается сразу.
 (() => {
   let show = false;
-  try { show = !matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("splash"); sessionStorage.setItem("splash", "1"); } catch (e) {}
+  try {
+    show = !matchMedia("(prefers-reduced-motion: reduce)").matches && !sessionStorage.getItem("splash"); sessionStorage.setItem("splash", "1");
+    if (matchMedia("(display-mode: standalone)").matches || navigator.standalone) {
+      const last = +localStorage.getItem("splash-at") || 0;
+      if (Date.now() - last < 12 * 3600e3) show = false; else if (show) localStorage.setItem("splash-at", String(Date.now()));
+    }
+  } catch (e) {}
   if (/[?&]splash\b/.test(location.search)) show = true;              // ?splash — показать ещё раз (для проверки)
   if (!show) return;
   const box = document.getElementById("splash"), cv = box.querySelector("canvas"), ctx = cv.getContext("2d");
@@ -828,6 +847,15 @@ function dayPhase(d = new Date()) { const h = d.getHours() + d.getMinutes() / 60
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5" transform="rotate(-14 12 12)"/><path d="M3 9c-1 2-1 4 0 6M21 9c1 2 1 4 0 6"/></svg>
     <span>Горы двигаются от наклона</span>
     <button type="button">Включить</button>
+  </div>
+  <div class="install" id="install" hidden>
+    <img src="/icon-192.png" alt="" width="36" height="36">
+    <div class="txt">
+      <b>Добавить на экран</b>
+      <span class="how" id="install-how">Переводчик откроется как приложение</span>
+    </div>
+    <button class="go-in" id="install-go" type="button" hidden>Установить</button>
+    <button class="x" id="install-x" type="button" aria-label="Скрыть">×</button>
   </div>
   <div class="work">
     <div class="left">
@@ -1334,7 +1362,17 @@ async function fetchApi(payload, signal) {
 }
 function showError(e) {
   if (e.status === 429) { resetOutput("Слишком много переводов подряд."); setStatus("Подождите минуту и нажмите «Перевести» ещё раз." + (e.detail ? " (" + e.detail + ")" : ""), "error"); }
-  else if (e.name === "TypeError") { resetOutput("Нет связи с сервером."); setStatus("Проверьте интернет и нажмите «Перевести» ещё раз.", "error"); }
+  else if (e.name === "TypeError") {
+    // без интернета: если этот текст уже переводили, показываем перевод из истории
+    const x = loadHistory().find((h) => h.src === els.src.value && h.tgt === els.tgt.value && h.input === els.input.value.trim());
+    if (x) {
+      lastResult = x.output; lastInput = x.input; lastPair = { src: x.src, tgt: x.tgt };
+      showText(x.output); setButtons(true);
+      const m = x.meta && x.meta.kind ? x.meta : { text: "Из истории, откуда перевод — неизвестно", kind: "draft" };
+      setMeta(m.text, m.kind);
+      setStatus("Нет интернета: показан перевод из истории.", "error");
+    } else { resetOutput("Нет связи с сервером."); setStatus(navigator.onLine === false ? "Нет интернета. Переводы из «Недавних» открываются и без него." : "Проверьте интернет и нажмите «Перевести» ещё раз.", "error"); }
+  }
   else if ([502, 503, 504].includes(e.status)) {
     resetOutput(AI_ON ? "ИИ сейчас не отвечает." : "Сервер сейчас не отвечает.");
     // в скобках — какие ИИ не ответили и почему: это помогает понять, что чинить
@@ -1649,6 +1687,43 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
 }
+
+/* ---------- «Добавить на экран» ----------
+   Android/Chrome: кнопка «Установить» вызывает системное окно установки.
+   iPhone/iPad: такого окна нет, поэтому показываем, где нажать: «Поделиться» → «На экран „Домой“».
+   Уже установлено (открыто с экрана) или карточку закрыли — не показываем. */
+(() => {
+  const box = $("install");
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let hiddenAt = 0; try { hiddenAt = +localStorage.getItem("install-hidden") || 0; } catch (e) {}
+  if (installed || Date.now() - hiddenAt < 30 * 864e5) return;          // закрыли — снова покажем через месяц
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4M5 11v9h14v-9"/></svg>';
+  if (ios) {
+    $("install-how").innerHTML = "Нажмите " + SHARE + " «Поделиться», потом «На экран „Домой“»";
+    box.hidden = false;
+  }
+  let ask = null;
+  addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); ask = e;
+    $("install-go").hidden = false; box.hidden = false;
+  });
+  $("install-go").addEventListener("click", async () => {
+    if (!ask) return;
+    ask.prompt();
+    try { await ask.userChoice; } catch (e) {}
+    ask = null; box.hidden = true;
+  });
+  addEventListener("appinstalled", () => { box.hidden = true; });
+  $("install-x").addEventListener("click", () => {
+    box.hidden = true;
+    try { localStorage.setItem("install-hidden", String(Date.now())); } catch (e) {}
+  });
+})();
+
+// без интернета — сразу говорим об этом, а не после нажатия «Перевести»
+addEventListener("offline", () => setStatus("Нет интернета. Переводы из «Недавних» открываются и без него.", "error"));
+addEventListener("online", () => { if (els.status.textContent.startsWith("Нет интернета")) setStatus(""); });
 </script>
 <script>
 // Горы нарисованы как иллюстрация: 5 слоёв (дальний хребет, снежные вершины, средний хребет, холмы с башнями,

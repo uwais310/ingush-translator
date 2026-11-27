@@ -11,6 +11,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const zlib = require("zlib");
 
 const ROOT = __dirname;
 const DATA = path.join(ROOT, "local-data");
@@ -60,6 +61,26 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
   res.end(body);
 }
 
+// Файлы сайта: текст (страницы, sw.js, манифест) сжимается gzip — на телефоне грузится в разы быстрее.
+// Сжатая копия держится в памяти, пока файл не изменится. Иконки браузер может хранить неделю.
+const packed = new Map();
+function sendFile(req, res, file) {
+  const full = path.join(ROOT, file);
+  const stat = fs.statSync(full);
+  const type = TYPES[path.extname(file)] || "application/octet-stream";
+  const text = /^(text|application\/(manifest\+)?json)/.test(type) || type.includes("javascript");
+  const headers = { "Content-Type": type, "Cache-Control": file.endsWith(".png") ? "public, max-age=604800" : "no-cache", "Vary": "Accept-Encoding" };
+  let data;
+  if (text && /\bgzip\b/.test(req.headers["accept-encoding"] || "")) {
+    let p = packed.get(file);
+    if (!p || p.mtime !== stat.mtimeMs) { p = { mtime: stat.mtimeMs, gz: zlib.gzipSync(fs.readFileSync(full), { level: 9 }) }; packed.set(file, p); }
+    data = p.gz; headers["Content-Encoding"] = "gzip";
+  } else data = fs.readFileSync(full);
+  headers["Content-Length"] = data.length;
+  res.writeHead(200, headers);
+  res.end(req.method === "HEAD" ? undefined : data);
+}
+
 function readBody(req, limit = 200_000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -97,8 +118,7 @@ function createServer() {
       }
       const file = PAGES[url];
       if (!file || (req.method !== "GET" && req.method !== "HEAD")) return send(res, 404, "Not found", "text/plain; charset=utf-8");
-      const data = fs.readFileSync(path.join(ROOT, file));
-      return send(res, 200, req.method === "HEAD" ? "" : data, TYPES[path.extname(file)] || "application/octet-stream");
+      return sendFile(req, res, file);
     } catch (e) {
       console.error(e);
       if (!res.headersSent) send(res, 500, JSON.stringify({ error: "Ошибка сервера. Посмотрите окно, где запущен server.js." }));
