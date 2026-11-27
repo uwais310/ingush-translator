@@ -1648,6 +1648,8 @@ function appVersion() {
   if (VERSION) return VERSION;
   const env = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_REF;
   if (env) return (VERSION = String(env).slice(0, 7));
+  // Railway при `railway up` (без git) коммита не знает — тогда хотя бы id выкладки
+  if (process.env.RAILWAY_DEPLOYMENT_ID) return (VERSION = "deploy " + String(process.env.RAILWAY_DEPLOYMENT_ID).slice(0, 8));
   try { // без переменных хостинга — коммит из .git (локально), как получится
     const fs = require("fs"), path = require("path");
     const git = path.join(__dirname, "..", ".git");
@@ -1674,14 +1676,25 @@ function serverInfo() {
 }
 
 // восстановление из резервной копии (op "restore"): только добавляет недостающее, ничего не удаляет и не переписывает.
+// Добавляется только то, что помещается в лимиты хранилища (словарь 3000, жалобы 2000, журнал MAX, дни STAT_DAYS):
+// иначе следующая запись сайта вытеснила бы старое молча. Остальное — в skipped.
 // Страница может слать копию частями (у локального сервера лимит на размер запроса) — повторное добавление ничего не меняет.
+// used — сколько места уже заняли прежние части того же предпросмотра (dry), чтобы итог по частям был точным.
 const RESTORE_CAP = { corrections: 5000, reports: 5000, log: 5000, review: 20000, logStats: 1000 };
+const LIMITS = { corrections: 3000, reports: 2000 };
+const RESTORE_KEYS = ["corrections", "reports", "review", "log", "logStats"];
+const BAD_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 const isStr = (v, max) => typeof v === "string" && v.length <= max;
-async function restoreBackup(store, b, dry) {
-  const isLang = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(LANGS, c);
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+let SEED_IDS = null;
+async function restoreBackup(store, b, dry, used = {}) {
+  const isLang = (c) => typeof c === "string" && own(LANGS, c);
   const arr = (v, cap) => (Array.isArray(v) ? v.slice(0, cap) : []);
-  const out = { corrections: 0, reports: 0, review: 0, log: 0, logStats: 0 };
+  const u = (k) => (Number.isFinite(used[k]) && used[k] > 0 ? Math.floor(used[k]) : 0);
+  const added = Object.fromEntries(RESTORE_KEYS.map((k) => [k, 0]));
+  const skipped = Object.fromEntries(RESTORE_KEYS.map((k) => [k, 0]));
+  const byTime = (x, y) => (String(x.at) < String(y.at) ? -1 : String(x.at) > String(y.at) ? 1 : 0);
 
   // словарь сайта ("all"): по phraseId, существующая запись главнее
   const corr = arr(b.corrections, RESTORE_CAP.corrections)
@@ -1692,9 +1705,9 @@ async function restoreBackup(store, b, dry) {
     const have = new Set(list.map(phraseId));
     const add = [];
     for (const p of corr) { const id = phraseId(p); if (!have.has(id)) { have.add(id); add.push(p); } }
-    const room = Math.max(0, 3000 - list.length); // как у savePhrase: не больше 3000, старое не вытесняем
+    const room = Math.max(0, LIMITS.corrections - list.length - u("corrections"));
     const take = add.slice(0, room);
-    out.corrections = take.length;
+    added.corrections = take.length; skipped.corrections = add.length - take.length;
     if (!dry && take.length) {
       const merged = take.concat(list); // восстановленные — более старые, кладём в начало
       await store.setJSON("all", merged);
@@ -1703,7 +1716,7 @@ async function restoreBackup(store, b, dry) {
     }
   }
 
-  // жалобы: по reportId, по времени
+  // жалобы: по reportId, по времени; не больше 2000 (иначе новая жалоба вытеснит старые)
   const reps = arr(b.reports, RESTORE_CAP.reports)
     .filter((r) => isObj(r) && isStr(r.at, 40) && isStr(r.text, 2000) && r.text && isStr(r.source || "", 10) && isStr(r.target || "", 10))
     .map((r) => { const o = {}; for (const k of ["at", "text", "translation", "source", "target", "model", "handled", "handledAt", "fixed", "note"]) if (r[k] !== undefined && (typeof r[k] === "string" || typeof r[k] === "boolean")) o[k] = typeof r[k] === "string" ? r[k].slice(0, 2000) : r[k]; return o; });
@@ -1713,22 +1726,28 @@ async function restoreBackup(store, b, dry) {
     const have = new Set(cur.map(reportId));
     const add = [];
     for (const r of reps) { const id = reportId(r); if (!have.has(id)) { have.add(id); add.push(r); } }
-    out.reports = add.length;
-    if (!dry && add.length) await store.setJSON("reports", cur.concat(add).sort((x, y) => (String(x.at) < String(y.at) ? -1 : String(x.at) > String(y.at) ? 1 : 0)));
+    const room = Math.max(0, LIMITS.reports - cur.length - u("reports"));
+    const take = room ? add.sort(byTime).slice(-room) : []; // места мало — берём самые свежие
+    added.reports = take.length; skipped.reports = add.length - take.length;
+    if (!dry && take.length) await store.setJSON("reports", cur.concat(take).sort(byTime));
   }
 
-  // решения /review: по ключу, только недостающие
+  // решения /review: по ключу (id пары из data/phrases.json), только недостающие
   if (isObj(b.review)) {
+    if (!SEED_IDS) SEED_IDS = new Set(SEED.map((p) => p.id).filter(Boolean));
     const cur = await loadReview(true);
     const add = {};
+    let n = 0;
     for (const [k, v] of Object.entries(b.review).slice(0, RESTORE_CAP.review)) {
-      if (!isStr(k, 80) || !isObj(v) || (v.s !== "ok" && v.s !== "fix") || k in cur) continue;
-      if (v.s === "fix" && !(isStr(v.inh, 1000) && v.inh.trim())) continue;
-      add[k] = v.s === "fix" ? { s: "fix", inh: v.inh, at: isStr(v.at, 40) ? v.at : undefined } : { s: "ok", at: isStr(v.at, 40) ? v.at : undefined };
+      if (BAD_KEYS.has(k) || !isStr(k, 80) || own(cur, k)) continue;
+      if (!SEED_IDS.has(k) || !isObj(v) || (v.s !== "ok" && v.s !== "fix") || (v.s === "fix" && !(isStr(v.inh, 1000) && v.inh.trim()))) { skipped.review++; continue; }
+      const at = isStr(v.at, 40) ? v.at : undefined;
+      Object.defineProperty(add, k, { value: v.s === "fix" ? { s: "fix", inh: v.inh, at } : { s: "ok", at }, enumerable: true, writable: true, configurable: true });
+      n++;
     }
-    out.review = Object.keys(add).length;
-    if (!dry && out.review) {
-      const merged = { ...cur, ...add };
+    added.review = n;
+    if (!dry && n) {
+      const merged = Object.assign({}, cur, add);
       await store.setJSON("review", merged);
       setReview(merged);
       CACHE.clear();
@@ -1746,8 +1765,12 @@ async function restoreBackup(store, b, dry) {
     const n = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
     days[d] = { total: n(s.total), ruInh: n(s.ruInh), inhRu: n(s.inhRu), empty: n(s.empty) };
   }
-  if (log.length || Object.keys(days).length) Object.assign(out, await LOG.merge(log, days, { dry }));
-  return out;
+  if (log.length || Object.keys(days).length) {
+    const m = await LOG.merge(log, days, { dry, used: { log: u("log"), logStats: u("logStats") } });
+    added.log = m.added.log; added.logStats = m.added.logStats;
+    skipped.log = m.skipped.log; skipped.logStats = m.skipped.logStats;
+  }
+  return { added, skipped };
 }
 
 function sameCode(given, code) {
@@ -1802,8 +1825,9 @@ async function adminAction(body, res) {
       if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
       const b = body.backup;
       if (!isObj(b) || b.kind !== "ingush-translator-backup") return res.status(400).json({ error: "Это не файл резервной копии переводчика." });
-      const added = await restoreBackup(store, b, !!body.dry);
-      return res.status(200).json({ ok: true, dry: !!body.dry, added });
+      if (b.version !== 1) return res.status(400).json({ error: "Неизвестная версия копии: " + String(b.version).slice(0, 20) });
+      const { added, skipped } = await restoreBackup(store, b, !!body.dry, body.dry && isObj(body.used) ? body.used : {});
+      return res.status(200).json({ ok: true, dry: !!body.dry, added, skipped });
     }
     // резервная копия: всё, что сайт хранит сам (база data/phrases.json и так лежит в git)
     if (op === "backup") {
