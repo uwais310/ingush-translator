@@ -84,6 +84,11 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
     const r = C.translate(t, "ru");
     assert.ok(r.translation.includes(w) && !/\[/.test(r.translation), t + " → " + r.translation);
   }
+  // «Сунжа» — сначала словарь (PaydaDosh: «Сунжа — Шолж», река), не одно из нескольких названий («Аьхка-Юрт» — село)
+  const su = C.translate("Сунжа течёт", "ru").translation;
+  assert.ok(/^Шолж/.test(su) && !/Аьхка/.test(su), su);
+  // «из Магаса» — нужен исходный падеж (-ра), формы нет: в [скобках], не «Магаса» (родительный)
+  assert.ok(C.translate("Я из Магаса", "ru").translation.includes("[из Магаса]"), C.translate("Я из Магаса", "ru").translation);
   // «Я» в начале предложения — местоимение, не название
   assert.ok(/^Сона/.test(C.translate("Я люблю Мадину", "ru").translation));
   console.log("ok 3б:", C.translate("Завтра я поеду в Назрань", "ru").translation);
