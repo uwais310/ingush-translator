@@ -58,7 +58,10 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
     const r = C.translate(t, "ru");
     assert.ok(r.translation.includes(chunk) && !name(r).length, t + " → " + r.translation);
   }
-  console.log("ok 3:", a.translation, "|", b.translation, "|", C.translate("Я был у Ахмеда", "ru").translation);
+  // родительный после существительного («Книга Ахмеда» — чья) — не дополнение: в [скобках], не «Книжка Ахмед»
+  const k = C.translate("Книга Ахмеда", "ru");
+  assert.ok(k.translation.includes("[Ахмеда]") && !name(k).length, k.translation);
+  console.log("ok 3:", a.translation, "|", b.translation, "|", C.translate("Я был у Ахмеда", "ru").translation, "|", k.translation);
 }
 
 // 3б. Города — не люди: форма из настоящих текстов или словаря, а не [скобки]
