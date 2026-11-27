@@ -38,6 +38,10 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   // зимой двенадцать дней голодным ходил); русское «двенадцать» — не «две…»
   const n12 = C0.translate("Аьхки цхьа ди доадаьр, Ӏай шийтта дийнахьа меца лийннав", "inh");
   assert.strictEqual(piece(n12, "шийтта").to, "двенадцать", JSON.stringify(n12.pieces));
+  // порядковое из редкой записи: «ялхайтталагӀа» — шестнадцатый (PaydaDosh: «две тысячи шестнадцатый год —
+  // ши эзар ялхайтталагӀа шу»)
+  const n16 = C0.translate("ши эзар ялхайтталагӀа шу", "inh");
+  assert.strictEqual(piece(n16, "ялхайтталагӏа").to, "шестнадцатый", JSON.stringify(n16.pieces));
   // «Ӏай» (корпус: «зимой») — наречие, не прилагательное: не «зимая»
   assert.ok(!/зимая/.test(n12.translation), n12.translation);
   console.log("   ", n12.translation);
