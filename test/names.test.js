@@ -45,7 +45,7 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
 }
 
 // 3. По словам, русский → ингушский. Прямое дополнение без предлога — в именительном («люблю Мадину» → «Мадина»,
-// «вижу Ахмеда» → «Ахмед»: в ингушском дополнение в именительном). После предлога и в дательном нужен ингушский
+// «вижу Ахмеда» → «Ахьмад»: в ингушском дополнение в именительном). После предлога и в дательном нужен ингушский
 // падеж, формы имён с окончаниями не подтверждены — имя вместе с предлогом остаётся в [скобках] как написано
 // (раньше «Я был у Ахмеда» → «Со Ахмед вар» — «я был Ахмед»).
 {
@@ -53,7 +53,7 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
   const a = C.translate("Я люблю Мадину", "ru");
   assert.deepStrictEqual(name(a), ["Мадина"], JSON.stringify(a.pieces));
   const b = C.translate("Я вижу Ахмеда", "ru");
-  assert.deepStrictEqual(name(b), ["Ахмед"], JSON.stringify(b.pieces));
+  assert.deepStrictEqual(name(b), ["Ахьмад"], JSON.stringify(b.pieces));
   for (const [t, chunk] of [["Я был у Ахмеда", "[у Ахмеда]"], ["Подарок для Ахмеда", "[для Ахмеда]"], ["Я иду с Мадиной", "[с Мадиной]"], ["Позвони Мадине", "[Мадине]"], ["Скажи Увайсу", "[Увайсу]"]]) {
     const r = C.translate(t, "ru");
     assert.ok(r.translation.includes(chunk) && !name(r).length, t + " → " + r.translation);
