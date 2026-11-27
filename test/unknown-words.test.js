@@ -142,6 +142,8 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
     const r = C.translate(t, "ru");
     assert.ok(!r || !r.pieces.some((p) => /^приш/.test(p.from) && p.how !== "unknown"), t + " → " + JSON.stringify(r && r.pieces));
   }
+  // в [скобках] — слово как написано, с «ё»
+  assert.ok(C.translate("Он пришёл домой", "ru").translation.includes("[пришёл]"), C.translate("Он пришёл домой", "ru").translation);
   console.log("ok 7: «прийти», «пришла», «пришёл» — без догадок");
 }
 
