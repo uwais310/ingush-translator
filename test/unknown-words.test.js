@@ -175,6 +175,14 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   console.log("ok 8б:", r.translation);
 }
 
+// 8в. «мичахь» — «где», как «мичахьа». Справочник (раздел 2) называет «мичахь» чеченским написанием «где»; фраза —
+// PaydaDosh «Тика мичахьа я?» (Где магазин?) с таким написанием, как его вводят пользователи
+{
+  const r = C.translate("Тика мичахь я?", "inh");
+  assert.strictEqual(r.translation, "Где магазин?", r.translation);
+  console.log("ok 8в:", r.translation);
+}
+
 // 9. одна согласная буква — не слово: «и т. д.», пометы класса «(й, б, д)»
 {
   const r = C.translate("Доастам ваккха (й, б, д,)", "inh");
