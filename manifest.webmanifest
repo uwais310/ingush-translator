@@ -1,15 +1,35 @@
 {
+  "id": "/",
   "name": "Ингушский переводчик — ГӀалгӀай мотт",
   "short_name": "ГӀалгӀай",
   "description": "Перевод ингушских слов, фраз и текстов",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0a6b3d",
   "theme_color": "#0a6b3d",
+  "categories": [
+    "education",
+    "reference"
+  ],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
