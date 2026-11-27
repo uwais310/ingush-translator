@@ -31,6 +31,11 @@ const tr = (text) => new Promise((ok) => T({ method: "POST", body: { text, sourc
   // неизвестное имя — как написано
   t = await tr("Пётр купил хлеб.");
   assert.ok(/Пётр|Петр/.test(t), t);
+  // два имени через «и» — без формы на -а, с «… а … а»; наречие — не дополнение (код-ревью)
+  t = await tr("Хасан и Ахмед купили хлеб.");
+  assert.ok(!/Хьасана|Ахьмада/.test(t), t);
+  t = await tr("Ахмед бежал быстро.");
+  assert.ok(!/Ахьмада/.test(t), t);
   // обратно: ингушское имя и его форма на -а → русское имя (не «Имя дома»)
   const back = (text) => new Promise((ok) => T({ method: "POST", body: { text, source: "inh", target: "ru" } }, { status() { return this; }, json: (o) => ok(o.translation) }));
   t = await back("Ахьмад цӀагӀа ва.");

@@ -29,5 +29,11 @@ function tr(text) {
     assert.ok(/ийцар/.test(r.translation), `${ru} → ${r.translation}`);
     assert.ok(!/\bэца\b/.test(r.translation), `${ru} → ${r.translation}`);
   }
+  // обратно: «ийцар» — прошедшее; существительное со своей записью в словаре («дешар» — учёба) — не глагол
+  const back = (text) => new Promise((ok) => T({ method: "POST", body: { text, source: "inh", target: "ru" } }, { status() { return this; }, json: (o) => ok(o.translation) }));
+  let t = await back("Аз маькх ийцар.");
+  assert.ok(/взял|купил/.test(t), t);
+  t = await back("Са дешар дика да.");
+  assert.ok(!/растаял/i.test(t), t);
   console.log("ok: прошедшее время по образцу словаря");
 })().catch((e) => { console.error(e); process.exit(1); });
