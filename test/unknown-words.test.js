@@ -16,12 +16,23 @@ const C = require("../lib/rules/chunks.js")({ RET, SEED, ALIGN, EXAMPLES: phrase
 const C0 = require("../lib/rules/chunks.js")({ RET, SEED });
 const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
 
-// 1. ингушская форма из таблицы корпуса, перевод подтверждён словарями: «эггара» — «самых» (corpus-lexicon: самых:28*)
+// 1. ингушская форма из таблицы корпуса, перевод подтверждён словарями: «эггара» — самых / самым / самые / самый
+// (corpus-lexicon; строки корпуса GhalghayTools в базе) → словарная форма «самый».
+// Фраза — PaydaDosh: «Сага эггара халагӀдар – ше вовзар» — для человека самое сложное – познать себя (по словам)
 {
-  const r = C.translate("эггара дика саг", "inh");
+  const r = C.translate("Сага эггара халагӀдар – ше вовзар", "inh", { noWhole: true });
   const p = piece(r, "эггара");
-  assert.ok(p && p.how === "corpus" && p.to === "самых", JSON.stringify(r && r.pieces));
-  console.log("ok 1: «эггара дика саг» →", r.translation);
+  assert.ok(p && p.how === "corpus" && p.to === "самый", JSON.stringify(r && r.pieces));
+  console.log("ok 1: «Сага эггара халагӀдар – ше вовзар» →", r.translation);
+  // и в начале предложения — не имя: «Эггара хозача йоӀах фоарт йӀаьха я аьннад» (PaydaDosh)
+  const r2 = C.translate("Эггара хозача йоӀах фоарт йӀаьха я аьннад", "inh", { noWhole: true });
+  assert.strictEqual(piece(r2, "эггара").how, "corpus", JSON.stringify(r2.pieces));
+  console.log("   ", r2.translation);
+  // отрицание не теряется: «венавац» (корпус: «пришёл») — не «пришёл»; числительные — не из таблицы корпуса
+  for (const t of ["Саг венавац", "шовзткъеи ши"]) {
+    const q = C0.translate(t, "inh");
+    assert.ok(!q || !q.pieces.some((p) => p.how === "corpus" && !/^не/.test(p.to) && /ц$/.test(p.from)) && !q.pieces.some((p) => p.how === "corpus" && /пятьдесят|четверт/.test(p.to)), JSON.stringify(q && q.pieces));
+  }
 }
 
 // 2. редкая запись PaydaDosh (слово есть в словаре, но не в собранных текстах): «доарех» — «дёшево» (PaydaDosh)
