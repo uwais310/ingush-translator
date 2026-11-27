@@ -1514,7 +1514,7 @@ async function handleRequest(req, res) {
         translation: fixT(ch.translation), model: ch.pieces.length && ch.pieces.every((p) => p.how === "name") ? "Имя: не переводится, пишется так же" : backOk ? "Без ИИ: по словам, подтверждено обратным переводом по базе" : "Без ИИ: по словам из словаря", rules: true, chunks: true, roundTrip: backOk || undefined,
         known: ch.known, total: ch.total, words, similar,
         // откуда каждое слово перевода: страница показывает это по нажатию на слово
-        pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "" })),
+        pieces: (ch.pieces || []).filter((p) => p && p.to).map((p) => ({ from: String(p.from || ""), to: fixT(p.to), how: String(p.how || ""), src: p.src ? String(p.src) : "", ...(p.syn ? { syn: String(p.syn), synOf: String(p.synOf || "") } : {}) })),
         details: { alternatives: [], note: "Собрано по словам из словаря; слова в [скобках] не найдены." + ((ch.pieces || []).some((p) => p.how === "loan") ? " Слова " + ch.pieces.filter((p) => p.how === "loan").map((p) => "«" + p.to + "»").join(", ") + " оставлены как по-русски (новые заимствования)." : "") + ((ch.pieces || []).some((p) => p.how === "name") ? " Имена не переводятся." : "") },
       };
       if (target === "inh") Object.assign(result, checkIngush(result.translation, input));

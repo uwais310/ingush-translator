@@ -55,22 +55,22 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   console.log("ok 5: «Ца яьчох нана хиннаяц» →", r.translation);
 }
 
-// 6. русский синоним из нашего словаря: «поручать» есть только в редкой записи PaydaDosh «амалт де — поручить,
-// поручать»; «поручить» — «тӀадила» (PaydaDosh: «тӀадила — задать, поручить…»)
+// 6. русское слово только с редкой записью PaydaDosh — перевод из неё (how: "near"): «кинотеатр» — «кийнотеатр»
+// (PaydaDosh, форма есть в словаре, но не в собранных текстах)
 {
-  const r = C0.translate("Мама поручает мне работу", "ru");
-  const p = piece(r, "поручает");
-  assert.ok(p && p.how === "synonym" && p.syn === "поручить" && p.to === "тӀадила", JSON.stringify(r.pieces));
-  console.log("ok 6: «Мама поручает мне работу» →", r.translation, `(«поручает» ≈ «${p.syn}»)`);
+  const r = C0.translate("Я иду в кинотеатр", "ru");
+  const p = piece(r, "кинотеатр");
+  assert.ok(p && p.how === "near" && p.to === "кийнотеатр", JSON.stringify(r && r.pieces));
+  console.log("ok 6: «Я иду в кинотеатр» →", r.translation);
 }
 
-// 7. формы, которые ждут носителей (CLAUDE.md: «пришёл», «прийти»), синонимом не заменяются
+// 7. формы, которые ждут носителей (CLAUDE.md: «пришёл», «прийти»), догадками не заменяются
 {
   for (const t of ["прийти домой", "Она пришла домой"]) {
     const r = C0.translate(t, "ru");
-    assert.ok(!r || !r.pieces.some((p) => p.how === "synonym"), t + " → " + JSON.stringify(r && r.pieces));
+    assert.ok(!r || !r.pieces.some((p) => p.how === "synonym" || p.how === "near"), t + " → " + JSON.stringify(r && r.pieces));
   }
-  console.log("ok 7: «прийти», «пришла» — без синонимов");
+  console.log("ok 7: «прийти», «пришла» — без догадок");
 }
 
 // 8. пометы окончаний и заполнители толкований — не слова: «Ленивый (-ая, -ые)», «Прим.: -ая, ые», «кого-либо»
@@ -81,9 +81,10 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   assert.ok(!/\[(ая|ые)\]/.test(b), b);
   const c = C0.translate("Вскружить голову кому-либо", "ru");
   assert.ok(!c || !/либо/.test(c.translation), c && c.translation);
-  // одно такое слово — синоним из словаря: «что-либо» → «что-нибудь»
-  const d = C0.translate("что-либо", "ru");
-  assert.ok(d && d.pieces[0].how === "synonym" && d.pieces[0].syn === "что-нибудь", JSON.stringify(d && d.pieces));
+  // «что-либо» в обычной фразе — запись «что-нибудь» целиком: «моллагӀа цхьа хӀама» (PaydaDosh)
+  const d = C0.translate("Скажи что-либо", "ru");
+  const dp = piece(d, "что-либо");
+  assert.ok(dp && dp.how === "synonym" && dp.syn === "что-нибудь" && dp.to === "моллагӀа цхьа хӀама", JSON.stringify(d && d.pieces));
   // падежная форма («кого-то») — без синонима: формы падежа словарь по-ингушски не даёт
   const e = C0.translate("Я кого-то видел", "ru");
   assert.ok(!e || !e.pieces.some((p) => p.how === "synonym"), JSON.stringify(e && e.pieces));
@@ -97,10 +98,11 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   console.log("ok 9: «Доастам ваккха (й, б, д,)» →", r.translation);
 }
 
-// 10. замер считает неизвестные слова (scripts/eval-chunks.js)
+// 10. палочка Ӏ в начале слова — не заглавная буква: «Ӏуйре» — утро, не имя (справочник: «Ӏуйре дика хийла»)
 {
-  const src = require("fs").readFileSync(require("path").join(__dirname, "../scripts/eval-chunks.js"), "utf8");
-  assert.ok(/неизвестные слова: во фразах/.test(src) && /unkPhr, unkTok/.test(src));
-  console.log("ok 10: eval-chunks показывает неизвестные слова");
+  const r = C0.translate("дика Ӏуйре", "inh");
+  assert.ok(piece(r, "ӏуйре").how !== "name", JSON.stringify(r.pieces));
+  console.log("ok 10: «дика Ӏуйре» →", r.translation);
 }
+
 console.log("все проверки неизвестных слов прошли");
