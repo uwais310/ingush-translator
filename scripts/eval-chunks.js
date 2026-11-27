@@ -13,6 +13,7 @@
 //   node scripts/eval-chunks.js --diff    — показать 40 примеров
 //   node scripts/eval-chunks.js --no-align — без таблицы слов (как было)
 //   node scripts/eval-chunks.js --no-cons  — без конструкций с несколькими местами (chunks.js, construction)
+//   «неизвестные слова» — сколько фраз с хотя бы одним [словом] без перевода и сколько таких слов всего.
 //   node scripts/eval-chunks.js --cons-stats — сколько фраз дошли до каждой проверки конструкций
 // Конструкции, как и перевод по аналогии, выписываются только из обучающих частей (EXAMPLES: train).
 
@@ -71,12 +72,15 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
     chunksFor.push(makeChunks({ RET, SEED, ALIGN, EXAMPLES: train, tune }));
   }
 
-  let done = 0, same = 0, hitW = 0, allW = 0, shown = 0;
+  let done = 0, same = 0, hitW = 0, allW = 0, shown = 0, unkPhr = 0, unkTok = 0;
   const dump = [];
   for (const { from, to } of items) {
     const r = chunksFor[foldOf(from)].translate(from, src, { noWhole: true });
     if (!r) continue;
     done++;
+    // неизвестные слова: в ответе они стоят в [скобках] (chunks.js, how: "unknown")
+    const unk = (r.pieces || []).filter((x) => x.how === "unknown").length;
+    if (unk) { unkPhr++; unkTok += unk; }
     const ours = norm(r.translation).split(" ").filter(Boolean);
     const refWords = new Set(to.flatMap((t) => norm(t).split(" ")));
     const good = ours.filter((w) => refWords.has(w)).length;
@@ -84,7 +88,7 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
     const bag = (s) => norm(s).split(" ").sort().join(" ");
     const ok = to.some((t) => bag(t) === bag(r.translation));
     if (ok) same++;
-    if (DUMP) dump.push({ from, ours: r.translation, ref: to[0], same: ok, good, n: ours.length });
+    if (DUMP) dump.push({ from, ours: r.translation, ref: to[0], same: ok, good, n: ours.length, pieces: (r.pieces || []).map((x) => [x.from, x.to, x.how]) });
     if (SHOW && shown < 40 && done % 7 === 0) { shown++; log(`${from}\n  наш:     ${r.translation}\n  носитель: ${to[0]}`); }
   }
   if (DUMP && !quiet) require("fs").writeFileSync(DUMP, JSON.stringify(dump, null, 1));
@@ -92,8 +96,9 @@ function run(quiet = false, inh = INH, tune = {}, extra = []) {
   log(`Фраз (от 2 слов): ${refs.size}. Переведено по кускам: ${done} (${pct(done, refs.size)}).`);
   log(`  слова на месте (есть в переводе носителя): ${pct(hitW, allW)}`);
   log(`  совпало целиком (порядок слов не важен):   ${same} (${pct(same, done)})`);
+  log(`  неизвестные слова: во фразах ${unkPhr} из ${done}, всего слов ${unkTok}`);
   if (CONS_STATS) log(`  конструкции (до какой проверки дошли): ${JSON.stringify(consStats)}`);
-  return { total: refs.size, done, words: allW ? hitW / allW : 0, same };
+  return { total: refs.size, done, words: allW ? hitW / allW : 0, same, unkPhr, unkTok };
 }
 
 if (require.main === module) run();
