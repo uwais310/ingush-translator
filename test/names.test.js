@@ -21,6 +21,8 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
     const r = R.translate(ru);
     assert.ok(texts(r).some((t) => norm(t) === norm(inh)), `${ru} → ${JSON.stringify(texts(r))}`);
   }
+  // «Как тебя (вас) зовут? — Хьа цӀи мишта я?» — для «вас» тот же ответ источника
+  assert.strictEqual(R.translate("Как вас зовут?").translation, "Хьа цӀи мишта я?");
   // любое имя — без ингушского окончания
   const a = R.translate("Меня зовут Ахмед");
   assert.ok(texts(a).includes("Са цӀи Ахмед я"), JSON.stringify(texts(a)));
@@ -35,7 +37,11 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
     const r = R.translateInh(inh);
     assert.ok(texts(r).some((t) => norm(t) === norm(ru)), `${inh} → ${JSON.stringify(texts(r))}`);
   }
-  console.log("ok 2: «Са цӀи Увайс я.» →", R.translateInh("Са цӀи Увайс я.").translation);
+  // женское имя из списка PaydaDosh («лейла» — имя, женское): первым «Ее зовут». Ингушская фраза — та, что дают
+  // сами правила для «Её зовут Лейла»
+  const lei = R.translate("Её зовут Лейла");
+  assert.strictEqual(R.translateInh(lei.translation).translation, "Ее зовут Лейла", lei.translation);
+  console.log("ok 2: «Са цӀи Увайс я.» →", R.translateInh("Са цӀи Увайс я.").translation, "|", lei.translation, "→", R.translateInh(lei.translation).translation);
 }
 
 // 3. По словам, русский → ингушский. Прямое дополнение без предлога — в именительном («люблю Мадину» → «Мадина»,
