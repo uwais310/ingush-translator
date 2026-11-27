@@ -172,6 +172,10 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
 {
   const r = C0.translate("Как поживает твоя семья?", "ru");
   assert.ok(r.translation.includes("[поживает]"), r.translation);
+  // и прошедшее на -ил, настоящее на -ёт: «починил», «течёт» — не заимствования; «смартфон», «сериал» — заимствования
+  assert.ok(C0.translate("Он починил кран", "ru").translation.includes("[починил]"));
+  assert.ok(C0.translate("Сунжа течёт", "ru").translation.includes("[течёт]"));
+  assert.ok(/смартфон/.test(C0.translate("Я купил смартфон", "ru").translation) && /сериал/.test(C0.translate("Я смотрю сериал", "ru").translation));
   console.log("ok 8б:", r.translation);
 }
 
