@@ -38,15 +38,21 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
   console.log("ok 2: «Са цӀи Увайс я.» →", R.translateInh("Са цӀи Увайс я.").translation);
 }
 
-// 3. По словам, русский → ингушский: имя в косвенном падеже — в именительном, без русского окончания
-// и без придуманного ингушского («у Ахмеда» — не «Ахмеда», «с Мадиной» — не «Мадиной»)
+// 3. По словам, русский → ингушский. Прямое дополнение без предлога — в именительном («люблю Мадину» → «Мадина»,
+// «вижу Ахмеда» → «Ахмед»: в ингушском дополнение в именительном). После предлога и в дательном нужен ингушский
+// падеж, формы имён с окончаниями не подтверждены — имя вместе с предлогом остаётся в [скобках] как написано
+// (раньше «Я был у Ахмеда» → «Со Ахмед вар» — «я был Ахмед»).
 {
   const name = (r) => r.pieces.filter((p) => p.how === "name").map((p) => p.to);
-  const a = C.translate("У Ахмеда есть машина", "ru");
-  assert.deepStrictEqual(name(a), ["Ахмед"], JSON.stringify(a.pieces));
-  const b = C.translate("Я иду с Мадиной", "ru");
-  assert.deepStrictEqual(name(b), ["Мадина"], JSON.stringify(b.pieces));
-  console.log("ok 3:", a.translation, "|", b.translation);
+  const a = C.translate("Я люблю Мадину", "ru");
+  assert.deepStrictEqual(name(a), ["Мадина"], JSON.stringify(a.pieces));
+  const b = C.translate("Я вижу Ахмеда", "ru");
+  assert.deepStrictEqual(name(b), ["Ахмед"], JSON.stringify(b.pieces));
+  for (const [t, chunk] of [["Я был у Ахмеда", "[у Ахмеда]"], ["Подарок для Ахмеда", "[для Ахмеда]"], ["Я иду с Мадиной", "[с Мадиной]"], ["Позвони Мадине", "[Мадине]"], ["Скажи Увайсу", "[Увайсу]"]]) {
+    const r = C.translate(t, "ru");
+    assert.ok(r.translation.includes(chunk) && !name(r).length, t + " → " + r.translation);
+  }
+  console.log("ok 3:", a.translation, "|", b.translation, "|", C.translate("Я был у Ахмеда", "ru").translation);
 }
 
 // 4. По словам, ингушский → русский: имя в начале предложения не становится словом «имя»
