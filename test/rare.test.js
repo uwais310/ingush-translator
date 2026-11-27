@@ -43,11 +43,12 @@ const SEED = require("../data/phrases.json");
 
   // 5. имена: не «нет в словаре», а как есть (записи «имя = …» PaydaDosh, большая буква в середине предложения)
   r = await call({ text: "Ахмед", source: "ru", target: "inh", mode: "word" });
-  assert.strictEqual(r.translation, "Ахмед"); assert.ok(/Имя/.test(r.model), r.model);
+  assert.strictEqual(r.translation, "Ахьмад"); // по-ингушски (подписи Википедии)
+  assert.ok(/Имя/.test(r.model), r.model);
   r = await call({ text: "Мурад и Амина пьют чай", source: "ru", target: "inh", mode: "text" });
   assert.ok(/Мурад а Амина а/.test(r.translation), r.translation);
   r = await call({ text: "Ахьмад цӀа вахар", source: "inh", target: "ru", mode: "text" });
-  assert.ok(/^Ахьмад /.test(r.translation), r.translation);
+  assert.ok(/^Ахмед /.test(r.translation), r.translation); // имя — по-русски (подписи Википедии)
   r = await call({ text: "Брат работает в Москве", source: "ru", target: "inh", mode: "text" });
   assert.ok(/Моске/.test(r.translation), "город — не имя: " + r.translation);
   console.log("ok 5: имена —", r.translation);
