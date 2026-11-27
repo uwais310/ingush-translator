@@ -72,6 +72,10 @@ const norm = (s) => String(s).toLowerCase().replace(/ӏ/g, "Ӏ").replace(/[.,!?]
       back++;
     }
   }
+  // «мой + слово» — только если обратно получается то же: «Моя девушка» → «Са йоӀ» было бы «моя дочь»
+  // (справочник: «са йоӀ — моя дочь»)
+  assert.strictEqual(R.translate("Моя девушка"), null, JSON.stringify(R.translate("Моя девушка")));
+  assert.strictEqual(R.translate("Моя дочь").translation, "Са йоӀ");
   const silentInh = ["ЧӀоагӀа шийла я", "Ер Эса да", "Хьо бакъ ва", "Дала хоастам ба!", "Со меца ва", "ХӀанз тӀехьа да"];
   for (const s of silentInh) assert.strictEqual(R.translateInh(s), null, `«${s}» должно остаться без перевода по правилам: ${JSON.stringify(R.translateInh(s))}`);
   let ri = R.translateInh("Сона талмач веза");
