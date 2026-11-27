@@ -81,7 +81,12 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
     const r = C0.translate(t, "ru");
     assert.ok(!r || !r.pieces.some((p) => p.how === "synonym" || p.how === "near"), t + " → " + JSON.stringify(r && r.pieces));
   }
-  console.log("ok 7: «прийти», «пришла» — без догадок");
+  // и не из таблицы корпуса: «Ӏумар пришёл» не даёт «венав» (имя — PaydaDosh: «Ӏумар»)
+  for (const t of ["Ӏумар пришёл", "Он пришёл домой", "Кто пришёл?"]) {
+    const r = C.translate(t, "ru");
+    assert.ok(!r || !r.pieces.some((p) => /^приш/.test(p.from) && p.how !== "unknown"), t + " → " + JSON.stringify(r && r.pieces));
+  }
+  console.log("ok 7: «прийти», «пришла», «пришёл» — без догадок");
 }
 
 // 8. пометы окончаний и заполнители толкований — не слова: «Ленивый (-ая, -ые)», «Прим.: -ая, ые», «кого-либо»
