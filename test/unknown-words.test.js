@@ -168,6 +168,13 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   console.log("ok 8: пометы и заполнители —", a, "|", b, "|", c && c.translation, "|", d.translation, "|", f.translation);
 }
 
+// 8б. русский глагол, которого нет в словаре («поживает»), — не заимствование: остаётся в [скобках]
+{
+  const r = C0.translate("Как поживает твоя семья?", "ru");
+  assert.ok(r.translation.includes("[поживает]"), r.translation);
+  console.log("ok 8б:", r.translation);
+}
+
 // 9. одна согласная буква — не слово: «и т. д.», пометы класса «(й, б, д)»
 {
   const r = C.translate("Доастам ваккха (й, б, д,)", "inh");
