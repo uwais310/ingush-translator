@@ -63,6 +63,22 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   assert.ok(/^Самая красивая/.test(a.translation), a.translation);
   const b = C0.translate("Эггара хозагӀа дола хӀама да аьлча, хьаргӀийво ший кӀориг енай", "inh", { noWhole: true });
   assert.ok(!/самый красивее/i.test(b.translation) && /красивее всех/i.test(b.translation), b.translation);
+  // любая форма «самый» перед сравнительной степенью: «эггара лакхагӀа» (PaydaDosh: самый высокий) — не «самое выше»
+  const c = C.translate("эггара лакхагӀа", "inh", { noWhole: true });
+  assert.ok(!/сам\S*\s+выше/i.test(c.translation) && /выше всех/i.test(c.translation), c.translation);
+  // по всем фразам базы с «эггара»: «самый» согласован со следующим словом и не стоит перед сравнительной степенью
+  // (с таблицей фраз следующий кусок бывает из двух слов: «красивая девушка» — согласуем с первым)
+  const GEN = (e) => (/^(ая|яя)$/.test(e) ? "f" : /^(ое|ее)$/.test(e) ? "n" : /^(ые|ие)$/.test(e) ? "pl" : /^(ый|ий|ой)$/.test(e) ? "m" : null);
+  for (const p of SEED.filter((x) => /^[Ээ]ггара /.test(x.inh || "")).slice(0, 60)) {
+    for (const CC of [C, C0]) {
+      const t = CC.translate(p.inh, "inh", { noWhole: true }).translation;
+      const m = /(?:^|\s)сам(ый|ая|ое|ые)\s+([а-яё]+)/i.exec(t);
+      if (!m) continue;
+      assert.ok(!/(ее|ше|же)$/.test(m[2]) || GEN(m[2].slice(-2)) === "n", p.inh + " → " + t);
+      const g2 = GEN(m[2].slice(-2));
+      if (g2) assert.strictEqual(GEN(m[1]), g2, p.inh + " → " + t);
+    }
+  }
   // притяжательные на -ий: волчий → волчья, коровий → коровье (не «волчая», «коровее»)
   const R = require("../lib/rules/russian.js");
   assert.deepStrictEqual(["f", "n", "pl"].map((g) => R.adj("волчий", g)), ["волчья", "волчье", "волчьи"]);
