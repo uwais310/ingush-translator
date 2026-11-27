@@ -171,7 +171,61 @@
   .addbar { display: flex; gap: 8px; flex-wrap: wrap; }
   .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #14201a; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 15px; z-index: 9; max-width: calc(100% - 32px); }
   @media (prefers-color-scheme: dark) { .toast { background: #e9f1ec; color: #14201a; } }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  /* --- v3: живой режим, качество, тепловая карта, рекорды, сервер, копия, противоречия --- */
+  .live-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .live-head h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .live-head .btn { min-height: 36px; padding: 6px 12px; font-size: 14px; }
+  .live-head .btn[aria-pressed="true"] { background: #0a6b3d; color: #fff; border-color: #0a6b3d; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: color-mix(in srgb, var(--stone) 45%, transparent); flex: none; position: relative; }
+  .dot.on { background: #2fb36b; }
+  .dot.on::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #2fb36b; animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse { from { transform: scale(1); opacity: .7; } to { transform: scale(2.8); opacity: 0; } }
+  .live li { grid-template-columns: 3.6em minmax(0, 1fr); }
+  .live .tm { font-size: 12px; color: var(--stone); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .live li.fresh { animation: slidein .5s ease-out; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-6px); background: var(--leaf); } to { opacity: 1; transform: none; } }
+  .col .q { background: var(--green); }
+  .col .q.low { background: var(--amber-ink); opacity: .75; }
+  .heat { display: grid; grid-template-columns: 1.7em repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10px; color: var(--stone); }
+  .heat span { text-align: center; line-height: 1.6; white-space: nowrap; overflow: visible; }
+  .heat .wd { text-align: left; font-size: 11px; align-self: center; }
+  .heat i { display: block; aspect-ratio: 1; border-radius: 3px; background: color-mix(in srgb, var(--line) 45%, transparent); min-width: 0; }
+  .heat-legend i { background: color-mix(in srgb, var(--line) 45%, transparent); }
+  .heat i.l1, .heat-legend i.l1 { background: color-mix(in srgb, var(--green) 22%, var(--snow)); }
+  .heat i.l2, .heat-legend i.l2 { background: color-mix(in srgb, var(--green) 45%, var(--snow)); }
+  .heat i.l3, .heat-legend i.l3 { background: color-mix(in srgb, var(--green) 70%, var(--snow)); }
+  .heat i.l4, .heat-legend i.l4 { background: var(--green); }
+  @media (min-width: 700px) { .heat i { aspect-ratio: auto; height: 20px; } }
+  .grid2 > .card { align-content: start; }
+  .heat-legend { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--stone); justify-content: flex-end; }
+  .heat-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .mini { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mini div { background: var(--snow); border-radius: 12px; padding: 10px 12px; display: grid; gap: 1px; min-width: 0; }
+  .mini b { font-size: 22px; line-height: 1.15; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .mini span { font-size: 12.5px; color: var(--stone); }
+  .goal { display: grid; gap: 6px; font-size: 14px; }
+  .goal .split i { background: var(--green); }
+  .cheer { margin: 0; font-size: 14px; font-weight: 650; color: var(--green-deep); background: var(--leaf); border-radius: 10px; padding: 6px 10px; }
+  .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+  @media (max-width: 560px) { .kv { grid-template-columns: 1fr 1fr; } }
+  .kv div { background: var(--snow); border-radius: 12px; padding: 8px 12px; min-width: 0; }
+  .kv dt { font-size: 12px; color: var(--stone); }
+  .kv dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .restore { display: grid; gap: 10px; background: var(--snow); border: 1.5px solid var(--green); border-radius: 14px; padding: 12px; }
+  .restore ul { margin: 0; padding-left: 20px; font-size: 15px; }
+  .file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
+  .file-btn:focus-within { outline: 3px solid color-mix(in srgb, var(--green) 55%, transparent); outline-offset: 2px; border-color: var(--green); }
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; min-height: 0; padding: 0; }
+  .conflict { border-left: 4px solid var(--amber-ink); }
+  #add-slot:empty, #restore-box:empty { display: none; }
+  .conflict .grp { display: grid; gap: 6px; background: var(--snow); border-radius: 12px; padding: 10px 12px; }
+  .conflict .grp > b { font-size: 15px; overflow-wrap: anywhere; }
+  .conflict .opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .conflict .opt .tr { color: var(--green-deep); font-weight: 600; overflow-wrap: anywhere; }
+  .conflict .opt small { display: block; color: var(--stone); font-size: 12px; font-weight: 400; }
+  .conflict .btn { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
@@ -219,6 +273,16 @@
 
       <!-- Обзор: графики, частые фразы, слова без перевода -->
       <div id="overview" class="wrap" style="padding:0">
+        <section class="card" aria-label="Сейчас на сайте">
+          <div class="live-head">
+            <h2><span class="dot" id="live-dot" aria-hidden="true"></span>Сейчас на сайте</h2>
+            <button class="btn" type="button" id="live-toggle" aria-pressed="false" title="Обновлять каждые 20 секунд">Живой режим</button>
+          </div>
+          <p class="hint" id="live-hour"></p>
+          <ol class="rank live" id="live"></ol>
+          <p class="sr" id="live-status" role="status" aria-live="polite"></p>
+        </section>
+
         <section class="card" aria-label="Переводы по дням">
           <div class="chart-head">
             <h2>Переводы за 14 дней</h2>
@@ -226,6 +290,19 @@
           </div>
           <div class="chart" id="chart"></div>
         </section>
+
+        <div class="grid2">
+          <section class="card" aria-label="Качество по дням">
+            <div class="chart-head"><h2>Нашлось целиком</h2><span class="legend" id="quality-avg"></span></div>
+            <p class="hint">Доля переводов за день без пропусков: не пусто и без [слов в скобках].</p>
+            <div class="chart small" id="quality"></div>
+          </section>
+          <section class="card" aria-label="Рекорды">
+            <h2>Рекорды</h2>
+            <div id="records" class="mini"></div>
+            <div class="goal" id="goal"></div>
+          </section>
+        </div>
 
         <div class="grid2">
           <section class="card" aria-label="Переводы по неделям">
@@ -237,6 +314,12 @@
             <div class="chart small" id="rchart"></div>
           </section>
         </div>
+
+        <section class="card" aria-label="Когда переводят">
+          <div class="chart-head"><h2>Когда переводят</h2><span class="heat-legend" id="heat-legend"></span></div>
+          <p class="hint" id="heat-hint"></p>
+          <div class="heat" id="heatmap" role="img" aria-label="Переводы по дням недели и часам"></div>
+        </section>
 
         <div class="grid2">
           <section class="card">
@@ -264,11 +347,26 @@
           </section>
         </div>
 
+        <section class="card" aria-label="Копия">
+          <h2>Копия</h2>
+          <p class="hint">Скачайте копию словаря, жалоб и журнала. Из файла копии можно вернуть то, чего сейчас нет: ничего не удаляется и не перезаписывается, а то, что не помещается в лимиты хранилища, пропускается.</p>
+          <div class="row-actions">
+            <button class="btn" type="button" id="backup2">Скачать копию</button>
+            <span class="btn file-btn">Восстановить из файла<input type="file" id="restore-file" accept=".json,application/json" aria-label="Восстановить из файла копии"></span>
+          </div>
+          <div id="restore-box"></div>
+        </section>
+
         <section class="card" aria-label="Очистка">
           <h2>Очистка</h2>
           <p class="hint">Перед очисткой сайт сам скачает резервную копию, а последнюю очистку можно вернуть. Словарь сайта здесь не трогается.</p>
           <div class="row-actions" id="clear-actions"></div>
           <p class="fixed" id="undo-row" hidden></p>
+        </section>
+
+        <section class="card" aria-label="Сервер">
+          <h2>Сервер</h2>
+          <dl class="kv" id="server"></dl>
         </section>
       </div>
 
@@ -313,6 +411,7 @@
           </div>
         </section>
         <div id="add-slot"></div>
+        <section class="card conflict" id="conflicts" hidden></section>
         <div class="list" id="list"></div>
         <button class="btn more" type="button" id="more" hidden>Показать ещё</button>
       </div>
@@ -376,11 +475,15 @@ $("login").addEventListener("submit", async (e) => {
     $("login-status").textContent = err.message;
   } finally { $("enter").disabled = false; }
 });
-$("logout").addEventListener("click", () => {
+function signOut(msg) {
+  setLive(false, false);
   store(false, ""); code = ""; data = null;
   $("app").hidden = true; $("tools").hidden = true; $("login").hidden = false;
-  $("code").value = ""; $("login-status").textContent = "";
-});
+  $("code").value = "";
+  $("login-status").className = msg ? "status error" : "status";
+  $("login-status").textContent = msg || "";
+}
+$("logout").addEventListener("click", () => signOut(""));
 $("refresh").addEventListener("click", async () => {
   $("refresh").disabled = true;
   try { await load(); toast("Обновлено"); } catch (err) { $("app-status").textContent = err.message; } finally { $("refresh").disabled = false; }
@@ -394,13 +497,18 @@ $("backup").addEventListener("click", async () => {
   } catch (err) { $("app-status").textContent = err.message; } finally { $("backup").disabled = false; }
 });
 
+$("backup2").addEventListener("click", () => $("backup").click());
+
 async function load() {
   data = await api({ op: "data" });
   $("app-status").textContent = "";
   $("login").hidden = true; $("app").hidden = false; $("tools").hidden = false;
+  liveRows = null; liveHour = null;
   renderAll();
+  if (!liveInit) { liveInit = true; let on = false; try { on = localStorage.getItem("inh-admin-live") === "1"; } catch (e) {} if (on) setLive(true); }
 }
-function renderAll() { renderStats(); renderOverview(); renderClear(); renderList(); }
+let liveInit = false;
+function renderAll() { renderStats(); renderOverview(); renderV3(); renderClear(); renderList(); }
 
 function download(name, text, type) {
   const a = document.createElement("a");
@@ -454,15 +562,17 @@ function renderStats() {
   }
   $("n-reports").textContent = fresh ? String(fresh) : "";
   $("n-dict").textContent = (data.dict || []).length ? String(data.dict.length) : "";
+  const nc = (data.conflicts || []).length;
+  $("tab-dict").title = fmt((data.dict || []).length) + " записей в словаре сайта" + (nc ? "; противоречий: " + nc : "");
   const where = { supabase: "Supabase", netlify: "Netlify Blobs", local: "папка local-data", none: "нет хранилища — данные не сохраняются" }[data.storage] || data.storage;
   $("foot").textContent = "Хранилище: " + where + "." + (data.logging ? " Журнал хранит последние 3000 переводов, счётчики по дням — 4 месяца." : " Журнал переводов выключен (ADMIN_LOG=0).");
 }
 
 // ---------- графики ----------
 // columns: [{ label, title, today, parts: [[cls, n], ...] }]
-function bars(box, columns) {
+function bars(box, columns, fixedMax) {
   box.textContent = "";
-  const max = Math.max(1, ...columns.map((c) => c.parts.reduce((s, p) => s + p[1], 0)));
+  const max = fixedMax || Math.max(1, ...columns.map((c) => c.parts.reduce((s, p) => s + p[1], 0)));
   for (const c of columns) {
     const day = el("div", "day" + (c.today ? " today" : ""));
     day.title = c.title;
@@ -588,6 +698,313 @@ function renderOverview() {
     li.append(el("span", "cnt", "×" + m.count), body, add);
     ms.append(li);
   }
+}
+
+// ---------- v3: сейчас на сайте, качество, тепловая карта, рекорды, сервер ----------
+function renderV3() { renderLive(); renderQuality(); renderHeat(); renderRecords(); renderServer(); }
+
+// «Сейчас на сайте»: последние 8 переводов; «Живой режим» — опрос op live раз в 20 секунд, пока вкладка открыта
+let liveOn = false, liveTimer = null, liveRows = null, liveHour = null;
+const logKey = (e) => e.at + "|" + e.text;
+function hourCount(list) { const t = Date.now() - 3600e3; return list.filter((e) => Date.parse(e.at) >= t).length; }
+function renderLive(fresh) {
+  const rows = (liveRows || data.log).slice(0, 8);
+  const n = liveHour == null ? hourCount(data.log) : liveHour;
+  $("live-hour").textContent = "за последний час: " + fmt(n);
+  $("live-dot").className = "dot" + (liveOn ? " on" : "");
+  $("live-dot").title = liveOn ? "живой режим включён" : "";
+  const box = $("live"); box.textContent = "";
+  if (!rows.length) box.append(el("li", "", "Пока никто ничего не переводил."));
+  for (const e of rows) {
+    const li = el("li", fresh && fresh.has(logKey(e)) ? "fresh" : "");
+    const tm = el("span", "tm", shortTime(e.at)); tm.title = new Date(e.at).toLocaleString("ru-RU");
+    const body = el("div", "body");
+    body.append(document.createTextNode(e.text.length > 140 ? e.text.slice(0, 140) + "…" : e.text));
+    const sm = el("small"); sm.append(dirName(e) + ": ");
+    const t = String(e.translation || "");
+    sm.append(t ? el("span", "tr", t.length > 140 ? t.slice(0, 140) + "…" : t) : el("span", "tr none", "нет перевода"));
+    body.append(sm);
+    li.append(tm, body);
+    box.append(li);
+  }
+}
+// коротко для узкой колонки: «5 мин», «14:03», «25.11»
+function shortTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const mins = Math.round((Date.now() - d) / 60000);
+  if (mins < 1) return "сейчас";
+  if (mins < 60) return mins + " мин";
+  if (dayKey(d) === dayKey(new Date())) return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  return pad(d.getDate()) + "." + pad(d.getMonth() + 1);
+}
+let liveSeq = 0, liveBusy = false;
+async function pollLive() {
+  if (!liveOn || document.hidden || !code || !data || liveBusy) return;
+  liveBusy = true;
+  const seq = ++liveSeq, myCode = code;
+  try {
+    const out = await api({ op: "live" });
+    if (seq !== liveSeq || !liveOn || !data || !code || code !== myCode) return; // устаревший ответ — пропускаем
+    // новые записи (по at+text) — и в список «Переводы», без повторов и в прежнем порядке (новые сверху)
+    const have = new Set(data.log.map(logKey));
+    const add = out.log.filter((e) => !have.has(logKey(e)));
+    liveRows = out.log; liveHour = out.hour;
+    if (add.length) data.log = add.concat(data.log);
+    renderLive(new Set(add.map(logKey)));
+    if (add.length) $("live-status").textContent = add.length >= out.log.length && out.log.length >= 20
+      ? "Новых переводов больше 20 — нажмите «Обновить», чтобы увидеть все."
+      : "Новых переводов: " + add.length;
+  } catch (e) {
+    if (e.status === 403) { signOut("Код больше не подходит — войдите снова."); return; }
+    $("app-status").textContent = e.message;
+  } finally { liveBusy = false; }
+}
+function setLive(on, remember) {
+  liveOn = on;
+  liveSeq++; // ответы прежних опросов больше не нужны
+  clearInterval(liveTimer); liveTimer = null;
+  $("live-toggle").setAttribute("aria-pressed", String(on));
+  if (on) { liveTimer = setInterval(pollLive, 20000); pollLive(); }
+  if (remember !== false) try { localStorage.setItem("inh-admin-live", on ? "1" : ""); } catch (e) {}
+  if (data) renderLive();
+}
+$("live-toggle").addEventListener("click", () => setLive(!liveOn));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && liveOn) pollLive(); }); // скрытая вкладка не опрашивает (pollLive сам пропускает)
+
+// доля переводов, нашедшихся целиком, по дням (из журнала)
+function renderQuality() {
+  const q = data.quality || [];
+  let tot = 0, full = 0;
+  const cols = q.map((d, i) => {
+    tot += d.total; full += d.full;
+    const pct = d.total ? Math.round((d.full / d.total) * 100) : 0;
+    const date = new Date(d.day + "T12:00:00Z");
+    return {
+      label: i === q.length - 1 ? "сег." : String(date.getUTCDate()), today: i === q.length - 1,
+      title: date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" }) + ": " + (d.total ? pct + "% (" + d.full + " из " + d.total + ")" : "нет переводов в журнале"),
+      parts: d.total ? [[pct < 50 ? "q low" : "q", Math.max(pct, 2)]] : [],
+    };
+  });
+  bars($("quality"), cols, 100);
+  $("quality-avg").textContent = tot ? "в среднем " + Math.round((full / tot) * 100) + "%" : "";
+}
+
+// тепловая карта: день недели × час (местное время смотрящего) по журналу
+const WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+function renderHeat() {
+  const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  let n = 0;
+  for (const e of data.log) {
+    const d = new Date(e.at);
+    if (isNaN(d)) continue;
+    grid[(d.getDay() + 6) % 7][d.getHours()]++; n++;
+  }
+  const max = Math.max(1, ...grid.flat());
+  const level = (c) => (!c ? "" : c / max > 0.75 ? "l4" : c / max > 0.5 ? "l3" : c / max > 0.25 ? "l2" : "l1");
+  const box = $("heatmap"); box.textContent = "";
+  box.append(el("span"));
+  for (let h = 0; h < 24; h++) box.append(el("span", "", h % 3 === 0 ? String(h) : ""));
+  const word = (c) => (c % 10 === 1 && c % 100 !== 11 ? "перевод" : c % 10 >= 2 && c % 10 <= 4 && (c % 100 < 10 || c % 100 >= 20) ? "перевода" : "переводов");
+  for (let w = 0; w < 7; w++) {
+    box.append(el("span", "wd", WD[w]));
+    for (let h = 0; h < 24; h++) {
+      const c = grid[w][h];
+      const cell = el("i", level(c));
+      cell.title = WD[w] + ", " + pad(h) + ":00–" + pad((h + 1) % 24) + ":00 — " + c + " " + word(c);
+      box.append(cell);
+    }
+  }
+  const lg = $("heat-legend"); lg.textContent = "";
+  lg.append("меньше");
+  for (const l of ["", "l1", "l2", "l3", "l4"]) { const i = el("i", l); lg.append(i); }
+  lg.append("больше");
+  $("heat-hint").textContent = "По последним " + fmt(n) + " переводам журнала, ваше местное время.";
+}
+
+// рекорды: по счётчикам по дням (log-stats, хранятся 4 месяца)
+const MILESTONES = [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+function renderRecords() {
+  const days = data.stats || {};
+  const keys = Object.keys(days).filter((k) => (days[k].total || 0) > 0).sort();
+  let best = null, total = 0;
+  for (const k of keys) { const t = days[k].total || 0; total += t; if (!best || t > best.n) best = { k, n: t }; }
+  const has = (k) => ((days[k] || {}).total || 0) > 0;
+  const shift = (k, n) => { const d = new Date(k + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return utcKey(d); };
+  // текущая серия — до сегодня или до вчера (сегодня ещё может начаться)
+  let cur = 0, k = utcKey(new Date());
+  if (!has(k)) k = shift(k, -1);
+  while (has(k)) { cur++; k = shift(k, -1); }
+  let longest = 0, run = 0, prev = null;
+  for (const d of keys) { run = prev && shift(prev, 1) === d ? run + 1 : 1; longest = Math.max(longest, run); prev = d; }
+  const dayWord = (n) => (n % 10 === 1 && n % 100 !== 11 ? "день" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "дня" : "дней");
+  const box = $("records"); box.textContent = "";
+  const tile = (b, span, title) => { const d = el("div"); d.append(el("b", "", b), el("span", "", span)); if (title) d.title = title; box.append(d); };
+  tile(best ? fmt(best.n) : "—", best ? "лучший день · " + new Date(best.k + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" }) : "лучший день");
+  tile(cur + " " + dayWord(cur), "серия сейчас", "Дней подряд с переводами, до сегодня или вчера");
+  tile(longest + " " + dayWord(longest), "самая длинная серия");
+  tile(fmt(total), "переводов за 4 месяца", "По счётчикам по дням: они хранятся 4 месяца, поэтому это не «за всё время»");
+  // следующая цель
+  const goal = $("goal"); goal.textContent = "";
+  const next = MILESTONES.find((m) => m > total) || total;
+  const prevM = [...MILESTONES].reverse().find((m) => m <= total) || 0;
+  const head = el("div", "chart-head");
+  head.append(el("span", "", "Следующая цель: " + fmt(next)), el("span", "legend", total >= next ? "" : "ещё " + fmt(next - total)));
+  const bar = el("div", "split"); const fill = el("i");
+  fill.style.width = Math.min(100, ((total - prevM) / Math.max(1, next - prevM)) * 100) + "%"; bar.append(fill);
+  bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-valuemin", String(prevM)); bar.setAttribute("aria-valuemax", String(next)); bar.setAttribute("aria-valuenow", String(total));
+  goal.append(head, bar);
+  // перешли рубеж за последние 7 дней — маленький праздник
+  let week = 0;
+  for (let i = 0; i < 7; i++) week += (days[utcKey(new Date(Date.now() - i * 864e5))] || {}).total || 0;
+  // только пока окно счётчиков не заполнено: иначе старые дни выпадают, сумма проседает и «рубеж» мог бы засчитаться повторно
+  const oldest = Object.keys(days).sort()[0];
+  const windowFull = oldest && Date.parse(oldest + "T00:00:00Z") <= Date.now() - (120 - 8) * 864e5;
+  const crossed = week > 0 && !windowFull ? MILESTONES.filter((m) => total - week < m && m <= total).pop() : null;
+  if (crossed) goal.append(el("p", "cheer", "★ На этой неделе — " + fmt(crossed) + " переводов! Спасибо всем, кто пользуется."));
+}
+
+// состояние сервера
+function renderServer() {
+  const s = data.server || {};
+  const up = (sec) => { sec = Number(sec) || 0; const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60); return d ? d + " д " + h + " ч" : h ? h + " ч " + m + " мин" : m + " мин"; };
+  const rows = [
+    ["Версия", s.version || "—"],
+    ["Работает", s.uptimeSec != null ? up(s.uptimeSec) : "—"],
+    ["Запущен", s.startedAt ? when(s.startedAt) : "—"],
+    ["Память", s.memMB != null ? fmt(s.memMB) + " МБ" : "—"],
+    ["Node.js", s.node || "—"],
+    ["Журнал ждёт записи", s.logPending != null ? fmt(s.logPending) : "—"],
+  ];
+  const box = $("server"); box.textContent = "";
+  for (const [k, v] of rows) { const d = el("div"); d.append(el("dt", "", k), el("dd", "", v)); box.append(d); }
+}
+
+// ---------- восстановление из копии ----------
+// Копия может быть больше лимита запроса локального сервера, поэтому шлётся частями (~150 КБ).
+// Сервер добавляет только то, чего нет, поэтому части и повторы безопасны.
+function restoreParts(b) {
+  const enc = new TextEncoder();
+  const LIMIT = 150000;
+  const blank = () => ({ kind: b.kind, version: b.version, corrections: [], reports: [], log: [], review: {}, logStats: { days: {} } });
+  const items = [];
+  for (const sec of ["corrections", "reports", "log"]) for (const x of Array.isArray(b[sec]) ? b[sec] : []) items.push([sec, x]);
+  for (const [k, v] of Object.entries(b.review && typeof b.review === "object" ? b.review : {})) items.push(["review", [k, v]]);
+  const days = b.logStats && b.logStats.days && typeof b.logStats.days === "object" ? b.logStats.days : {};
+  for (const [k, v] of Object.entries(days)) items.push(["logStats", [k, v]]);
+  const parts = [];
+  let cur = blank(), size = 0, count = 0;
+  for (const [sec, x] of items) {
+    const n = enc.encode(JSON.stringify(x)).length + 4;
+    if (count && size + n > LIMIT) { parts.push(cur); cur = blank(); size = 0; count = 0; }
+    if (sec === "review") cur.review[x[0]] = x[1];
+    else if (sec === "logStats") cur.logStats.days[x[0]] = x[1];
+    else cur[sec].push(x);
+    size += n; count++;
+  }
+  if (count || !parts.length) parts.push(cur);
+  return parts;
+}
+const RESTORE_NAMES = [["corrections", "Словарь сайта (слова и фразы)"], ["reports", "Жалобы"], ["review", "Решения проверки (/review)"], ["log", "Записи журнала"], ["logStats", "Дни в счётчиках"]];
+// added / skipped по разделам. В предпросмотре (dry) сервер ещё ничего не записал, поэтому каждой следующей части
+// сообщаем, сколько места уже заняли прежние (used), — итог совпадает с тем, что добавится на самом деле.
+async function restoreRun(parts, dry, onStep) {
+  const zero = () => ({ corrections: 0, reports: 0, review: 0, log: 0, logStats: 0 });
+  const added = zero(), skipped = zero();
+  for (let i = 0; i < parts.length; i++) {
+    if (onStep) onStep(i + 1, parts.length);
+    const out = await api({ op: "restore", dry, backup: parts[i], used: dry ? added : undefined });
+    for (const k in added) { added[k] += (out.added || {})[k] || 0; skipped[k] += (out.skipped || {})[k] || 0; }
+  }
+  return { added, skipped };
+}
+const SKIP_WHY = "не помещается в лимиты хранилища (словарь — 3000, жалобы — 2000, журнал — 3000 записей, счётчики — 4 месяца) или запись неверная";
+$("restore-file").addEventListener("change", async (ev) => {
+  const input = ev.target;
+  const file = input.files && input.files[0];
+  input.value = "";
+  const box = $("restore-box"); box.textContent = "";
+  if (!file) return;
+  const panel = el("div", "restore");
+  box.append(panel);
+  const say = (t) => { panel.textContent = ""; panel.append(el("p", "note", t)); };
+  if (file.size > 25 * 1048576) { say("Файл слишком большой для копии переводчика."); return; }
+  let b;
+  try { b = JSON.parse(await file.text()); } catch (e) { say("Не получилось прочитать файл: это не JSON."); return; }
+  if (!b || b.kind !== "ingush-translator-backup") { say("Это не файл резервной копии переводчика (нужен файл, скачанный кнопкой «Копия»)."); return; }
+  if (b.version !== 1) { say("Неизвестная версия копии (" + String(b.version).slice(0, 20) + "): эта админка умеет только версию 1."); return; }
+  const parts = restoreParts(b);
+  say("Проверяю, чего из копии сейчас нет…");
+  let plan;
+  try { plan = await restoreRun(parts, true, (i, n) => n > 1 && say("Проверяю, чего из копии сейчас нет… " + i + "/" + n)); }
+  catch (e) { say(e.message); return; }
+  panel.textContent = "";
+  const count = (o) => Object.values(o).reduce((a, x) => a + x, 0);
+  const total = count(plan.added), skipped = count(plan.skipped);
+  panel.append(el("b", "", "Копия от " + (b.at ? new Date(b.at).toLocaleString("ru-RU") : "неизвестной даты")));
+  const list = (o) => { const ul = el("ul"); for (const [k, name] of RESTORE_NAMES) if (o[k]) ul.append(el("li", "", name + ": " + fmt(o[k]))); return ul; };
+  if (total) { panel.append(el("p", "note", "Будет добавлено (то, что уже есть, не меняется):"), list(plan.added)); }
+  else panel.append(el("p", "note", skipped ? "Добавить нечего: всё остальное из копии уже есть." : "Всё из этой копии уже есть — добавлять нечего."));
+  if (skipped) panel.append(el("p", "note", "Не будет добавлено — " + SKIP_WHY + ":"), list(plan.skipped));
+  if (!total) { panel.append(button("Закрыть", "", () => (box.textContent = ""))); return; }
+  const act = el("div", "row-actions");
+  const go = button("Восстановить", "ok", async () => {
+    go.disabled = true; cancel.disabled = true;
+    try {
+      const done = await restoreRun(parts, false, (i, n) => (go.textContent = n > 1 ? "Восстанавливаю… " + i + "/" + n : "Восстанавливаю…"));
+      box.textContent = "";
+      const sk = count(done.skipped);
+      toast("Восстановлено записей: " + fmt(count(done.added)) + (sk ? ", пропущено: " + fmt(sk) : ""));
+      await load();
+    } catch (e) { go.disabled = false; cancel.disabled = false; go.textContent = "Восстановить"; $("app-status").textContent = e.message; }
+  });
+  const cancel = button("Отмена", "", () => (box.textContent = ""));
+  act.append(go, cancel);
+  panel.append(act);
+});
+
+// ---------- противоречия в словаре ----------
+function renderConflicts() {
+  const box = $("conflicts");
+  const groups = (data.conflicts || []).filter((g) => g.entries.length > 1);
+  box.hidden = tab !== "dict" || !groups.length;
+  box.textContent = "";
+  if (box.hidden) return;
+  box.append(el("h2", "", "Противоречия в словаре: " + groups.length));
+  box.append(el("p", "hint", "Один и тот же текст сохранён с разными переводами. Оставьте верный, лишнее удалите."));
+  for (const g of groups) {
+    const grp = el("div", "grp");
+    const title = el("b"); title.append(chip(dirName(g)), " «" + g.text + "»");
+    grp.append(title);
+    for (const e of g.entries) {
+      const row = el("div", "opt");
+      const t = el("div", "tr", e.translation);
+      t.append(el("small", "", "«" + e.text + "»" + (e.at ? " · " + when(e.at) : "")));
+      // одинаковый id у двух записей (старые данные): удаление по id убрало бы обе — не предлагаем
+      const twin = data.dict.filter((d) => d.id === e.id).length > 1;
+      let sure = false, timer = null;
+      const del = button("Удалить", "danger", async () => {
+        if (twin) return;
+        if (!sure) { sure = true; del.textContent = "Точно?"; del.classList.add("sure"); timer = setTimeout(() => { sure = false; del.textContent = "Удалить"; del.classList.remove("sure"); }, 4000); return; }
+        clearTimeout(timer); del.disabled = true;
+        try {
+          await api({ op: "dict-delete", id: e.id });
+          data.dict = data.dict.filter((d) => d.id !== e.id);
+          dropFromConflicts(e.id);
+          renderStats(); renderList(); toast("Удалено из словаря");
+        } catch (ex) { $("app-status").textContent = ex.message; del.disabled = false; }
+      });
+      if (twin) { del.disabled = true; del.title = "У этой записи тот же ключ, что у соседней: удаление убрало бы обе"; }
+      row.append(t, del);
+      grp.append(row);
+    }
+    box.append(grp);
+  }
+}
+function dropFromConflicts(id) {
+  const n = (s) => norm(s).replace(/[«»"“”„.,!?;:()…—–-]+/g, " ").replace(/\s+/g, " ").trim();
+  data.conflicts = (data.conflicts || []).map((g) => ({ ...g, entries: g.entries.filter((e) => e.id !== id) }))
+    .filter((g) => new Set(g.entries.map((e) => n(e.translation))).size > 1);
 }
 
 // ---------- очистка ----------
@@ -842,6 +1259,7 @@ function dictItem(r) {
     try {
       await api({ op: "dict-delete", id: r.id });
       data.dict = data.dict.filter((d) => d.id !== r.id);
+      dropFromConflicts(r.id);
       renderStats(); renderList(); toast("Удалено из словаря");
     } catch (e) { $("app-status").textContent = e.message; del.disabled = false; }
   });
@@ -851,7 +1269,9 @@ function dictItem(r) {
 }
 
 function renderList() {
-  if (!data || tab === "overview") return;
+  if (!data) return;
+  renderConflicts();
+  if (tab === "overview") return;
   const rows = filtered();
   const box = $("list");
   box.textContent = "";
