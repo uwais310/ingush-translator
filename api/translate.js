@@ -1641,6 +1641,138 @@ async function removePhrase(id) {
   return kept.length;
 }
 const reportId = (r) => require("crypto").createHash("sha1").update(String(r.at || "") + "|" + String(r.text || "") + "|" + String(r.source || "")).digest("hex").slice(0, 12);
+// состояние сервера для карточки «Сервер» в админке
+const STARTED_AT = new Date().toISOString();
+let VERSION = null;
+function appVersion() {
+  if (VERSION) return VERSION;
+  const env = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_REF;
+  if (env) return (VERSION = String(env).slice(0, 7));
+  // Railway при `railway up` (без git) коммита не знает — тогда хотя бы id выкладки
+  if (process.env.RAILWAY_DEPLOYMENT_ID) return (VERSION = "deploy " + String(process.env.RAILWAY_DEPLOYMENT_ID).slice(0, 8));
+  try { // без переменных хостинга — коммит из .git (локально), как получится
+    const fs = require("fs"), path = require("path");
+    const git = path.join(__dirname, "..", ".git");
+    const head = fs.readFileSync(path.join(git, "HEAD"), "utf8").trim();
+    let sha = head;
+    const ref = /^ref: (.+)$/.exec(head);
+    if (ref) {
+      try { sha = fs.readFileSync(path.join(git, ref[1]), "utf8").trim(); }
+      catch { const line = fs.readFileSync(path.join(git, "packed-refs"), "utf8").split("\n").find((l) => l.endsWith(" " + ref[1])); sha = line ? line.split(" ")[0] : ""; }
+    }
+    if (/^[0-9a-f]{7,40}$/.test(sha)) return (VERSION = sha.slice(0, 7));
+  } catch {}
+  return (VERSION = "—");
+}
+function serverInfo() {
+  return {
+    uptimeSec: Math.round(process.uptime()),
+    memMB: Math.round(process.memoryUsage().rss / 1048576),
+    node: process.version,
+    version: appVersion(),
+    startedAt: STARTED_AT,
+    logPending: LOG._pending().length,
+  };
+}
+
+// восстановление из резервной копии (op "restore"): только добавляет недостающее, ничего не удаляет и не переписывает.
+// Добавляется только то, что помещается в лимиты хранилища (словарь 3000, жалобы 2000, журнал MAX, дни STAT_DAYS):
+// иначе следующая запись сайта вытеснила бы старое молча. Остальное — в skipped.
+// Страница может слать копию частями (у локального сервера лимит на размер запроса) — повторное добавление ничего не меняет.
+// used — сколько места уже заняли прежние части того же предпросмотра (dry), чтобы итог по частям был точным.
+const RESTORE_CAP = { corrections: 5000, reports: 5000, log: 5000, review: 20000, logStats: 1000 };
+const LIMITS = { corrections: 3000, reports: 2000 };
+const RESTORE_KEYS = ["corrections", "reports", "review", "log", "logStats"];
+const BAD_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+const isStr = (v, max) => typeof v === "string" && v.length <= max;
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+let SEED_IDS = null;
+async function restoreBackup(store, b, dry, used = {}) {
+  const isLang = (c) => typeof c === "string" && own(LANGS, c);
+  const arr = (v, cap) => (Array.isArray(v) ? v.slice(0, cap) : []);
+  const u = (k) => (Number.isFinite(used[k]) && used[k] > 0 ? Math.floor(used[k]) : 0);
+  const added = Object.fromEntries(RESTORE_KEYS.map((k) => [k, 0]));
+  const skipped = Object.fromEntries(RESTORE_KEYS.map((k) => [k, 0]));
+  const byTime = (x, y) => (String(x.at) < String(y.at) ? -1 : String(x.at) > String(y.at) ? 1 : 0);
+
+  // словарь сайта ("all"): по phraseId, существующая запись главнее
+  const corr = arr(b.corrections, RESTORE_CAP.corrections)
+    .filter((p) => isObj(p) && isLang(p.source) && isLang(p.target) && p.source !== p.target && isStr(p.text, 500) && p.text.trim() && isStr(p.translation, 1000) && p.translation.trim())
+    .map((p) => ({ source: p.source, target: p.target, text: p.text, translation: p.translation, at: isStr(p.at, 40) ? p.at : new Date().toISOString() }));
+  if (corr.length) {
+    const list = await loadPhrases(true);
+    const have = new Set(list.map(phraseId));
+    const add = [];
+    for (const p of corr) { const id = phraseId(p); if (!have.has(id)) { have.add(id); add.push(p); } }
+    const room = Math.max(0, LIMITS.corrections - list.length - u("corrections"));
+    const take = add.slice(0, room);
+    added.corrections = take.length; skipped.corrections = add.length - take.length;
+    if (!dry && take.length) {
+      const merged = take.concat(list); // восстановленные — более старые, кладём в начало
+      await store.setJSON("all", merged);
+      PHRASES = merged; PHRASES_AT = Date.now();
+      CACHE.clear();
+    }
+  }
+
+  // жалобы: по reportId, по времени; не больше 2000 (иначе новая жалоба вытеснит старые)
+  const reps = arr(b.reports, RESTORE_CAP.reports)
+    .filter((r) => isObj(r) && isStr(r.at, 40) && isStr(r.text, 2000) && r.text && isStr(r.source || "", 10) && isStr(r.target || "", 10))
+    .map((r) => { const o = {}; for (const k of ["at", "text", "translation", "source", "target", "model", "handled", "handledAt", "fixed", "note"]) if (r[k] !== undefined && (typeof r[k] === "string" || typeof r[k] === "boolean")) o[k] = typeof r[k] === "string" ? r[k].slice(0, 2000) : r[k]; return o; });
+  if (reps.length) {
+    const list = (await store.get("reports", { type: "json" })) || [];
+    const cur = Array.isArray(list) ? list : [];
+    const have = new Set(cur.map(reportId));
+    const add = [];
+    for (const r of reps) { const id = reportId(r); if (!have.has(id)) { have.add(id); add.push(r); } }
+    const room = Math.max(0, LIMITS.reports - cur.length - u("reports"));
+    const take = room ? add.sort(byTime).slice(-room) : []; // места мало — берём самые свежие
+    added.reports = take.length; skipped.reports = add.length - take.length;
+    if (!dry && take.length) await store.setJSON("reports", cur.concat(take).sort(byTime));
+  }
+
+  // решения /review: по ключу (id пары из data/phrases.json), только недостающие
+  if (isObj(b.review)) {
+    if (!SEED_IDS) SEED_IDS = new Set(SEED.map((p) => p.id).filter(Boolean));
+    const cur = await loadReview(true);
+    const add = {};
+    let n = 0;
+    for (const [k, v] of Object.entries(b.review).slice(0, RESTORE_CAP.review)) {
+      if (BAD_KEYS.has(k) || !isStr(k, 80) || own(cur, k)) continue;
+      if (!SEED_IDS.has(k) || !isObj(v) || (v.s !== "ok" && v.s !== "fix") || (v.s === "fix" && !(isStr(v.inh, 1000) && v.inh.trim()))) { skipped.review++; continue; }
+      const at = isStr(v.at, 40) ? v.at : undefined;
+      Object.defineProperty(add, k, { value: v.s === "fix" ? { s: "fix", inh: v.inh, at } : { s: "ok", at }, enumerable: true, writable: true, configurable: true });
+      n++;
+    }
+    added.review = n;
+    if (!dry && n) {
+      const merged = Object.assign({}, cur, add);
+      await store.setJSON("review", merged);
+      setReview(merged);
+      CACHE.clear();
+    }
+  }
+
+  // журнал и счётчики по дням — в очереди журнала, чтобы не смешаться со сбросами
+  const log = arr(b.log, RESTORE_CAP.log)
+    .filter((e) => isObj(e) && isStr(e.at, 40) && !isNaN(Date.parse(e.at)) && isStr(e.text, 500) && e.text)
+    .map((e) => ({ at: e.at, text: e.text, translation: isStr(e.translation, 1000) ? e.translation : "", source: isStr(e.source, 10) ? e.source : "", target: isStr(e.target, 10) ? e.target : "", how: isStr(e.how, 20) ? e.how : "none", label: isStr(e.label, 120) ? e.label : "" }));
+  const days = {};
+  const statDays = isObj(b.logStats) && isObj(b.logStats.days) ? b.logStats.days : {};
+  for (const [d, s] of Object.entries(statDays).slice(0, RESTORE_CAP.logStats)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !isObj(s)) continue;
+    const n = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+    days[d] = { total: n(s.total), ruInh: n(s.ruInh), inhRu: n(s.inhRu), empty: n(s.empty) };
+  }
+  if (log.length || Object.keys(days).length) {
+    const m = await LOG.merge(log, days, { dry, used: { log: u("log"), logStats: u("logStats") } });
+    added.log = m.added.log; added.logStats = m.added.logStats;
+    skipped.log = m.skipped.log; skipped.logStats = m.skipped.logStats;
+  }
+  return { added, skipped };
+}
+
 function sameCode(given, code) {
   const crypto = require("crypto");
   const a = crypto.createHash("sha256").update(String(given || "")).digest();
@@ -1661,18 +1793,41 @@ async function adminAction(body, res) {
       let reports = [];
       if (store) reports = (await store.get("reports", { type: "json" })) || [];
       const log = await LOG.read();
+      // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
+      const dict = (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse();
       return res.status(200).json({
         reports: (Array.isArray(reports) ? reports : []).map((r) => ({ ...r, id: reportId(r) })).reverse(),
         log: log.list.slice().reverse(),
         stats: log.stats,
         storage: store ? (process.env.SUPABASE_URL ? "supabase" : storeOverride ? "local" : "netlify") : "none",
         logging: process.env.ADMIN_LOG !== "0",
-        // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
-        dict: (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse(),
+        dict,
+        conflicts: INSIGHTS.conflicts(dict),
         popular: INSIGHTS.popular(log.list),
         missed: INSIGHTS.missed(log.list),
         trash: await (async () => { try { const t = await store.get("trash", { type: "json" }); return t && t.what ? { what: t.what, at: t.at } : null; } catch { return null; } })(),
+        quality: INSIGHTS.quality(log.list, 14),
+        server: serverInfo(),
       });
+    }
+    // «Сейчас на сайте»: последние 20 переводов и сколько за последний час — без словаря и подсчётов
+    if (op === "live") {
+      const log = await LOG.read();
+      const hourAgo = Date.now() - 3600e3;
+      return res.status(200).json({
+        log: log.list.slice(-20).reverse(),
+        hour: log.list.filter((e) => Date.parse(e.at) >= hourAgo).length,
+        at: new Date().toISOString(),
+      });
+    }
+    // восстановить из файла резервной копии: dry — только посчитать, что добавится
+    if (op === "restore") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const b = body.backup;
+      if (!isObj(b) || b.kind !== "ingush-translator-backup") return res.status(400).json({ error: "Это не файл резервной копии переводчика." });
+      if (b.version !== 1) return res.status(400).json({ error: "Неизвестная версия копии: " + String(b.version).slice(0, 20) });
+      const { added, skipped } = await restoreBackup(store, b, !!body.dry, body.dry && isObj(body.used) ? body.used : {});
+      return res.status(200).json({ ok: true, dry: !!body.dry, added, skipped });
     }
     // резервная копия: всё, что сайт хранит сам (база data/phrases.json и так лежит в git)
     if (op === "backup") {
