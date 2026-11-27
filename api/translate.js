@@ -1641,6 +1641,115 @@ async function removePhrase(id) {
   return kept.length;
 }
 const reportId = (r) => require("crypto").createHash("sha1").update(String(r.at || "") + "|" + String(r.text || "") + "|" + String(r.source || "")).digest("hex").slice(0, 12);
+// состояние сервера для карточки «Сервер» в админке
+const STARTED_AT = new Date().toISOString();
+let VERSION = null;
+function appVersion() {
+  if (VERSION) return VERSION;
+  const env = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_REF;
+  if (env) return (VERSION = String(env).slice(0, 7));
+  try { // без переменных хостинга — коммит из .git (локально), как получится
+    const fs = require("fs"), path = require("path");
+    const git = path.join(__dirname, "..", ".git");
+    const head = fs.readFileSync(path.join(git, "HEAD"), "utf8").trim();
+    let sha = head;
+    const ref = /^ref: (.+)$/.exec(head);
+    if (ref) {
+      try { sha = fs.readFileSync(path.join(git, ref[1]), "utf8").trim(); }
+      catch { const line = fs.readFileSync(path.join(git, "packed-refs"), "utf8").split("\n").find((l) => l.endsWith(" " + ref[1])); sha = line ? line.split(" ")[0] : ""; }
+    }
+    if (/^[0-9a-f]{7,40}$/.test(sha)) return (VERSION = sha.slice(0, 7));
+  } catch {}
+  return (VERSION = "—");
+}
+function serverInfo() {
+  return {
+    uptimeSec: Math.round(process.uptime()),
+    memMB: Math.round(process.memoryUsage().rss / 1048576),
+    node: process.version,
+    version: appVersion(),
+    startedAt: STARTED_AT,
+    logPending: LOG._pending().length,
+  };
+}
+
+// восстановление из резервной копии (op "restore"): только добавляет недостающее, ничего не удаляет и не переписывает.
+// Страница может слать копию частями (у локального сервера лимит на размер запроса) — повторное добавление ничего не меняет.
+const RESTORE_CAP = { corrections: 5000, reports: 5000, log: 5000, review: 20000, logStats: 1000 };
+const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+const isStr = (v, max) => typeof v === "string" && v.length <= max;
+async function restoreBackup(store, b, dry) {
+  const isLang = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(LANGS, c);
+  const arr = (v, cap) => (Array.isArray(v) ? v.slice(0, cap) : []);
+  const out = { corrections: 0, reports: 0, review: 0, log: 0, logStats: 0 };
+
+  // словарь сайта ("all"): по phraseId, существующая запись главнее
+  const corr = arr(b.corrections, RESTORE_CAP.corrections)
+    .filter((p) => isObj(p) && isLang(p.source) && isLang(p.target) && p.source !== p.target && isStr(p.text, 500) && p.text.trim() && isStr(p.translation, 1000) && p.translation.trim())
+    .map((p) => ({ source: p.source, target: p.target, text: p.text, translation: p.translation, at: isStr(p.at, 40) ? p.at : new Date().toISOString() }));
+  if (corr.length) {
+    const list = await loadPhrases(true);
+    const have = new Set(list.map(phraseId));
+    const add = [];
+    for (const p of corr) { const id = phraseId(p); if (!have.has(id)) { have.add(id); add.push(p); } }
+    const room = Math.max(0, 3000 - list.length); // как у savePhrase: не больше 3000, старое не вытесняем
+    const take = add.slice(0, room);
+    out.corrections = take.length;
+    if (!dry && take.length) {
+      const merged = take.concat(list); // восстановленные — более старые, кладём в начало
+      await store.setJSON("all", merged);
+      PHRASES = merged; PHRASES_AT = Date.now();
+      CACHE.clear();
+    }
+  }
+
+  // жалобы: по reportId, по времени
+  const reps = arr(b.reports, RESTORE_CAP.reports)
+    .filter((r) => isObj(r) && isStr(r.at, 40) && isStr(r.text, 2000) && r.text && isStr(r.source || "", 10) && isStr(r.target || "", 10))
+    .map((r) => { const o = {}; for (const k of ["at", "text", "translation", "source", "target", "model", "handled", "handledAt", "fixed", "note"]) if (r[k] !== undefined && (typeof r[k] === "string" || typeof r[k] === "boolean")) o[k] = typeof r[k] === "string" ? r[k].slice(0, 2000) : r[k]; return o; });
+  if (reps.length) {
+    const list = (await store.get("reports", { type: "json" })) || [];
+    const cur = Array.isArray(list) ? list : [];
+    const have = new Set(cur.map(reportId));
+    const add = [];
+    for (const r of reps) { const id = reportId(r); if (!have.has(id)) { have.add(id); add.push(r); } }
+    out.reports = add.length;
+    if (!dry && add.length) await store.setJSON("reports", cur.concat(add).sort((x, y) => (String(x.at) < String(y.at) ? -1 : String(x.at) > String(y.at) ? 1 : 0)));
+  }
+
+  // решения /review: по ключу, только недостающие
+  if (isObj(b.review)) {
+    const cur = await loadReview(true);
+    const add = {};
+    for (const [k, v] of Object.entries(b.review).slice(0, RESTORE_CAP.review)) {
+      if (!isStr(k, 80) || !isObj(v) || (v.s !== "ok" && v.s !== "fix") || k in cur) continue;
+      if (v.s === "fix" && !(isStr(v.inh, 1000) && v.inh.trim())) continue;
+      add[k] = v.s === "fix" ? { s: "fix", inh: v.inh, at: isStr(v.at, 40) ? v.at : undefined } : { s: "ok", at: isStr(v.at, 40) ? v.at : undefined };
+    }
+    out.review = Object.keys(add).length;
+    if (!dry && out.review) {
+      const merged = { ...cur, ...add };
+      await store.setJSON("review", merged);
+      setReview(merged);
+      CACHE.clear();
+    }
+  }
+
+  // журнал и счётчики по дням — в очереди журнала, чтобы не смешаться со сбросами
+  const log = arr(b.log, RESTORE_CAP.log)
+    .filter((e) => isObj(e) && isStr(e.at, 40) && !isNaN(Date.parse(e.at)) && isStr(e.text, 500) && e.text)
+    .map((e) => ({ at: e.at, text: e.text, translation: isStr(e.translation, 1000) ? e.translation : "", source: isStr(e.source, 10) ? e.source : "", target: isStr(e.target, 10) ? e.target : "", how: isStr(e.how, 20) ? e.how : "none", label: isStr(e.label, 120) ? e.label : "" }));
+  const days = {};
+  const statDays = isObj(b.logStats) && isObj(b.logStats.days) ? b.logStats.days : {};
+  for (const [d, s] of Object.entries(statDays).slice(0, RESTORE_CAP.logStats)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !isObj(s)) continue;
+    const n = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+    days[d] = { total: n(s.total), ruInh: n(s.ruInh), inhRu: n(s.inhRu), empty: n(s.empty) };
+  }
+  if (log.length || Object.keys(days).length) Object.assign(out, await LOG.merge(log, days, { dry }));
+  return out;
+}
+
 function sameCode(given, code) {
   const crypto = require("crypto");
   const a = crypto.createHash("sha256").update(String(given || "")).digest();
@@ -1661,18 +1770,40 @@ async function adminAction(body, res) {
       let reports = [];
       if (store) reports = (await store.get("reports", { type: "json" })) || [];
       const log = await LOG.read();
+      // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
+      const dict = (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse();
       return res.status(200).json({
         reports: (Array.isArray(reports) ? reports : []).map((r) => ({ ...r, id: reportId(r) })).reverse(),
         log: log.list.slice().reverse(),
         stats: log.stats,
         storage: store ? (process.env.SUPABASE_URL ? "supabase" : storeOverride ? "local" : "netlify") : "none",
         logging: process.env.ADMIN_LOG !== "0",
-        // словарь сайта: исправления, сохранённые кнопкой «Исправить» и из админки (новые сверху)
-        dict: (await loadPhrases(true)).map((p) => ({ ...p, id: phraseId(p) })).reverse(),
+        dict,
+        conflicts: INSIGHTS.conflicts(dict),
         popular: INSIGHTS.popular(log.list),
         missed: INSIGHTS.missed(log.list),
         trash: await (async () => { try { const t = await store.get("trash", { type: "json" }); return t && t.what ? { what: t.what, at: t.at } : null; } catch { return null; } })(),
+        quality: INSIGHTS.quality(log.list, 14),
+        server: serverInfo(),
       });
+    }
+    // «Сейчас на сайте»: последние 20 переводов и сколько за последний час — без словаря и подсчётов
+    if (op === "live") {
+      const log = await LOG.read();
+      const hourAgo = Date.now() - 3600e3;
+      return res.status(200).json({
+        log: log.list.slice(-20).reverse(),
+        hour: log.list.filter((e) => Date.parse(e.at) >= hourAgo).length,
+        at: new Date().toISOString(),
+      });
+    }
+    // восстановить из файла резервной копии: dry — только посчитать, что добавится
+    if (op === "restore") {
+      if (!store) return res.status(501).json({ error: "Хранилище недоступно." });
+      const b = body.backup;
+      if (!isObj(b) || b.kind !== "ingush-translator-backup") return res.status(400).json({ error: "Это не файл резервной копии переводчика." });
+      const added = await restoreBackup(store, b, !!body.dry);
+      return res.status(200).json({ ok: true, dry: !!body.dry, added });
     }
     // резервная копия: всё, что сайт хранит сам (база data/phrases.json и так лежит в git)
     if (op === "backup") {
