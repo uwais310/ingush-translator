@@ -28,11 +28,47 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   const r2 = C.translate("Эггара хозача йоӀах фоарт йӀаьха я аьннад", "inh", { noWhole: true });
   assert.strictEqual(piece(r2, "эггара").how, "corpus", JSON.stringify(r2.pieces));
   console.log("   ", r2.translation);
-  // отрицание не теряется: «венавац» (корпус: «пришёл») — не «пришёл»; числительные — не из таблицы корпуса
-  for (const t of ["Саг венавац", "шовзткъеи ши"]) {
+  // отрицание не теряется: «венавац» (корпус: «пришёл») — не «пришёл»; часть составного числа — не число всей
+  // связки (PaydaDosh: «Тридцать — Ткъаь итт», «Двести тридцать рублей — Ши бӀаь ткъаь итт сом»)
+  for (const t of ["Саг венавац", "Ткъаь итт", "Ши бӀаь ткъаь итт сом"]) {
     const q = C0.translate(t, "inh");
-    assert.ok(!q || !q.pieces.some((p) => p.how === "corpus" && !/^не/.test(p.to) && /ц$/.test(p.from)) && !q.pieces.some((p) => p.how === "corpus" && /пятьдесят|четверт/.test(p.to)), JSON.stringify(q && q.pieces));
+    assert.ok(!q || !q.pieces.some((p) => p.how === "corpus" && !/^не/.test(p.to) && /ц$/.test(p.from)) && !q.pieces.some((p) => p.how === "corpus" && /тридцать|пятьдесят|четверт/.test(p.to)), JSON.stringify(q && q.pieces));
   }
+  // простое число таблица знает верно: «шийтта» — двенадцать (PaydaDosh: «Ӏай шийтта дийнахьа меца лийннав» —
+  // зимой двенадцать дней голодным ходил); русское «двенадцать» — не «две…»
+  const n12 = C0.translate("Аьхки цхьа ди доадаьр, Ӏай шийтта дийнахьа меца лийннав", "inh");
+  assert.strictEqual(piece(n12, "шийтта").to, "двенадцать", JSON.stringify(n12.pieces));
+  // «Ӏай» (корпус: «зимой») — наречие, не прилагательное: не «зимая»
+  assert.ok(!/зимая/.test(n12.translation), n12.translation);
+  console.log("   ", n12.translation);
+}
+
+// 1б. формы одного русского слова — одна группа, даже если у каждой своя строка в таблице корпуса: «программа» —
+// программа 76, программы 67, программу 31 (одна форма меньше половины). Фраза — Википедия в базе
+// («уж я шоай гӀонца, пайда эцачар программа урхал ду кечалаш»)
+{
+  const r = C0.translate("уж я шоай гӀонца, пайда эцачар программа урхал ду кечалаш", "inh");
+  assert.strictEqual(piece(r, "программа").to, "программа", JSON.stringify(r.pieces));
+  // глагол — самая частая форма группы, без начальной формы: «ладийгӀар» — «выслушал» (PaydaDosh:
+  // «Даь хьехамашка ладийгӀар атта гӀалата варгвац»)
+  const v = C0.translate("Даь хьехамашка ладийгӀар атта гӀалата варгвац.", "inh");
+  assert.strictEqual(piece(v, "ладийгӏар").to, "выслушал", JSON.stringify(v.pieces));
+  console.log("ok 1б: «программа», «ладийгӀар» →", piece(r, "программа").to, piece(v, "ладийгӏар").to);
+}
+
+// 1в. «самый» согласуется со следующим прилагательным, а перед сравнительной степенью не ставится (PaydaDosh:
+// «Эггара хозача йоӀах фоарт йӀаьха я аьннад», «Эггара хозагӀа дола хӀама да аьлча, хьаргӀийво ший кӀориг енай»)
+{
+  const a = C0.translate("Эггара хозача йоӀах фоарт йӀаьха я аьннад", "inh", { noWhole: true });
+  assert.ok(/^Самая красивая/.test(a.translation), a.translation);
+  const b = C0.translate("Эггара хозагӀа дола хӀама да аьлча, хьаргӀийво ший кӀориг енай", "inh", { noWhole: true });
+  assert.ok(!/самый красивее/i.test(b.translation) && /красивее всех/i.test(b.translation), b.translation);
+  // притяжательные на -ий: волчий → волчья, коровий → коровье (не «волчая», «коровее»)
+  const R = require("../lib/rules/russian.js");
+  assert.deepStrictEqual(["f", "n", "pl"].map((g) => R.adj("волчий", g)), ["волчья", "волчье", "волчьи"]);
+  assert.strictEqual(R.adj("коровий", "n"), "коровье");
+  assert.strictEqual(R.adj("синий", "f"), "синяя");
+  console.log("ok 1в:", a.translation, "|", b.translation);
 }
 
 // 2. редкая запись PaydaDosh (слово есть в словаре, но не в собранных текстах): «доарех» — «дёшево» (PaydaDosh)
@@ -104,7 +140,10 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   // падежная форма («кого-то») — без синонима: формы падежа словарь по-ингушски не даёт
   const e = C0.translate("Я кого-то видел", "ru");
   assert.ok(!e || !e.pieces.some((p) => p.how === "synonym"), JSON.stringify(e && e.pieces));
-  console.log("ok 8: пометы и заполнители —", a, "|", b, "|", c && c.translation, "|", d.translation);
+  // после «хочу, могу» неопределённая форма — не толкование: «-либо» не пропускается
+  const f = C0.translate("Хочу купить что-либо", "ru");
+  assert.ok(f.pieces.some((p) => p.from === "что-либо" && p.how === "synonym"), JSON.stringify(f.pieces));
+  console.log("ok 8: пометы и заполнители —", a, "|", b, "|", c && c.translation, "|", d.translation, "|", f.translation);
 }
 
 // 9. одна согласная буква — не слово: «и т. д.», пометы класса «(й, б, д)»
@@ -114,11 +153,12 @@ const piece = (r, from) => r && r.pieces.find((p) => p.from === from);
   console.log("ok 9: «Доастам ваккха (й, б, д,)» →", r.translation);
 }
 
-// 10. палочка Ӏ в начале слова — не заглавная буква: «Ӏуйре» — утро, не имя (справочник: «Ӏуйре дика хийла»)
+// 10. палочка Ӏ в начале слова — не заглавная буква: «Ӏуйре» — утро, не имя
+// (PaydaDosh: «И тебе доброго утра — Хьа а хийла Ӏуйре дика»)
 {
-  const r = C0.translate("дика Ӏуйре", "inh");
+  const r = C0.translate("Хьа а хийла Ӏуйре дика", "inh", { noWhole: true });
   assert.ok(piece(r, "ӏуйре").how !== "name", JSON.stringify(r.pieces));
-  console.log("ok 10: «дика Ӏуйре» →", r.translation);
+  console.log("ok 10: «Хьа а хийла Ӏуйре дика» →", r.translation);
 }
 
 console.log("все проверки неизвестных слов прошли");
