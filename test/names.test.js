@@ -64,6 +64,19 @@ const norm = (s) => String(s).toLowerCase().replace(/ё/g, "е").replace(/[.,!?]
   console.log("ok 3:", a.translation, "|", b.translation, "|", C.translate("Я был у Ахмеда", "ru").translation, "|", k.translation);
 }
 
+// 3а. Связка при имени в [скобках] остаётся: «Я был у Ахмеда» → «… вар», «Это для Ахмеда» → «Ер … да»; родительный
+// после существительного — не сказуемое («Книга Ахмеда» — без связки)
+{
+  for (const [t, end] of [["Я был у Ахмеда", "вар"], ["Я с Ахмедом", "ва"], ["Он с Мадиной", "ва"], ["Это для Ахмеда", "да"]]) {
+    const r = C.translate(t, "ru").translation;
+    assert.ok(new RegExp(`\\] ${end}$`).test(r), t + " → " + r);
+  }
+  assert.ok(!/ да$/.test(C.translate("Книга Ахмеда", "ru").translation), C.translate("Книга Ахмеда", "ru").translation);
+  // предложение с именем в скобках не пропадает целиком
+  assert.ok(C.translate("Я пришёл к Ахмеду", "ru"), "«Я пришёл к Ахмеду» — без ответа");
+  console.log("ok 3а:", C.translate("Я был у Ахмеда", "ru").translation, "|", C.translate("Это для Ахмеда", "ru").translation, "|", C.translate("Я пришёл к Ахмеду", "ru").translation);
+}
+
 // 3б. Города — не люди: форма из настоящих текстов или словаря, а не [скобки]
 // (корпус: «назрань» — наьсаре, «малгобеке» — магӀалбике, «магасе» — магасе; PaydaDosh: «Малгобек — МоагӀалбик»)
 {
